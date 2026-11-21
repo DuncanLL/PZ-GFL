@@ -214,6 +214,7 @@ Events.OnFillWorldObjectContextMenu.Add(menu)
 Events.OnGameStart.Add(function()
     awaiting={}
     expressionEdits={}
+    voiceSaveEdits={}
     window.closeAll()
     started = true
     if not GFL2CharacterRuntime then return end
@@ -231,6 +232,7 @@ Events.OnSave.Add(function()
             local player = getSpecificPlayer(i)
             if player and not player:isDead() then
                 flushExpression(player)
+                voiceSaveEdits[player]=nil
                 economy.saveLocal(player)
             end
         end
@@ -238,6 +240,7 @@ Events.OnSave.Add(function()
 end)
 Events.OnPlayerDeath.Add(function(player)
     flushExpression(player)
+    voiceSaveEdits[player]=nil
     economy.saveLocal(player)
     awaiting[player]=nil
     window.closeFor(player)
@@ -250,6 +253,7 @@ if Events.OnMainMenuEnter then
         started = false
         awaiting={}
         expressionEdits={}
+        voiceSaveEdits={}
         window.closeAll()
         if GFL2CharacterRuntime then GFL2CharacterRuntime.clear() end
     end)
@@ -257,6 +261,7 @@ end
 Events.OnDisconnect.Add(function()
     awaiting={}
     expressionEdits={}
+    voiceSaveEdits={}
     window.closeAll()
     started = false
     if GFL2CharacterRuntime then GFL2CharacterRuntime.clear() end

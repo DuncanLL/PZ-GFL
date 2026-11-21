@@ -256,8 +256,21 @@ public class Main {
         return j;
     }
     private static JSONObject settingsFor(ModelSession session,String value) {
-        return restoreMaterialSlots(settings(value),session.profile)
+        return restoreAppendedMorphs(restoreMaterialSlots(settings(value),session.profile),session.profile)
             .put("appearance_controls",session.profile.optJSONObject("appearance_controls"));
+    }
+    static JSONObject restoreAppendedMorphs(JSONObject settings,JSONObject profile) {
+        var appearance=settings.optJSONObject("appearance");
+        var defaults=profile==null?null:profile.optJSONObject("appearance");
+        if(appearance==null||defaults==null)return settings;
+        var saved=appearance.optJSONArray("morph_weights");
+        var current=defaults.optJSONArray("morph_weights");
+        if(saved!=null&&current!=null&&saved.length()<current.length()) {
+            var padded=new org.json.JSONArray(saved.toString());
+            for(int i=saved.length();i<current.length();i++)padded.put(current.get(i));
+            appearance.put("morph_weights",padded);
+        }
+        return settings;
     }
     static JSONObject restoreMaterialSlots(JSONObject settings,JSONObject profile) {
         var previous=profile.optJSONArray("previous_material_slots");

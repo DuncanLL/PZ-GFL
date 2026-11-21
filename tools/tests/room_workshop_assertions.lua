@@ -182,7 +182,7 @@ end
 if roomTranslations then
  local oldMetrics=getTextManager
  getTextManager=localeMetrics
- for _,button in ipairs({w.gripAimButton,w.gripButton,w.expressionButton,w.motionTab,w.restoreButton,w.bodyPhysicsButton,w.physicsResetButton,w.drawButtons[1],w.drawButtons[2]}) do
+ for _,button in ipairs({w.gripAimButton,w.gripButton,w.expressionButton,w.motionTab,w.restoreButton,w.settingsButton,w.physicsResetButton,w.drawButtons[1],w.drawButtons[2]}) do
   local originalText,originalCentre,originalZoom=button.drawText,button.drawTextCentre,button.drawTextZoomed
   local function check(value,x,y,zoom,font)
    local top,bottom=0,button.height
@@ -190,7 +190,7 @@ if roomTranslations then
    assert(y>=top and y+fontHeight(font)*zoom<=bottom+.01,"button text exceeds height for "..value)
    assert(x>=-.01 and x+measureStockFont(value,font)*zoom<=button.width+.01,"button text exceeds width for "..value)
    if button.roomTile then
-    local reserved=button==w.bodyPhysicsButton and 50 or 27
+    local reserved=27
     assert(value==button.roomTitle and x>=40 and x+measureStockFont(value,font)*zoom<=button.width-reserved+.01,
      "action label collides with an icon or was shortened: "..value)
    end
@@ -412,17 +412,69 @@ if roomTranslations then
   "short expression lists must place the save controls directly below their rows")
  assert(w.content.height<w.height*.5,"a short expression list left a full-height empty panel")
  local oldPhysics,oldToggle=GFL2CharacterRuntime.modelPhysicsEnabled,w.actions.bodyPhysics
- local physics=true
+ local oldHasChest,oldChestVal,oldChestSet=GFL2CharacterRuntime.hasChestPhysics,GFL2CharacterRuntime.chestStrength,w.actions.chestStrength
+ local oldVoiceGet,oldVoiceSet=w.actions.getVoiceVolume,w.actions.setVoiceVolume
+ local physics,hasChest,chestVal,voiceVal=true,true,80,40
  GFL2CharacterRuntime.modelPhysicsEnabled=function()return physics end
+ GFL2CharacterRuntime.hasChestPhysics=function()return hasChest end
+ GFL2CharacterRuntime.chestStrength=function()return chestVal end
  w.actions.bodyPhysics=function(_,on)physics=on;return true end
+ w.actions.chestStrength=function(_,v)chestVal=v;return true end
+ w.actions.getVoiceVolume=function()return voiceVal end
+ w.actions.setVoiceVolume=function(_,v)voiceVal=v;return v end
  w:setTab("overview")
- assert(w.bodyPhysicsButton.roomActive)
- w:toggleBodyPhysics()
- assert(not physics and not w.bodyPhysicsButton.roomActive)
+ assert(w.settingsButton and w.settingsButton.visible)
+ w.settingsButton.onclick(w.settingsButton.target,w.settingsButton)
+ assert(w.tab=="settings")
+ local function collectSettings()
+  local sliders,buttons={},{}
+  for _,widget in ipairs(w.widgets) do
+   if widget.roomSlider then sliders[#sliders+1]=widget
+   elseif widget.onclick then buttons[#buttons+1]=widget end
+  end
+  return sliders,buttons
+ end
+ local function renderWidgets()
+  for _,widget in ipairs(w.widgets) do
+   if widget.prerender then widget:prerender() end
+   if widget.render then widget:render() end
+  end
+ end
+ local sliders,buttons=collectSettings()
+ assert(#sliders==2 and #buttons==2,"editable chest settings must render 2 sliders and 2 buttons")
+ assert(sliders[1].currentValue==40 and sliders[2].currentValue==80)
+ assert(sliders[1].doToolTip==false and sliders[2].doToolTip==false)
+ assert(type(sliders[1].tooltip)=="string" and type(sliders[2].tooltip)=="string")
+ assert(buttons[1].roomActive==true)
+ sliders[1].onValueChange(sliders[1].target,25)
+ sliders[2].onValueChange(sliders[2].target,65)
+ assert(voiceVal==25 and chestVal==65)
+ sliders[1].dragInside=true
+ renderWidgets()
+ sliders[1].dragInside=false
+ renderWidgets()
+ buttons[1].onclick(buttons[1].target,buttons[1])
+ assert(physics==false and buttons[1].roomActive==false)
+ buttons[2].onclick(buttons[2].target,buttons[2])
+ assert(voiceVal==50 and chestVal==100 and physics==true,"reset button must restore voice, chest strength, and cloth physics")
+ hasChest=false
+ w:setTab("settings")
+ sliders,buttons=collectSettings()
+ assert(#sliders==1 and #buttons==2,"no-chest editable settings must render voice slider, cloth toggle, and reset")
+ renderWidgets()
+ w.canEditCurrent=function()return false end
+ w:setTab("settings")
+ sliders,buttons=collectSettings()
+ assert(#sliders==1 and #buttons==1,"read-only settings must still render voice slider and reset")
+ renderWidgets()
+ w.canEditCurrent=function()return true end
  GFL2CharacterRuntime.modelPhysicsEnabled,w.actions.bodyPhysics=oldPhysics,oldToggle
+ GFL2CharacterRuntime.hasChestPhysics,GFL2CharacterRuntime.chestStrength,w.actions.chestStrength=oldHasChest,oldChestVal,oldChestSet
+ w.actions.getVoiceVolume,w.actions.setVoiceVolume=oldVoiceGet,oldVoiceSet
+ w:setTab("overview")
  w:layoutBiography(w.byCharacter[w.character])
- assert(w.bodyPhysicsButton.visible and w.bodyPhysicsButton.width==w.expressionButton.width)
- assert(w.bodyPhysicsButton.y>=w.expressionButton.y+w.expressionButton.height)
+ assert(w.settingsButton.visible and w.settingsButton.width==w.expressionButton.width)
+ assert(w.settingsButton.y>=w.expressionButton.y+w.expressionButton.height)
  assert(w.skinButton.x==w.overviewX and w.skinButton.x+w.skinButton.width<w.wearButton.x)
  assert(w.biographyPanel.y>=w.physicsResetButton.y+w.physicsResetButton.height)
  local bottom=w.weaponCard.visible and w.weaponCard.y or w.wearButton.y

@@ -93,7 +93,7 @@ end
 local roomText,roleNames,outfitNames={},{},{}
 local biographies,outfitDescriptions,recruitmentText,descriptionCache={},{},{},{}
 local descriptionLineHeight
-local function tr(key) return roomText[key] or data.text[key] or key end
+local function tr(key) return roomText[key] or data.text[key] or (getTextOrNull and getTextOrNull("UI_GFL2_"..key)) or key end
 local function loadRoomText()
     roomText={}
     for key,value in pairs(data.text) do
@@ -2638,16 +2638,27 @@ function W:addSettingsSection(title,y,width)
     return y+34
 end
 
+local function attachSliderTooltip(slider,text)
+    slider.doToolTip=false
+    slider.tooltip=text
+    local basePrerender=slider.prerender
+    slider.prerender=function(s)
+        if basePrerender then basePrerender(s) end
+        if s.dragInside then hideTooltip(s)
+        elseif ISButton and ISButton.updateTooltip then ISButton.updateTooltip(s) end
+    end
+end
+
 function W:buildSettingsTab(y,width,editable)
     y=self:addSettingsSection(tr("SettingsAudio"),y,width)
     local voiceVal=self.actions.getVoiceVolume and self.actions.getVoiceVolume(self.player) or 50
-    self:addLabel(tr("VoiceVolume"),y,18,width-76)
+    self:addLabel(tr("VoiceVolume"),y,18,width-82)
     local voiceSlider=ISSliderPanel:new(5,y+25,width-10,20,self,function(w,value)
         if w.actions.setVoiceVolume then w.actions.setVoiceVolume(w.player,value,false) end
     end)
     voiceSlider:initialise();voiceSlider:instantiate();voiceSlider:setDoButtons(false)
     voiceSlider:setValues(0,100,1,10,true);voiceSlider:setCurrentValue(voiceVal,true)
-    voiceSlider:setTooltip(getText("ContextMenu_GFL2_VoiceVolumeTip"))
+    attachSliderTooltip(voiceSlider,getText("ContextMenu_GFL2_VoiceVolumeTip"))
     local renderVoice=voiceSlider.render
     voiceSlider.render=function(s)
         renderVoice(s)
@@ -2666,13 +2677,13 @@ function W:buildSettingsTab(y,width,editable)
         local hasChest=GFL2CharacterRuntime.hasChestPhysics and GFL2CharacterRuntime.hasChestPhysics(self.player)
         if hasChest then
             local chestVal=GFL2CharacterRuntime.chestStrength and GFL2CharacterRuntime.chestStrength(self.player) or 100
-            self:addLabel(tr("ChestPhysics"),y,18,width-76)
+            self:addLabel(tr("ChestPhysics"),y,18,width-82)
             local chestSlider=ISSliderPanel:new(5,y+25,width-10,20,self,function(w,value)
                 if w.actions.chestStrength then w.actions.chestStrength(w.player,value,false) end
             end)
             chestSlider:initialise();chestSlider:instantiate();chestSlider:setDoButtons(false)
             chestSlider:setValues(0,100,1,10,true);chestSlider:setCurrentValue(chestVal,true)
-            chestSlider:setTooltip(getText("ContextMenu_GFL2_ChestPhysicsTip"))
+            attachSliderTooltip(chestSlider,getText("ContextMenu_GFL2_ChestPhysicsTip"))
             local renderChest=chestSlider.render
             chestSlider.render=function(s)
                 renderChest(s)
