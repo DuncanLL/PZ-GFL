@@ -42,6 +42,11 @@ for _,character in ipairs(w.characters) do
  if roomData.roomWorkshopItems[character.name] then w:onCharacter(character);break end
 end
 click(w.preview,w.workshopButton)
+assert(w.workshopPrompt)
+w:openExchange("credits")
+assert(w.exchange and not w.workshopPrompt,"opening exchange left workshop prompt open")
+w:closeExchange()
+click(w.preview,w.workshopButton)
 local before=#opened
 w:close()
 assert(#opened==before and not w.workshopPrompt)
@@ -727,6 +732,11 @@ if testPart then
 end
 GFL2CharacterRuntime.groupCount,GFL2CharacterRuntime.groupLabel,GFL2CharacterRuntime.optionCount,GFL2CharacterRuntime.optionLabel=
  groupCount,groupLabel,optionCount,optionLabel
+w:setTab("overview")
+assert(w.preview.y==w:titleBarHeight() and w.preview.y+w.preview.height==w.fullHeight,"preview clipped vertically")
+w:setTab("grip")
+assert(w.preview.y==w:titleBarHeight() and w.preview.y+w.preview.height==w.fullHeight,"grip preview clipped vertically")
+w:setTab("overview")
 w:close()
 
 client=true

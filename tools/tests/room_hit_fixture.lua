@@ -3,7 +3,7 @@ function UI:isMouseOver()return false end
 function UI:setTextureRGBA(r,g,b,a)self.textureColor={r=r,g=g,b=b,a=a}end
 function UI:setBorderRGBA(r,g,b,a)self.borderColor={r=r,g=g,b=b,a=a}end
 function UI:setBackgroundRGBA(r,g,b,a)self.backgroundColor={r=r,g=g,b=b,a=a}end
-function getTextManager()return {MeasureStringX=function(s,f,t)return #t*8 end}end
+function getTextManager()return {MeasureStringX=function(s,f,t)return #t*8 end,getFontHeight=function(s,f)return f==UIFont.Medium and 22 or 18 end}end
 function getSoundManager()return {playUISound=function()end}end
 UITransition={new=function()return {}end}
 local function inside(panel,x,y)

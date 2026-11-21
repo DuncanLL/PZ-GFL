@@ -108,6 +108,10 @@ function getText(key,...) return getTextOrNull(key) or original(key,...) end""",
  run('client=true','multiplayer-mode')
  env.rawset('multiplayerRoom',load(repo/'game/mod/42/media/lua/client/GFL2MultiplayerClient.lua'))
  run('client=false','single-player-mode')
+ room_modules=platform.newTable()
+ for mod_file in sorted((repo/'game/mod/42/media/lua/client/GFL2Room').glob('*.lua')):
+  room_modules.rawset('GFL2Room/'+mod_file.stem,load(mod_file))
+ env.rawset('roomModules',room_modules)
  load(repo/'game/mod/42/media/lua/client/GFL2RoomWindow.lua')
  result=load(repo/'tools/tests/room_workshop_assertions.lua');print(result)
 

@@ -10,6 +10,7 @@ function require(name)
  if name=="GFL2WeaponSkins"then return weaponSkins end
  if name=="GFL2MultiplayerProtocol"then return multiplayerProtocol end
  if name=="GFL2MultiplayerClient"then return multiplayerRoom end
+ if roomModules and roomModules[name] then return roomModules[name] end
  return oldRequire(name)
 end
 function getScriptManager()return {FindItem=function()end}end
