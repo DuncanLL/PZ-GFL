@@ -43,19 +43,25 @@ function M.transact(player, command, target, count, callback)
     local state = slot(player)
     if not state or not state.ready or state.pending then return false end
     local args = {request = state.request + 1, target = target, count = count}
-    state.pending = {command = command, args = args, callback = callback, retryAt = getTimestampMs() + 3000}
+    state.pending = {command = command, args = args, callback = callback, retries = 0, retryAt = getTimestampMs() + 3000}
     send(state, command, args)
     return true
 end
 
 function M.publish(player, saved)
-    if not player:isLocalPlayer() or not M.ready(player) then return end
+    if not player:isLocalPlayer() then return end
+    local state = slot(player)
+    if not state then return end
     local model = saved and saved.model or ""
     local signature = model ~= "" and GFL2CharacterRuntime.networkSignature(model) or ""
     local appearance = model ~= "" and GFL2CharacterRuntime.networkAppearance(player) or ""
     local args = {model = model, signature = signature, appearance = appearance}
     if not protocol.appearance(args) then return end
-    local state = slot(player)
+    if not state.ready then
+        state.pendingPublish = args
+        return
+    end
+    state.pendingPublish = nil
     local previous = state.lastPublished
     if previous and previous.model == model and previous.signature == signature and previous.appearance == appearance then return end
     state.attempt = (state.attempt or 0) + 1
@@ -130,11 +136,20 @@ end
 
 local function restoreAppearance(state, equipped)
     if not protocol.appearance(equipped) or equipped.model == "" then return end
-    if GFL2CharacterRuntime.networkSignature(equipped.model) ~= equipped.signature then return end
+    local localSignature = GFL2CharacterRuntime.networkSignature(equipped.model)
+    if localSignature == "" then return end
     local saved = state.player:getModData().GFL2CharacterRuntime
     local settings = saved and (saved.model == equipped.model and saved.settings
         or saved.profiles and saved.profiles[equipped.model]) or ""
     local result = GFL2CharacterRuntime.queueOwnedAppearance(state.player, equipped.model, equipped.appearance, settings)
+    if result ~= "" and localSignature ~= equipped.signature then
+        if settings ~= "" and GFL2CharacterRuntime.queueSettings then
+            result = GFL2CharacterRuntime.queueSettings(state.player, equipped.model, settings)
+        end
+        if result ~= "" and GFL2CharacterRuntime.queueRestore then
+            result = GFL2CharacterRuntime.queueRestore(state.player, equipped.model, "")
+        end
+    end
     if result == "" then state.restoring = true
     else print("[GFL2Exilium] Restore appearance: " .. result) end
 end
@@ -157,19 +172,32 @@ end
 
 local function acceptWallet(state, data)
     local first = not state.ready
-    if state.ready and data.request < state.request then return end
+    local sessionChanged = state.ready and state.session ~= nil and data.session ~= nil and data.session ~= state.session
+    if not sessionChanged and state.ready and data.request < state.request then return end
     state.ready = true
     state.session = data.session
     state.request = data.request
     economy.setSnapshot(state.player, data.wallet)
+    if sessionChanged then state.lastPublished = nil end
     -- A wallet snapshot may arrive before the transaction reply. Replay that request
     -- to get the cached result instead of reporting a purchase failure.
-    if state.pending and (state.pending.args.request < data.request or state.pending.args.request > data.request + 1) then
+    if state.pending and (sessionChanged or state.pending.args.request < data.request or state.pending.args.request > data.request + 1) then
         local callback = state.pending.callback
         state.pending = nil
         callback({status = "unavailable"})
     end
-    if first then restoreAppearance(state, data.equipped) end
+    local queued = state.pendingPublish
+    if queued then
+        state.pendingPublish = nil
+        state.attempt = (state.attempt or 0) + 1
+        queued.attempt = state.attempt
+        state.lastPublished = queued
+        send(state, "Appearance", queued)
+    elseif first then
+        restoreAppearance(state, data.equipped)
+    elseif sessionChanged and GFL2CharacterRuntime.isReady and GFL2CharacterRuntime.isReady(state.player) and M.onRestored then
+        M.onRestored(state.player)
+    end
 end
 
 Events.OnServerCommand.Add(function(module, command, data)
@@ -180,8 +208,10 @@ Events.OnServerCommand.Add(function(module, command, data)
     end
     local state = slots[data.player]
     if not state or state.player:isDead() or state.player:getOnlineID() ~= data.player then return end
-    if data.handshake ~= nil and data.handshake ~= state.handshake then return end
-    if state.session ~= nil and state.session ~= data.session then return end
+    local handshakeMatched = data.handshake ~= nil and data.handshake == state.handshake
+    if data.handshake ~= nil and not handshakeMatched then return end
+    if state.session ~= nil and state.session ~= data.session
+        and not (handshakeMatched and (command == "Wallet" or command == "Snapshot")) then return end
     if command == "Snapshot" then
         if data.revision < lastSnapshotRevision then return end
         lastSnapshotRevision = data.revision
@@ -229,8 +259,17 @@ Events.OnTick.Add(function()
                     if not state.pending then send(state, "Request", {handshake = state.handshake}) end
                 end
                 if state.pending and now >= state.pending.retryAt then
-                    state.pending.retryAt = now + 3000
-                    send(state, state.pending.command, state.pending.args)
+                    local retries = state.pending.retries or 0
+                    if retries >= 4 then
+                        local callback = state.pending.callback
+                        state.pending = nil
+                        state.nextSync = 0
+                        callback({status = "unavailable"})
+                    else
+                        state.pending.retries = retries + 1
+                        state.pending.retryAt = now + 3000
+                        send(state, state.pending.command, state.pending.args)
+                    end
                 end
                 finishRejection(state)
                 if state.restoring then

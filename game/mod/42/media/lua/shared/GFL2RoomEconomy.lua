@@ -161,7 +161,7 @@ function E.buy(player,key,count)
         for _,row in ipairs(notes)do
             local note,container=row[1],row[2]
             player:removeFromHands(note)
-            sendRemoveItemFromContainer(container,note)
+            if isServer and isServer() then sendRemoveItemFromContainer(container,note) end
             container:Remove(note)
         end
         room.credits=total

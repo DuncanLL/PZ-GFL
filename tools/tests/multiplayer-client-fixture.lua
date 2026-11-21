@@ -19,7 +19,7 @@ function peer:isDead() return self.dead==true end
 function getPlayerByOnlineID(id) if id==4 then return actor elseif id==5 then return peer end end
 local sent = {}
 function sendClientCommand(_,_,command,args)
-    sent[#sent+1] = {command=command,request=args.request,appearance=args.appearance,attempt=args.attempt,
+    sent[#sent+1] = {command=command,request=args.request,model=args.model,appearance=args.appearance,attempt=args.attempt,
         handshake=args.handshake,session=args.session}
 end
 
@@ -259,5 +259,52 @@ function verifyClient(client,economy)
     assert(client.pending(actor) and economy.balance(actor,"targeted")==2 and results==2)
     receive("Transaction",{player=6,request=4,wallet={targeted=1},session=35,result={status="unlocked"}})
     assert(not client.pending(actor) and economy.balance(actor,"targeted")==1 and results==3)
+
+    -- Pending transaction stops retrying after 4 resends, fails cleanly, and triggers Request sync.
+    local timedOut=0
+    assert(client.transact(actor,"DrawCharacter",model,1,function(r) assert(r.status=="unavailable");timedOut=timedOut+1 end))
+    for _=1,4 do
+        clock=clock+3000;callbacks.tick()
+        assert(client.pending(actor) and timedOut==0)
+    end
+    clock=clock+3000;callbacks.tick()
+    assert(not client.pending(actor) and timedOut==1)
+    clock=clock+300;callbacks.tick()
+    assert(sent[#sent].command=="Request")
+    local rotatedHs=sent[#sent].handshake
+    receive("Wallet",{player=6,request=5,wallet={targeted=7},handshake=rotatedHs,session=36})
+    assert(economy.balance(actor,"targeted")==7)
+    assert(client.transact(actor,"DrawCharacter",model,1,onResult) and sent[#sent].session==36)
+    receive("Transaction",{player=6,request=6,wallet={targeted=99},session=35,result={status="unlocked"}})
+    assert(client.pending(actor) and economy.balance(actor,"targeted")==7 and results==3)
+    receive("Transaction",{player=6,request=6,wallet={targeted=6},session=36,result={status="unlocked"}})
+    assert(not client.pending(actor) and economy.balance(actor,"targeted")==6 and results==4)
+
+    -- Changed pack signature still restores equipped character and falls back to queueSettings on material mismatch.
+    callbacks.disconnect()
+    actor.data.GFL2CharacterRuntime={model="other-model",profiles={[model]="updated local profile"}}
+    local prevOwned=GFL2CharacterRuntime.queueOwnedAppearance
+    local fallbackSettings
+    GFL2CharacterRuntime.queueOwnedAppearance=function() return "Material count mismatch" end
+    GFL2CharacterRuntime.queueSettings=function(p,id,s) assert(p==actor and id==model);fallbackSettings=s;return "" end
+    callbacks.tick()
+    receive("Wallet",{player=6,request=6,wallet={},handshake=sent[#sent].handshake,session=37,
+        equipped={model=model,signature=string.rep("b",64),appearance="{}"}})
+    assert(fallbackSettings=="updated local profile")
+    GFL2CharacterRuntime.queueOwnedAppearance,GFL2CharacterRuntime.queueSettings=prevOwned,nil
+
+    -- Pre-ready publish is queued and flushed on Wallet without being overwritten by stale server equipped.
+    callbacks.disconnect()
+    GFL2CharacterRuntime.networkAppearance=function() return '{"choices":{},"material_visibility":[]}' end
+    local sentBeforePublish=#sent
+    client.publish(actor,{model=model})
+    assert(#sent==sentBeforePublish)
+    callbacks.tick()
+    restoredSettings=nil
+    receive("Wallet",{player=6,request=0,wallet={},handshake=sent[#sent].handshake,session=38,
+        equipped={model="pmx-0000000000000000",signature=signature,appearance="{}"}})
+    assert(sent[#sent].command=="Appearance" and sent[#sent].model==model and restoredSettings==nil)
+    GFL2CharacterRuntime.networkAppearance=nil
+
     return "PASS client handshake, retry after wallet snapshot, stale appearance, per-model restore, disconnect and respawn"
 end
