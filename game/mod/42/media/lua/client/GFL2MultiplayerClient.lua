@@ -137,7 +137,7 @@ end
 local function restoreAppearance(state, equipped)
     if not protocol.appearance(equipped) or equipped.model == "" then return end
     local localSignature = GFL2CharacterRuntime.networkSignature(equipped.model)
-    if localSignature == "" then return end
+    if type(localSignature) ~= "string" or localSignature == "" then return end
     local saved = state.player:getModData().GFL2CharacterRuntime
     local settings = saved and (saved.model == equipped.model and saved.settings
         or saved.profiles and saved.profiles[equipped.model]) or ""
@@ -196,7 +196,7 @@ local function acceptWallet(state, data)
     elseif first then
         restoreAppearance(state, data.equipped)
     elseif sessionChanged and GFL2CharacterRuntime.isReady and GFL2CharacterRuntime.isReady(state.player) and M.onRestored then
-        M.onRestored(state.player)
+        M.onRestored(state.player, true)
     end
 end
 
