@@ -96,15 +96,20 @@ end
 
 local function updateRemote()
     for id, state in pairs(remote) do
-        local actor = getPlayerByOnlineID(id)
+        local raw = getPlayerByOnlineID(id)
+        local actor = raw
         if actor and (actor == state.previousActor or actor:isLocalPlayer() or actor:isDead()
                 or actor:getUsername() ~= state.owner) then actor = nil end
         if state.actor and state.actor ~= actor then
+            local retired = state.actor:isDead()
+                or (raw ~= nil and (raw:isLocalPlayer() or raw:getUsername() ~= state.owner))
             GFL2CharacterRuntime.disable(state.actor)
-            state.previousActor = state.actor
+            if retired then
+                state.previousActor = state.actor
+                state.retired = true
+            end
             state.actor = nil
             state.applied = false
-            state.retired = true
         end
         if state.actor and state.applied and GFL2CharacterRuntime.hasModelFailure(state.actor) then
             GFL2CharacterRuntime.disable(state.actor)

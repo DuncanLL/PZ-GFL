@@ -124,6 +124,7 @@ function verifyAppearanceRejections()
     return "PASS late appearance rejection leaves the newer model intact, current rejection restores the approved model and its voice"
 end
 local applied, disabled, cleared, restoredSettings = 0, 0, 0, nil
+local expectedDisablePeer = peer
 local signature = string.rep("a",64)
 GFL2CharacterRuntime = {
     hasModelFailure=function() return false end,
@@ -139,7 +140,7 @@ GFL2CharacterRuntime = {
         else assert(model=="pmx-abe3eaaaa9d04264");applied=applied+1 end
         return ""
     end,
-    disable=function(player) assert(player==peer);disabled=disabled+1 end,
+    disable=function(player) assert(player==(peer or expectedDisablePeer));disabled=disabled+1 end,
 }
 function verifyClient(client,economy)
     local function receive(command,data)
@@ -212,6 +213,26 @@ function verifyClient(client,economy)
     receive("Appearance",{player=5,owner="remote",revision=9,model=model,signature=signature,appearance="{}",session=26})
     clock=10500;callbacks.tick()
     assert(applied==5,"the same live player could not re-enable an appearance")
+    expectedDisablePeer=peer;peer=nil
+    clock=10800;callbacks.tick()
+    assert(disabled==4 and applied==5,"stream-out must release the live remote model without changing applied count")
+    peer=setmetatable({},{__index={isLocalPlayer=expectedDisablePeer.isLocalPlayer,getUsername=expectedDisablePeer.getUsername,isDead=expectedDisablePeer.isDead}})
+    clock=11100;callbacks.tick()
+    assert(applied==6,"driving back into streaming range with a fresh peer instance did not re-apply PMX")
+    expectedDisablePeer=peer;peer=nil
+    clock=11400;callbacks.tick()
+    assert(disabled==5 and applied==6)
+    peer=expectedDisablePeer
+    clock=11700;callbacks.tick()
+    assert(applied==7,"returning into streaming range with the same peer instance did not re-apply PMX")
+    peer.dead=true
+    clock=12000;callbacks.tick()
+    assert(disabled==6)
+    peer=setmetatable({},{__index={isLocalPlayer=peer.isLocalPlayer,getUsername=peer.getUsername,isDead=peer.isDead}})
+    clock=12300;callbacks.tick()
+    assert(applied==7,"a dead player's respawned actor on the same session must still be blocked")
+    receive("Appearance",{player=5,owner="remote",revision=10,model="",signature="",appearance="",session=26})
+    clock=12600;callbacks.tick()
     callbacks.disconnect()
     assert(not client.ready(actor) and economy.balance(actor,"targeted")==0)
     actor.data.GFL2CharacterRuntime={model="other-model",profiles={[model]="saved settings for that outfit"}}
@@ -220,12 +241,12 @@ function verifyClient(client,economy)
     assert(restoredSettings=="saved settings for that outfit")
     actor.dead=true
     assert(not client.ready(actor))
-    clock=10800;callbacks.tick()
+    clock=clock+300;callbacks.tick()
     receive("Wallet",{player=4,request=3,wallet={targeted=25}})
     assert(economy.balance(actor,"targeted")==0)
     actor.onlineId=6;actor.dead=false
     local oldHandshake=sent[#sent].handshake
-    clock=11100;callbacks.tick()
+    clock=clock+300;callbacks.tick()
     assert(sent[#sent].command=="Request" and not client.ready(actor))
     local newHandshake=sent[#sent].handshake
     assert(oldHandshake and newHandshake and oldHandshake~=newHandshake)
