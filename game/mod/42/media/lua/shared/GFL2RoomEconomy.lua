@@ -1,5 +1,5 @@
 local weaponSkins=require "GFL2WeaponSkins"
-local E={cost={targeted=150,outfit=120},creditsPerCash=60}
+local E={cost={targeted=150,outfit=120},creditsPerCash=300}
 E.keys={"targeted","outfit","credits"}
 local snapshots=setmetatable({},{__mode="k"})
 local recordingUnlocks=setmetatable({},{__mode="k"})

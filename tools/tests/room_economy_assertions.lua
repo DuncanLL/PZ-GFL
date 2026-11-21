@@ -20,7 +20,7 @@ local player={data={[retiredWallet]={
 function player:getModData() return self.data end
 function player:getPlayerNum() return 0 end
 local wallet=player.data[retiredWallet]
-assert(E.outfitGuarantee==100 and E.characterGuarantee==80)
+assert(E.creditsPerCash==300 and E.outfitGuarantee==100 and E.characterGuarantee==80)
 assert(E.characterChance(58)==60 and E.characterChance(59)==510 and E.characterChance(80)==10000)
 assert(E.weaponChance(50)==70 and E.weaponChance(51)==570 and E.weaponChance(70)==10000)
 local outfitRates={{25,2},{26,3},{49,26},{50,28},{69,66},{70,81},{79,216},{80,266},{99,1216},{100,10000}}
