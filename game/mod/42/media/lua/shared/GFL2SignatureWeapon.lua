@@ -22,6 +22,8 @@ local weapons = {{
     previewCenterZ = 0.0068845125,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.Box545x39",
 }, {
     id = "GFL2.AlvaAN94",
     mod = "GFL2Alva",
@@ -35,6 +37,8 @@ local weapons = {{
     previewCenterZ = 0.039588132,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.Box545x39",
 }, {
     id = "GFL2.Scylla",
     mod = "GFL2Klukai",
@@ -47,6 +51,7 @@ local weapons = {{
     previewCenterZ = 0.017063277,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.UnspokenCalling",
     mod = "GFL2Suomi",
@@ -59,6 +64,7 @@ local weapons = {{
     previewCenterZ = -0.0087635611,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.Bullets9mmBox",
 }, {
     id = "GFL2.NightRoaming",
     mod = "GFL2Cheyanne",
@@ -71,6 +77,8 @@ local weapons = {{
     previewCenterZ = 0.022345308,
     previewZoom = 13,
     startsWithMagazine = true,
+    ammoBox = "Base.308Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.AB_5fc382c1016cce60e8341b20",
 }, {
     id = "GFL2.Skyhowl",
     mod = "GFL2Soppo",
@@ -83,6 +91,7 @@ local weapons = {{
     previewCenterZ = 0.006056078,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.Snotra",
     mod = "GFL2Cecilia",
@@ -95,6 +104,7 @@ local weapons = {{
     previewCenterZ = 0.021851002,
     previewZoom = 17,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.MaidsRules",
     mod = "GFL2Centaureissi",
@@ -107,6 +117,7 @@ local weapons = {{
     previewCenterZ = 0.021299842,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.SparklingCenterstage",
     mod = "GFL2Yohee",
@@ -119,6 +130,7 @@ local weapons = {{
     previewCenterZ = 0.0096723983,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.ConfessionCompass",
     mod = "GFL2Asteria",
@@ -131,6 +143,7 @@ local weapons = {{
     previewCenterZ = 0.012857762,
     previewZoom = 15,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.HeavyStrings",
     mod = "GFL2Daiyan",
@@ -143,6 +156,7 @@ local weapons = {{
     previewCenterZ = 0.016590572,
     previewZoom = 17,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.Capitoline",
     mod = "GFL2OTs14",
@@ -155,6 +169,8 @@ local weapons = {{
     previewCenterZ = 0.007081763,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.AB_61962d879bb3d20b0946d385",
 }, {
     id = "GFL2.SavageBeast",
     mod = "GFL2Faelynn",
@@ -167,6 +183,7 @@ local weapons = {{
     previewCenterZ = 0.01376928,
     previewZoom = 15,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.Schlitzohr",
     mod = "GFL2Laiya",
@@ -179,6 +196,7 @@ local weapons = {{
     previewCenterZ = -0.0024051744,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.Bullets45Box",
 }, {
     id = "GFL2.Lowenjunges",
     mod = "GFL2Lenna",
@@ -191,6 +209,7 @@ local weapons = {{
     previewCenterZ = 0.0084929512,
     previewZoom = 17,
     startsWithMagazine = true,
+    ammoBox = "Base.Bullets9mmBox",
 }, {
     id = "GFL2.BansheesWhisper",
     mod = "GFL2Vector",
@@ -203,6 +222,7 @@ local weapons = {{
     previewCenterZ = 0.0069128359,
     previewZoom = 17,
     startsWithMagazine = true,
+    ammoBox = "Base.Bullets45Box",
 }, {
     id = "GFL2.Radiance",
     mod = "GFL2Springfield",
@@ -214,6 +234,8 @@ local weapons = {{
     previewCenterY = 0.23107328,
     previewCenterZ = 0.006611228,
     previewZoom = 14,
+    ammoBox = "Base.308Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.Box762x54R",
 }, {
     id = "GFL2.BittersweetCaramel",
     mod = "GFL2Macqiato",
@@ -226,6 +248,7 @@ local weapons = {{
     previewCenterZ = 0.031933966,
     previewZoom = 15,
     startsWithMagazine = true,
+    ammoBox = "Base.308Box",
 }, {
     id = "GFL2.GuardianSilverwing",
     mod = "GFL2Nikketa",
@@ -238,6 +261,8 @@ local weapons = {{
     previewCenterZ = 0.024772913,
     previewZoom = 15,
     startsWithMagazine = true,
+    ammoBox = "Base.308Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.AB_61962d879bb3d20b0946d385",
 }, {
     id = "GFL2.Trailblazer",
     mod = "GFL2Qiuhua",
@@ -249,6 +274,7 @@ local weapons = {{
     previewCenterY = 0.12929947,
     previewCenterZ = 0.015572686,
     previewZoom = 16,
+    ammoBox = "Base.ShotgunShellsBox",
 }, {
     id = "GFL2.GaiaTerminus",
     mod = "GFL2Destroyer",
@@ -260,6 +286,7 @@ local weapons = {{
     previewCenterY = 0.20225553,
     previewCenterZ = 0.034709379,
     previewZoom = 15,
+    ammoBox = "Base.ShotgunShellsBox",
 }, {
     id = "GFL2.Iaso",
     mod = "GFL2Florence",
@@ -272,6 +299,7 @@ local weapons = {{
     previewCenterZ = -7.7325554e-05,
     previewZoom = 20,
     startsWithMagazine = true,
+    ammoBox = "Base.Bullets9mmBox",
 }, {
     id = "GFL2.TwilightRose",
     mod = "GFL2Sextans",
@@ -295,6 +323,7 @@ local weapons = {{
     previewCenterZ = 0.037367,
     previewZoom = 16,
     startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }, {
     id = "GFL2.TidalNocturne",
     mod = "GFL2Loreley",
@@ -307,6 +336,8 @@ local weapons = {{
     previewCenterZ = 0.007725,
     previewZoom = 14,
     startsWithMagazine = true,
+    ammoBox = "Base.308Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.AB_5fc382c1016cce60e8341b20",
 }}
 
 local catalog = {byId = {}, byCharacter = {}}

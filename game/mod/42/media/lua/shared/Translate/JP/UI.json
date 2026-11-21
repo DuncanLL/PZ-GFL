@@ -693,5 +693,7 @@
     "UI_GFL2_ClothHairPhysics": "衣装・髪物理",
     "UI_GFL2_SettingsOn": "オン",
     "UI_GFL2_SettingsOff": "オフ",
-    "UI_GFL2_SettingsReset": "デフォルトに戻す"
+    "UI_GFL2_SettingsReset": "デフォルトに戻す",
+    "UI_GFL2_RoomAmmoBuy": "弾薬を購入",
+    "UI_GFL2_RoomAmmoRate": "1箱あたり %d クレジット"
 }

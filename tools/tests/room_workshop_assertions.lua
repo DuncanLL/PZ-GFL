@@ -167,6 +167,16 @@ do
    assert(painted.viewPitch==98);painted:onMouseDown();painted:onMouseMove(5,0);assert(painted.viewPitch==98)
    assert(w.weaponSkinPanel.visible and w.weaponSkinPanel.y+w.weaponSkinPanel.height<=info.y-8)
    assert(painted.y+painted.height<=w.weaponClaimButton.y-64)
+   if weapon.ammoBox then
+    assert(w.weaponAmmoButton.visible and w.weaponAmmoButton.y==w.drawButtons[2].y)
+    w.weaponAmmoButton:render()
+    w:openExchange("ammo",weapon)
+    assert(w.exchange and w.exchange.key=="ammo")
+    w.exchange.overlay:prerender();w.exchange.overlay.children[1]:prerender()
+    w:closeExchange()
+   else
+    assert(not w.weaponAmmoButton.visible)
+   end
    economy.weaponProgress=originalProgress
    c.unlockRequired=wasLocked
    w:back();assert(not painted.visible and not painted.capture)

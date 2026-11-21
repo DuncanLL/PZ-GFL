@@ -1,5 +1,30 @@
 local weaponSkins=require "GFL2WeaponSkins"
 local E={cost={targeted=150,outfit=120},creditsPerCash=300}
+local gomAmmoBoxes={
+    ["Base.556Box"]="MarzGuns.556x45_Box",
+    ["Base.308Box"]="MarzGuns.308_Box",
+    ["Base.Bullets9mmBox"]="MarzGuns.9x19_Box",
+    ["Base.Bullets45Box"]="MarzGuns.45_Box",
+    ["Base.ShotgunShellsBox"]="MarzGuns.12Gauge_Box_Buckshot",
+}
+local ammoBoxPrices={
+    ["Base.Bullets9mmBox"]=1200,
+    ["MarzGuns.9x19_Box"]=1200,
+    ["Base.Bullets45Box"]=1500,
+    ["MarzGuns.45_Box"]=1500,
+    ["Base.ShotgunShellsBox"]=1800,
+    ["MarzGuns.12Gauge_Box_Buckshot"]=1800,
+    ["Base.556Box"]=2000,
+    ["MarzGuns.556x45_Box"]=2000,
+    ["EscapeFromZomboidFirearms.Box545x39"]=2000,
+    ["EscapeFromZomboidFirearms.AB_61962d879bb3d20b0946d385"]=2000,
+    ["Base.308Box"]=2400,
+    ["MarzGuns.308_Box"]=2400,
+    ["EscapeFromZomboidFirearms.Box762x54R"]=2400,
+    ["EscapeFromZomboidFirearms.AB_5fc382c1016cce60e8341b20"]=2400,
+}
+E.ammoBoxPrices=ammoBoxPrices
+E.gomAmmoBoxes=gomAmmoBoxes
 E.keys={"targeted","outfit","credits"}
 local snapshots=setmetatable({},{__mode="k"})
 local recordingUnlocks=setmetatable({},{__mode="k"})
@@ -104,8 +129,12 @@ local function cash(player)
     return player:getInventory():getAllTypeRecurse("Base.Money")
 end
 
-function E.available(player,key)
+function E.available(player,key,weapon)
     if key=="credits" then return cash(player):size() end
+    if key=="ammo" then
+        local ammo=E.weaponAmmo(weapon)
+        return ammo and math.min(1000,math.floor(E.balance(player,"credits")/ammo.price)) or 0
+    end
     local cost=E.cost[key]
     if cost then
         return math.floor(E.balance(player,"credits")/cost)
@@ -392,6 +421,72 @@ function E.claimMagazine(player,weapon)
     local item=inventory:AddItem(magazine)
     if not item then return "unavailable" end
     if isServer and isServer() then sendAddItemToContainer(inventory,item) end
+    return "ok"
+end
+
+function E.weaponAmmo(weapon)
+    if not weapon or not weapon.ammoBox then return nil end
+    local scripts=getScriptManager and getScriptManager()
+    if not scripts or not scripts.FindItem then return nil end
+    local mods=getActivatedMods and getActivatedMods()
+    local usesEFZ=mods and mods:contains("EscapeFromZomboidFirearms")
+    local usesGOM=not usesEFZ and mods and (mods:contains("GunsOfMarz") or mods:contains("MarzGuns"))
+    local box,itemScript
+    if usesEFZ and weapon.efzAmmoBox then
+        itemScript=scripts:FindItem(weapon.efzAmmoBox)
+        if itemScript then box=weapon.efzAmmoBox end
+    elseif usesGOM and gomAmmoBoxes[weapon.ammoBox] then
+        local gomBox=gomAmmoBoxes[weapon.ammoBox]
+        itemScript=scripts:FindItem(gomBox)
+        if itemScript then box=gomBox end
+    end
+    if not itemScript then
+        itemScript=scripts:FindItem(weapon.ammoBox)
+        if itemScript then box=weapon.ammoBox end
+    end
+    if not itemScript then return nil end
+    local price=ammoBoxPrices[box] or ammoBoxPrices[weapon.ammoBox] or 2000
+    local name,texture
+    if type(itemScript)=="table" or type(itemScript)=="userdata" then
+        local okN,valN=pcall(function()return itemScript.getDisplayName and itemScript:getDisplayName() or nil end)
+        if okN then name=valN end
+        local okT,valT=pcall(function()return itemScript.getNormalTexture and itemScript:getNormalTexture() or nil end)
+        if okT then texture=valT end
+    end
+    return {
+        box=box,
+        price=price,
+        script=itemScript,
+        name=name,
+        texture=texture,
+    }
+end
+
+function E.buyAmmo(player,weapon,count)
+    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if type(count)~="number" or count<1 or count%1~=0 or count>1000 then return "unavailable" end
+    if not weapon or not E.weaponProgress(player,weapon.id).acquired then return "unavailable" end
+    local ammo=E.weaponAmmo(weapon)
+    if not ammo then return "unavailable" end
+    local balance=E.balance(player,"credits")
+    local cost=count*ammo.price
+    if cost>balance then return "short" end
+    local inventory=player:getInventory()
+    local added={}
+    for i=1,count do
+        local item=inventory:AddItem(ammo.box)
+        if not item then
+            for j=1,#added do
+                if inventory.Remove then inventory:Remove(added[j]) end
+            end
+            return "unavailable"
+        end
+        added[i]=item
+    end
+    wallet(player).credits=balance-cost
+    if isServer and isServer() then
+        for _,item in ipairs(added) do sendAddItemToContainer(inventory,item) end
+    end
     return "ok"
 end
 

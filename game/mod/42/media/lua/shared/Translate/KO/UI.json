@@ -693,5 +693,7 @@
     "UI_GFL2_ClothHairPhysics": "의상 및 머리카락 물리",
     "UI_GFL2_SettingsOn": "켜짐",
     "UI_GFL2_SettingsOff": "꺼짐",
-    "UI_GFL2_SettingsReset": "기본값 복원"
+    "UI_GFL2_SettingsReset": "기본값 복원",
+    "UI_GFL2_RoomAmmoBuy": "탄약 구매",
+    "UI_GFL2_RoomAmmoRate": "상자당 %d 크레디트"
 }

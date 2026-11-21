@@ -1,17 +1,20 @@
 require "Items/ProceduralDistributions"
-local catalog = require "GFL2SignatureWeapon"
 
+-- Signature weapon magazines are claimed directly in the Ready Room; keep vanilla
+-- gun store ammo shelves untouched and strip any legacy character-pack magazine entries.
 Events.OnPreDistributionMerge.Add(function()
-    local items = ProceduralDistributions.list.GunStoreMagsAmmo.items
-    local stocked = {}
-    for i = 1, #items, 2 do stocked[items[i]] = true end
-
-    for weaponId, weapon in pairs(catalog.byId) do
-        local magazineId = weaponId .. "Magazine"
-        if weapon.startsWithMagazine and not stocked[magazineId] and
-                getScriptManager():FindItem(magazineId) then
-            items[#items + 1] = magazineId
-            items[#items + 1] = 8
+    local tableDef = ProceduralDistributions and ProceduralDistributions.list and ProceduralDistributions.list.GunStoreMagsAmmo
+    local items = tableDef and tableDef.items
+    if not items then return end
+    local write = 1
+    for read = 1, #items, 2 do
+        local name = items[read]
+        local weight = items[read + 1]
+        if type(name) ~= "string" or not name:match("^GFL2%..+Magazine$") then
+            items[write] = name
+            items[write + 1] = weight
+            write = write + 2
         end
     end
+    for i = write, #items do items[i] = nil end
 end)

@@ -124,5 +124,41 @@ local previousClient=isClient
 isClient=function() return true end
 assert(not E.grantTestCredits(player) and wallet.credits==50000)
 isClient=previousClient
+local oldScripts,oldMods=getScriptManager,getActivatedMods
+local activeMods={}
+local validBoxes={
+    ["Base.556Box"]=true,["Base.Bullets9mmBox"]=true,["Base.308Box"]=true,
+    ["MarzGuns.556x45_Box"]=true,
+    ["EscapeFromZomboidFirearms.Box545x39"]=true,["EscapeFromZomboidFirearms.Box762x54R"]=true,
+}
+function getActivatedMods() return {contains=function(_,m) return activeMods[m]==true end} end
+function getScriptManager()
+    return {FindItem=function(_,id)
+        if validBoxes[id] then return {getDisplayName=function()return id end} end
+    end}
+end
+local gun={id="GFL2.AlvaAN94",ammoBox="Base.556Box",efzAmmoBox="EscapeFromZomboidFirearms.Box545x39"}
+local smg={id="GFL2.UnspokenCalling",ammoBox="Base.Bullets9mmBox"}
+assert(E.weaponAmmo({id="GFL2.CauseAndEffect"})==nil)
+assert(E.weaponAmmo(gun).box=="Base.556Box" and E.weaponAmmo(gun).price==2000)
+assert(E.weaponAmmo(smg).box=="Base.Bullets9mmBox" and E.weaponAmmo(smg).price==1200)
+activeMods["GunsOfMarz"]=true
+assert(E.weaponAmmo(gun).box=="MarzGuns.556x45_Box" and E.weaponAmmo(gun).price==2000)
+activeMods={MarzGuns=true}
+assert(E.weaponAmmo(gun).box=="MarzGuns.556x45_Box" and E.weaponAmmo(gun).price==2000)
+activeMods["EscapeFromZomboidFirearms"]=true
+assert(E.weaponAmmo(gun).box=="EscapeFromZomboidFirearms.Box545x39" and E.weaponAmmo(gun).price==2000)
+activeMods={}
+wallet.credits=5000
+globalData.GFL2ExiliumSignatureWeapons["0"].signatureWeapons[gun.id]={acquired=true}
+assert(E.available(player,"ammo",gun)==2)
+assert(E.buyAmmo(player,smg,1)=="unavailable")
+assert(E.buyAmmo(player,gun,3)=="short")
+assert(E.buyAmmo(player,gun,2)=="ok" and wallet.credits==1000 and carried["Base.556Box"]==true and added==4)
+wallet.credits=5000000
+assert(E.available(player,"ammo",gun)==1000)
+assert(E.buyAmmo(player,gun,1001)=="unavailable")
+assert(E.weaponAmmo(blade)==nil and E.available(player,"ammo",blade)==0 and E.buyAmmo(player,blade,1)=="unavailable")
+getScriptManager,getActivatedMods=oldScripts,oldMods
 
 return "PASS wallet, shared character and weapon pity, outfit pity, legacy unlock migration, loss and death recovery, and single-player credits"

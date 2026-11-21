@@ -693,5 +693,7 @@
     "UI_GFL2_ClothHairPhysics": "Cloth & Hair Physics",
     "UI_GFL2_SettingsOn": "On",
     "UI_GFL2_SettingsOff": "Off",
-    "UI_GFL2_SettingsReset": "Reset Defaults"
+    "UI_GFL2_SettingsReset": "Reset Defaults",
+    "UI_GFL2_RoomAmmoBuy": "Buy Ammo",
+    "UI_GFL2_RoomAmmoRate": "Costs %d credits per box"
 }

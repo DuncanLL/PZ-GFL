@@ -81,7 +81,9 @@ function sendEquip(owner)
     equippedPackets[#equippedPackets+1]={held=held,model=held:getModData().GFL2WeaponSkin}
 end
 function getScriptManager()
-    return {FindItem=function(_,id) return id==magazine and {} end,
+    return {FindItem=function(_,id)
+            if id==magazine or id=="Base.556Box" then return {getDisplayName=function()return id end} end
+        end,
         getModelScript=function(_,name)
             return (name==weapon.."Skin4332565" or name==weapon.."Skin4332565Empty") and {}
         end}
@@ -167,6 +169,12 @@ function verifyServer()
     hands[2]=nil
     request(playerB,"WeaponSkin",{target=weapon..":4332565",request=14})
     assert(#syncChanged==3 and #equippedPackets==2 and syncAdded[1]:getModData().GFL2WeaponSkin==weapon.."Skin4332565")
+    request(playerB,"BuyAmmo",{target=weapon,count=1,request=15})
+    assert(replies.Transaction.result.status=="short" and #syncAdded==2,
+        string.format("expected short/2 got status=%s syncAdded=%d", tostring(replies.Transaction.result.status), #syncAdded))
+    saves["player-b"].wallet.credits=2500
+    request(playerB,"BuyAmmo",{target=weapon,count=1,request=16})
+    assert(replies.Transaction.result.status=="ok" and saves["player-b"].wallet.credits==500 and #syncAdded==3 and syncAdded[3]:getFullType()=="Base.556Box")
 
     player.dead=true
     luaEnvironment[2](player)

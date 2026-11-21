@@ -753,6 +753,17 @@ function W:createChildren()
     self.weaponSkinButton.roomLook="drawOnce"
     self.weaponSkinButton:setHeight(43)
     self.weaponSkinButton:setVisible(false)
+    self.weaponAmmoButton=button(self,0,0,43,"",self,function(w)w:openExchange("ammo",w.signatureWeapon)end)
+    self.weaponAmmoButton.roomLook="drawOnce"
+    self.weaponAmmoButton:setHeight(43)
+    self.weaponAmmoButton:setTooltip(tr("RoomAmmoBuy"))
+    self.weaponAmmoButton:setVisible(false)
+    local renderAmmo=self.weaponAmmoButton.render
+    self.weaponAmmoButton.render=function(b)
+        renderAmmo(b)
+        local icon=image(art.."ammo.png")
+        if icon then b:drawTextureScaled(icon,math.floor((b.width-24)/2),math.floor((b.height-24)/2),24,24,.94,1,1,1) end
+    end
     self.weaponSkinPanel=panel(self,0,0,230,100)
     self.weaponSkinPanel:setVisible(false)
     self.weaponSkinRows={}
@@ -1177,7 +1188,7 @@ end
 
 function W:updateExchange(quantity)
     local s=self.exchange
-    s.maximum=economy.available(self.player,s.key)
+    s.maximum=economy.available(self.player,s.key,s.weapon)
     s.quantity=clamp(math.floor(quantity+.5),1,math.max(1,s.maximum))
     s.slider:setValues(1,math.max(2,s.maximum),1,10,true)
     s.slider:setCurrentValue(s.quantity,true)
@@ -1187,8 +1198,11 @@ function W:updateExchange(quantity)
     s.confirm:setEnable(s.maximum>0)
 end
 
-function W:openExchange(key)
+function W:openExchange(key,weapon)
     if self.folded or self.foldStart or self.drawAnimation then return end
+    local buyingAmmo=key=="ammo"
+    local ammo=buyingAmmo and economy.weaponAmmo(weapon)
+    if buyingAmmo and not ammo then return end
     self:closeExchange()
     local overlay=ISPanel:new(0,0,self.width,self.height);overlay:initialise();overlay.background=false
     overlay.prerender=function(p)p:drawRect(0,0,p.width,p.height,.72,.05,.09,.10)end
@@ -1199,16 +1213,23 @@ function W:openExchange(key)
     local height=math.min(433,self.height-76)
     local card=ISPanel:new(math.floor((self.width-width)/2),math.floor((self.height-height)/2),width,height)
     card:initialise();card.background=false;overlay:addChild(card)
-    local s={key=key,overlay=overlay,quantity=1}
+    local s={key=key,weapon=weapon,ammo=ammo,overlay=overlay,quantity=1}
     local buyingCredits=key=="credits"
-    local cost=buyingCredits and 1 or economy.cost[key]
-    local rateLabel=buyingCredits and tr("RoomCashRate") or tr(key=="targeted" and "RoomTargetedPermitRate" or "RoomPermitRate")
+    local cost=buyingCredits and 1 or (buyingAmmo and ammo.price or economy.cost[key])
+    local title=buyingAmmo and (ammo.name or tr("RoomAmmoBuy")) or tr(resourceTitles[key])
+    local rateLabel=buyingCredits and tr("RoomCashRate") or buyingAmmo and string.format(tr("RoomAmmoRate"),ammo.price)
+        or tr(key=="targeted" and "RoomTargetedPermitRate" or "RoomPermitRate")
     card.prerender=function(p)
         p:drawRect(0,0,p.width,p.height,.98,.86,.89,.89)
         p:drawRect(0,0,p.width,5,.96,.27,.40,.42)
         p:drawRect(29,44,144,144,.34,.46,.59,.61)
-        resourceIcon(p,key,39,53,124)
-        label(p,tr(resourceTitles[key]),198,45,29,p.width-280,.07,.13,.15)
+        if buyingAmmo then
+            if ammo.texture then p:drawTextureScaledAspect(ammo.texture,43,57,116,116,1,1,1,1)
+            else resourceIcon(p,"ammo",55,69,92) end
+        else
+            resourceIcon(p,key,39,53,124)
+        end
+        label(p,title,198,45,29,p.width-280,.07,.13,.15)
         p:drawRect(198,84,p.width-239,1,.41,.28,.40,.43)
         label(p,rateLabel,198,94,17,p.width-239,.23,.35,.38)
         label(p,tr("RoomExchangeQuantity"),p.width/2-90,p.height-154,17,124,.13,.22,.24)
@@ -1235,13 +1256,23 @@ function W:openExchange(key)
     button(card,width-54,14,34,"X",self,function(w)w:closeExchange()end)
     button(card,math.floor(width*.23),height-48,math.floor(width*.24),tr("RoomExchangeCancel"),self,function(w)w:closeExchange()end)
     s.confirm=button(card,math.floor(width*.53),height-48,math.floor(width*.24),tr("RoomExchangeBuy"),self,function(w)
-        w:roomTransaction("Exchange",key,s.quantity,function()
-            return economy.buy(w.player,key,s.quantity) and "ok" or "short"
-        end,function(status)
-            if w.exchange~=s then return end
-            s.message=tr(status=="ok" and "RoomExchangeDone" or "RoomNotEnough")
-            w:updateExchange(s.quantity)
-        end)
+        if buyingAmmo then
+            w:roomTransaction("BuyAmmo",weapon.id,s.quantity,function()
+                return economy.buyAmmo(w.player,weapon,s.quantity)
+            end,function(status)
+                if w.exchange~=s then return end
+                s.message=tr(status=="ok" and "RoomExchangeDone" or "RoomNotEnough")
+                w:updateExchange(s.quantity)
+            end)
+        else
+            w:roomTransaction("Exchange",key,s.quantity,function()
+                return economy.buy(w.player,key,s.quantity) and "ok" or "short"
+            end,function(status)
+                if w.exchange~=s then return end
+                s.message=tr(status=="ok" and "RoomExchangeDone" or "RoomNotEnough")
+                w:updateExchange(s.quantity)
+            end)
+        end
     end)
     s.confirm:setSound("activate","GFL2RoomConfirm")
     self.exchange=s
@@ -1863,7 +1894,7 @@ function W:roomVisibility()
     self.gripAimButton:setVisible(false)
     self:refreshExpressionSlots(false)
     for _,widget in ipairs({self.sidebar,self.rosterToggle,self.content,self.pageButton,self.gripButton,
-        self.expressionButton,self.skinButton,self.wearButton,self.physicsResetButton,self.settingsButton,self.restoreButton,self.motionTab,self.workshopButton,self.weaponCard,self.weaponClaimButton,self.magazineClaimButton,self.weaponSkinButton,self.weaponSkinPanel}) do
+        self.expressionButton,self.skinButton,self.wearButton,self.physicsResetButton,self.settingsButton,self.restoreButton,self.motionTab,self.workshopButton,self.weaponCard,self.weaponClaimButton,self.magazineClaimButton,self.weaponSkinButton,self.weaponAmmoButton,self.weaponSkinPanel}) do
         widget:setVisible(false)
     end
     self.motionLibraryBox:setVisible(motions);self.motionBox:setVisible(motions)
@@ -2016,6 +2047,7 @@ function W:createWeaponPreview(signatureWeapon)
     self:addChild(scene)
     if self.content then self.content:bringToTop() end
     if self.weaponSkinPanel then self.weaponSkinPanel:bringToTop() end
+    if self.weaponAmmoButton then self.weaponAmmoButton:bringToTop() end
     if self.weaponSkinButton then self.weaponSkinButton:bringToTop() end
     if self.magazineClaimButton then self.magazineClaimButton:bringToTop() end
     if self.weaponClaimButton then self.weaponClaimButton:bringToTop() end
@@ -2070,6 +2102,10 @@ function W:layoutOverview()
     self.weaponSkinButton:setX(first.x-77)
     self.weaponSkinButton:setY(last.y)
     self.weaponSkinButton:setVisible(showSkins)
+    local showAmmo=claimVisible and economy.weaponAmmo(signatureWeapon)~=nil
+    self.weaponAmmoButton:setX((showSkins and self.weaponSkinButton.x or first.x)-55)
+    self.weaponAmmoButton:setY(last.y)
+    self.weaponAmmoButton:setVisible(showAmmo)
     local skin=progress.skin or ""
     local previewModel=weaponPage and (weaponSkins.model(signatureWeapon.id,skin) or signatureWeapon.id)
     self:layoutWeaponSkins(signatureWeapon,variants,showSkins and self.weaponSkinOpen==true,skin)

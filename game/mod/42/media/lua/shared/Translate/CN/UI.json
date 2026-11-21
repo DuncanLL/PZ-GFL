@@ -543,5 +543,7 @@
     "UI_GFL2_ClothHairPhysics": "衣服与头发物理",
     "UI_GFL2_SettingsOn": "已开启",
     "UI_GFL2_SettingsOff": "已关闭",
-    "UI_GFL2_SettingsReset": "恢复默认设置"
+    "UI_GFL2_SettingsReset": "恢复默认设置",
+    "UI_GFL2_RoomAmmoBuy": "购买弹药",
+    "UI_GFL2_RoomAmmoRate": "每盒消耗 %d 信用币"
 }
