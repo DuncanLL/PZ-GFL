@@ -4,12 +4,16 @@ import com.shiroha.mmdskin.NativeFunc;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.function.IntFunction;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.lwjgl.opengl.GL15;
 import viewpoint.platform.IrisPacks;
 import viewpoint.platform.ShaderPacks;
@@ -140,7 +144,7 @@ public final class PmxDrawMesh implements AutoCloseable {
         VertexBufferObject.Vbo handle;
         final int cull;
         final int stride;
-        final boolean hull,fringe;
+        final boolean hull,fringe,keepInFirstPerson;
         final int[] weld;
         final float[] edgeWeights,smooth;
         float inkU,inkV;
@@ -157,8 +161,12 @@ public final class PmxDrawMesh implements AutoCloseable {
             this(material,source,indices,bothFaces,ordinal,shading,weld,edgeWeights,groups,fringe,null);
         }
         Part(int material,int[] source,int[] indices,boolean bothFaces,int ordinal,boolean shading,int[] weld,float[] edgeWeights,int groups,boolean fringe,PmxOriginalInputs.Draw original) {
+            this(material,source,indices,bothFaces,ordinal,shading,weld,edgeWeights,groups,fringe,original,false);
+        }
+        Part(int material,int[] source,int[] indices,boolean bothFaces,int ordinal,boolean shading,int[] weld,float[] edgeWeights,int groups,boolean fringe,PmxOriginalInputs.Draw original,boolean keepInFirstPerson) {
             this.original=original;
             this.fringe=fringe;
+            this.keepInFirstPerson=keepInFirstPerson;
             this.material = material; this.source = source; this.indices = indices;
             this.hull=weld!=null;this.weld=weld;this.edgeWeights=edgeWeights;this.smooth=hull?new float[groups*3]:null;
             cull = fringe ? 1029 : hull ? 1028 : bothFaces ? 0 : 1029;
@@ -200,9 +208,36 @@ public final class PmxDrawMesh implements AutoCloseable {
         api.CopyDataToByteBuffer(indices, api.GetIndices(model), indices.capacity());
         PmxOriginalInputs original=PmxOriginalInputs.load(shading,count,textures.length);
         sourceProfile=original==null?null:original.key;
+        boolean anyFpHidden=false;
+        for(int i=0;i<textures.length;i++)if(appearance.firstPersonHidden(i)){anyFpHidden=true;break;}
+        boolean[] armVertices=anyFpHidden?detectArmVertices(api,model,count):null;
         if(original!=null){
             int ordinal=0;
-            for(PmxOriginalInputs.Draw draw:original.draws)parts.add(new Part(draw.material(),draw.source(),draw.indices(),api.GetMaterialBothFace(model,draw.material()),ordinal++,true,null,null,0,false,draw));
+            for(PmxOriginalInputs.Draw draw:original.draws){
+                int partOrdinal=ordinal++;
+                int material=draw.material();
+                boolean bothFaces=api.GetMaterialBothFace(model,material);
+                if(armVertices!=null&&appearance.firstPersonHidden(material)){
+                    int triCount=draw.indices().length/3;
+                    boolean[] triIsArm=new boolean[triCount];
+                    int armTris=classifyTriangles(armVertices,draw.source(),draw.indices(),triIsArm);
+                    int otherTris=triCount-armTris;
+                    if(armTris==0){
+                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false));
+                    }else if(otherTris==0){
+                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,true));
+                    }else{
+                        CompactMesh other=compactMesh(draw.source(),draw.indices(),draw.attributes(),triIsArm,false,otherTris);
+                        CompactMesh arm=compactMesh(draw.source(),draw.indices(),draw.attributes(),triIsArm,true,armTris);
+                        var otherDraw=new PmxOriginalInputs.Draw(material,draw.sourceMaterial(),other.source(),other.attributes(),other.indices(),draw.sourceAlphaIndependent());
+                        var armDraw=new PmxOriginalInputs.Draw(material,draw.sourceMaterial(),arm.source(),arm.attributes(),arm.indices(),draw.sourceAlphaIndependent());
+                        parts.add(new Part(material,otherDraw.source(),otherDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,otherDraw,false));
+                        parts.add(new Part(material,armDraw.source(),armDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,armDraw,true));
+                    }
+                }else{
+                    parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false));
+                }
+            }
         }
         for (int n = 0; original==null&&n < api.GetSubMeshCount(model); n++) {
             int material = api.GetSubMeshMaterialID(model, n);
@@ -220,23 +255,147 @@ public final class PmxDrawMesh implements AutoCloseable {
                 local[i] = unique.computeIfAbsent(id, key -> unique.size());
             }
             int[] source=unique.keySet().stream().mapToInt(Integer::intValue).toArray();
-            parts.add(new Part(material,source,local,api.GetMaterialBothFace(model,material),n,shading!=null));
-            if(shading!=null&&shading.outlineSources[material]!=null){
-                int[] lookup=new int[count];Arrays.fill(lookup,-1);int[] authored=shading.outlineSources[material];
-                for(int i=0;i<authored.length;i++)lookup[authored[i]]=i;
-                int[] weld=new int[source.length];float[] weights=new float[source.length];
-                for(int i=0;i<source.length;i++){
-                    int at=lookup[source[i]];if(at<0)throw new IllegalArgumentException("Outline vertex not in source material");
-                    weld[i]=shading.outlineWeld[material][at];weights[i]=shading.outlineWeights[material][at];
+            boolean bothFaces=api.GetMaterialBothFace(model,material);
+            if(armVertices!=null&&appearance.firstPersonHidden(material)){
+                int triCount=local.length/3;
+                boolean[] triIsArm=new boolean[triCount];
+                int armTris=classifyTriangles(armVertices,source,local,triIsArm);
+                int otherTris=triCount-armTris;
+                if(armTris==0){
+                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,count);
+                }else if(otherTris==0){
+                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,true,count);
+                }else{
+                    CompactMesh other=compactMesh(source,local,null,triIsArm,false,otherTris);
+                    CompactMesh arm=compactMesh(source,local,null,triIsArm,true,armTris);
+                    addSubmeshParts(material,other.source(),other.indices(),bothFaces,n,n+10000,false,count);
+                    addSubmeshParts(material,arm.source(),arm.indices(),bothFaces,n+30000,n+40000,true,count);
                 }
-                // The source winding is retained: the actual host culls its front
-                // faces, leaving the thin back-facing shell around the actor.
-                parts.add(new Part(material,source,local,true,n+10000,true,weld,weights,shading.outlineGroupCount[material]));
+            }else{
+                addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,count);
             }
         }
         if(original==null&&shading!=null&&shading.danrp&&shading.fringeMeshSource.length>0)
             parts.add(new Part(shading.fringeMeshMaterial,shading.fringeMeshSource,shading.fringeMeshIndices,false,20000,true,null,null,0,true));
         updateOutlineTextures(textures);
+    }
+
+    private record CompactMesh(int[] source,int[] indices,int[] attributes){}
+
+    private void addSubmeshParts(int material,int[] source,int[] local,boolean bothFaces,int ordinal,int hullOrdinal,boolean keepInFirstPerson,int vertexCount){
+        parts.add(new Part(material,source,local,bothFaces,ordinal,shading!=null,null,null,0,false,null,keepInFirstPerson));
+        if(shading!=null&&shading.outlineSources[material]!=null){
+            int[] lookup=new int[vertexCount];Arrays.fill(lookup,-1);int[] authored=shading.outlineSources[material];
+            for(int i=0;i<authored.length;i++)lookup[authored[i]]=i;
+            int[] weld=new int[source.length];float[] weights=new float[source.length];
+            for(int i=0;i<source.length;i++){
+                int at=lookup[source[i]];if(at<0)throw new IllegalArgumentException("Outline vertex not in source material");
+                weld[i]=shading.outlineWeld[material][at];weights[i]=shading.outlineWeights[material][at];
+            }
+            // The source winding is retained: the actual host culls its front
+            // faces, leaving the thin back-facing shell around the actor.
+            parts.add(new Part(material,source,local,true,hullOrdinal,true,weld,weights,shading.outlineGroupCount[material],false,null,keepInFirstPerson));
+        }
+    }
+
+    private static int classifyTriangles(boolean[] armVertices,int[] source,int[] indices,boolean[] triIsArm){
+        int armTris=0;
+        for(int t=0;t<triIsArm.length;t++){
+            int base=t*3;
+            boolean arm=armVertices[source[indices[base]]]
+                ||armVertices[source[indices[base+1]]]
+                ||armVertices[source[indices[base+2]]];
+            triIsArm[t]=arm;
+            if(arm)armTris++;
+        }
+        return armTris;
+    }
+
+    private static CompactMesh compactMesh(int[] source,int[] indices,int[] attributes,boolean[] triIsArm,boolean wantArm,int keepTris){
+        int[] remap=new int[source.length];
+        Arrays.fill(remap,-1);
+        int[] compactSource=new int[source.length];
+        int[] compactAttributes=attributes==null?null:new int[source.length];
+        int[] compactIndices=new int[keepTris*3];
+        int uniqueCount=0,writeIndex=0;
+        for(int t=0;t<triIsArm.length;t++){
+            if(triIsArm[t]!=wantArm)continue;
+            int base=t*3;
+            for(int c=0;c<3;c++){
+                int oldLocal=indices[base+c];
+                int nextLocal=remap[oldLocal];
+                if(nextLocal<0){
+                    nextLocal=uniqueCount++;
+                    remap[oldLocal]=nextLocal;
+                    compactSource[nextLocal]=source[oldLocal];
+                    if(compactAttributes!=null)compactAttributes[nextLocal]=attributes[oldLocal];
+                }
+                compactIndices[writeIndex++]=nextLocal;
+            }
+        }
+        return new CompactMesh(
+            Arrays.copyOf(compactSource,uniqueCount),
+            compactIndices,
+            compactAttributes==null?null:Arrays.copyOf(compactAttributes,uniqueCount));
+    }
+
+    private static boolean isArmRoot(String name){
+        return "左腕".equals(name)||"右腕".equals(name)
+            ||"arm_l".equalsIgnoreCase(name)||"arm_r".equalsIgnoreCase(name)
+            ||"upperarm_l".equalsIgnoreCase(name)||"upperarm_r".equalsIgnoreCase(name);
+    }
+
+    private static boolean[] detectArmVertices(NativeFunc api,long model,int vertexCount){
+        String metadata=api.GetBoneMetadata(model);
+        if(metadata==null||metadata.isBlank())return null;
+        JSONArray bones=new JSONArray(metadata);
+        int boneCount=bones.length();
+        if(boneCount<=0)return null;
+        int[] parents=new int[boneCount];
+        Arrays.fill(parents,-1);
+        boolean[] armBone=new boolean[boneCount];
+        boolean hasArm=false;
+        for(int i=0;i<boneCount;i++){
+            JSONObject bone=bones.getJSONObject(i);
+            int idx=bone.optInt("index",-1);
+            if(idx<0||idx>=boneCount)continue;
+            parents[idx]=bone.optInt("parent",-1);
+            if(isArmRoot(bone.optString("name",""))){
+                armBone[idx]=true;
+                hasArm=true;
+            }
+        }
+        if(!hasArm)return null;
+        boolean changed=true;
+        while(changed){
+            changed=false;
+            for(int i=0;i<boneCount;i++){
+                int p=parents[i];
+                if(!armBone[i]&&p>=0&&p<boneCount&&armBone[p]){
+                    armBone[i]=true;
+                    changed=true;
+                }
+            }
+        }
+        ByteBuffer boneIds=buffer(Math.multiplyExact(vertexCount,16));
+        ByteBuffer boneWeights=buffer(Math.multiplyExact(vertexCount,16));
+        api.InitGpuSkinningData(model);
+        int copied=api.CopyBoneIndicesToBuffer(model,boneIds,vertexCount);
+        int copiedW=api.CopyBoneWeightsToBuffer(model,boneWeights,vertexCount);
+        if(copied!=vertexCount||copiedW!=vertexCount)return null;
+        IntBuffer ids=boneIds.asIntBuffer();
+        FloatBuffer weights=boneWeights.asFloatBuffer();
+        boolean[] isArm=new boolean[vertexCount];
+        for(int v=0;v<vertexCount;v++){
+            float armWeight=0f;
+            int base=v*4;
+            for(int k=0;k<4;k++){
+                int b=ids.get(base+k);
+                if(b>=0&&b<boneCount&&armBone[b])armWeight+=weights.get(base+k);
+            }
+            isArm[v]=armWeight>=0.5f;
+        }
+        return isArm;
     }
 
     private PmxDrawMesh renderMesh(){
@@ -328,9 +487,10 @@ public final class PmxDrawMesh implements AutoCloseable {
         for (Part part : parts) {
             if(part.hull&&(!useOutline||!part.hullReady)){part.continuous=false;continue;}
             int offset=part.material*12;
-            boolean colour=colourVisible(part,materialState),shadow=shadowVisible(part,shadowMaterials);
+            float[] colourMaterials=part.keepInFirstPerson?shadowMaterials:materialState;
+            boolean colour=colourVisible(part,colourMaterials),shadow=shadowVisible(part,shadowMaterials);
             // Pack-owned eye layers can ignore base alpha; keep them ready across queued appearance changes.
-            if(part.original!=null&&part.original.sourceAlphaIndependent()&&materialState[offset+7]+materialState[offset+11]>0)colour=true;
+            if(part.original!=null&&part.original.sourceAlphaIndependent()&&colourMaterials[offset+7]+colourMaterials[offset+11]>0)colour=true;
             if(!colour&&((part.hull||part.fringe)||!shadow)){part.continuous=false;continue;}
             part.mesh.minXyz.set(Float.POSITIVE_INFINITY);
             part.mesh.maxXyz.set(Float.NEGATIVE_INFINITY);
@@ -424,7 +584,7 @@ public final class PmxDrawMesh implements AutoCloseable {
         for (Part part:parts) {
             if(part.fringe&&!useFringe)continue;
             if(part.hull&&(!useOutline||!part.hullReady))continue;
-            boolean colour=colourVisible(part,frame.materials),shadow=shadowVisible(part,shadowMaterials);
+            boolean colour=colourVisible(part,part.keepInFirstPerson?shadowMaterials:frame.materials),shadow=shadowVisible(part,shadowMaterials);
             if((part.hull||part.fringe)&&!colour)continue;
             if(!colour&&!shadow)continue;
             int cull=part.fringe?1029:part.hull?1028:doubleSided==null?part.cull:doubleSided[part.material]?0:1029;

@@ -19,6 +19,7 @@ public final class ModelAppearance {
     private final ByteBuffer morphBuffer;
     private final int[] morphIds;
     private boolean[] visible,effectiveVisible;
+    private final boolean[] firstPersonHidden;
     private float[] alpha,weights;
     private float[][] colours;
     private Boolean[] bothFaces;
@@ -46,6 +47,12 @@ public final class ModelAppearance {
         }
         morphBuffer=ByteBuffer.allocateDirect(Math.multiplyExact(count,56*4)).order(ByteOrder.nativeOrder());
         wardrobe=new Wardrobe(Wardrobe.empty(),count,weights.length);
+        boolean[] beforeFp=new boolean[count];
+        for(int i=0;i<count;i++)beforeFp[i]=api.IsMaterialVisible(model,i);
+        firstPersonHidden=new boolean[count];
+        api.SetFirstPersonMode(model,true);
+        for(int i=0;i<count;i++)firstPersonHidden[i]=beforeFp[i]&&!api.IsMaterialVisible(model,i);
+        api.SetFirstPersonMode(model,false);
     }
     private static JSONArray array(JSONObject state,String key,int length) {
         JSONArray value=state.getJSONArray(key);
@@ -148,6 +155,7 @@ public final class ModelAppearance {
         return -1;
     }
     public synchronized boolean materialVisible(int id){return visible[id];}
+    public boolean firstPersonHidden(int material){return firstPersonHidden[material];}
     public synchronized String controlsJson(){return wardrobe.json();}
     public synchronized long revision(){return revision;}
     public synchronized boolean bothFaces(int material){return bothFaces[material]==null?originalBothFaces[material]:bothFaces[material];}
