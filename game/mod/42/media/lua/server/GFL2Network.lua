@@ -88,7 +88,9 @@ local function transact(player, command, args)
         if command == "ClaimWeapon" then return economy.claimWeapon(player,weapon) end
         if command == "ClaimMagazine" then return economy.claimMagazine(player,weapon) end
         if command == "BuyAmmo" then return economy.buyAmmo(player,weapon,args.count) end
-        return economy.drawWeapon(player,weapon,args.count)
+        local misses = economy.weaponMisses(player)
+        local status, results = economy.drawWeapon(player,weapon,args.count)
+        return status, results, misses
     end
     local model = type(args.target) == "string" and openModel(args.target)
     if not model then return "unavailable" end

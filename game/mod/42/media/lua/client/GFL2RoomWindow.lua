@@ -12,6 +12,7 @@ local signatureWeapons=require "GFL2SignatureWeapon"
 local weaponSkins=require "GFL2WeaponSkins"
 local multiplayer=require "GFL2MultiplayerClient"
 local data
+local DEFAULT_ZOOM=.94
 local textures={}
 local function image(path)
     if not path then return nil end
@@ -79,17 +80,6 @@ local function chevron(p,x,y,direction,size,alpha)
     local glyph=image(art.."arrow-"..direction..".png")
     if glyph then p:drawTextureScaled(glyph,x-size/2,y-size/2,size,size,alpha,.95,.95,.95) end
 end
-local function drawStarIcon(p,cx,cy,size,filled,alpha)
-    local glyph=image(art..(filled and "star-on.png" or "star-off.png"))
-    if glyph then
-        if filled then p:drawTextureScaled(glyph,cx-size/2,cy-size/2,size,size,alpha,1,1,1)
-        else p:drawTextureScaled(glyph,cx-size/2,cy-size/2,size,size,alpha,.66,.78,.80) end
-        return
-    end
-    local r=math.floor(size/2)
-    if filled then p:drawRect(cx-r+2,cy-r+2,size-4,size-4,alpha,1,.78,.32)
-    else p:drawRectBorder(cx-r+2,cy-r+2,size-4,size-4,alpha,.66,.78,.80) end
-end
 local roomText,roleNames,outfitNames={},{},{}
 local biographies,outfitDescriptions,recruitmentText,descriptionCache={},{},{},{}
 local descriptionLineHeight
@@ -124,13 +114,6 @@ local function outfitName(entry)
     if outfitNames[entry.id] then return outfitNames[entry.id] end
     if entry.isDefault then return tr("Default") end
     return entry.outfitPool and entry.outfitPool.name or entry.meta.officialSkin or entry.meta.skin
-end
-local function isLocalMotion(file)
-    return file~=nil and file:find("[/\\]")~=nil
-end
-local function motionDisplayName(file)
-    if file:sub(1,7)=="sample:" then return file:sub(8) end
-    return file:match("([^/\\]+)$") or file
 end
 local function fitText(value,width,font,suffix)
     local tm=getTextManager()
@@ -232,19 +215,6 @@ end
 local function featureIcon(p,kind,x,y,size,a)
     local glyph=image(art..kind..".png")
     if glyph then p:drawTextureScaled(glyph,x,y,size,size,a,.83,.89,.89) end
-end
-
-local function expressionPreset(preset,rows)
-    local fields={}
-    for axis=2,#preset do
-        for _,channel in ipairs(preset[axis]) do
-            if rows[channel[1]]~=nil then
-                fields[#fields+1]='"'..channel[2]..'":'..tostring(channel[3])
-                break
-            end
-        end
-    end
-    if #preset==1 or #fields>0 then return "{"..table.concat(fields,",").."}" end
 end
 local function number(p,value,x,y,h,r,g,b,right)
     local text=string.format("%.0f",value)
@@ -375,7 +345,7 @@ local function button(parent,x,y,w,title,target,callback)
             s:drawRect(0,s.height-1,s.width,1,a*.57,.03,.05,.06)
         end
         if s.roomLook~="restore" and s.roomHover>.01 then s:drawRectBorder(0,0,s.width,s.height,s.roomHover*.46,.58,.78,.78) end
-        if s.roomActive and s.roomTile~="chest" and s.roomLook~="settingsToggle" then s:drawRect(0,4,2,s.height-8,.92,.875,.620,0) end
+        if s.roomActive and s.roomLook~="settingsToggle" then s:drawRect(0,4,2,s.height-8,.92,.875,.620,0) end
         if s.tooltip then s:updateTooltip() end
     end
     b.render=function(s)
@@ -408,17 +378,9 @@ local function button(parent,x,y,w,title,target,callback)
             local press=s.pressed and enabled and 1 or 0
             featureIcon(s,s.roomTile,9,(s.height-22)/2+press,22,a)
             local cy=math.floor(s.height/2)+press
-            local toggle=s.roomTile=="chest"
-            textInSlot(s,s.roomTitle,40,cy-12,24,s.width-40-(toggle and 50 or 27),.91,.94,.93,
+            textInSlot(s,s.roomTitle,40,cy-12,24,s.width-67,.91,.94,.93,
                 a*(s.roomEnterAlpha or 1),nil,UIFont.Medium)
-            if toggle then
-                local x=s.width-41
-                s:drawRect(x,cy-7,32,14,1,.14,s.roomActive and .36 or .19,s.roomActive and .34 or .20)
-                s:drawRectBorder(x,cy-7,32,14,s.roomActive and .88 or .50,.47,.69,.68)
-                s:drawRect(x+(s.roomActive and 18 or 3),cy-5,11,10,1,s.roomActive and .76 or .44,s.roomActive and .91 or .52,s.roomActive and .86 or .53)
-            else
-                chevron(s,s.width-14,cy,"right",14,.52+s.roomHover*.45)
-            end
+            chevron(s,s.width-14,cy,"right",14,.52+s.roomHover*.45)
             return
         end
         if s.roomLook=="outfit" then
@@ -512,7 +474,8 @@ function W:createChildren()
     self.closeButton.prerender=function(b)surface(b,0,0,b.width,b.height,b.mouseOver and .99 or .86)end
     self.closeButton.render=function(b)chevron(b,b.width/2,b.height/2,"left",28,1)end
     self.collapseButton:setVisible(false);self.pinButton:setVisible(false);self.infoButton:setVisible(false)
-    self.preview=ISPanel:new(math.floor(self.width*.5-390),50,780,self.height-100);self.preview:initialise();self.preview.background=false
+    local previewTop=self:titleBarHeight()
+    self.preview=ISPanel:new(math.floor(self.width*.5-390),previewTop,780,self.height-previewTop);self.preview:initialise();self.preview.background=false
     self.preview.render=function(p)
         local w=p.parent;local ok=false
         if w.roomPage~="appearance" then return end
@@ -836,10 +799,9 @@ function W:createRoomResources()
             local count=#string.format("%.0f",balance)
             local size=math.min(17,(p.width-62)/(count*.63))
             number(p,balance,p.width-29,(p.height-size)/2,size,.95,.96,.95,true)
-            local started=add.resourceHold or add.creditHold
             local progress=0
-            if add.resourceHoldConsumed or add.creditGranted then progress=1
-            elseif started then progress=clamp((getTimestampMs()-started)/resourceHoldMs,0,1) end
+            if add.resourceHoldConsumed then progress=1
+            elseif add.resourceHold then progress=clamp((getTimestampMs()-add.resourceHold)/resourceHoldMs,0,1) end
             if progress>=.05 then
                 p:drawRect(2,p.height-2,p.width-4,2,.40,.37,.47,.48)
                 p:drawRect(2,p.height-2,(p.width-4)*progress,2,.92,.58,.82,.77)
@@ -864,34 +826,9 @@ function W:createRoomResources()
                 if economy.toggleRecordingUnlocks(w.player)~=nil then w:refresh() end
             end)
         elseif key=="credits" and not self.multiplayerSession then
-            local originalDown,originalUp,originalOutside=add.onMouseDown,add.onMouseUp,add.onMouseUpOutside
-            add.onMouseDown=function(b,x,y)
-                originalDown(b,x,y)
-                if b.enable and b:getIsVisible() and not b.creditHold and not b.creditGranted then b.creditHold=getTimestampMs() end
-            end
-            add.onMouseUp=function(b,x,y)
-                b.creditHold=nil
-                if b.creditGranted then b.creditGranted=false;b.pressed=false;return end
-                return originalUp(b,x,y)
-            end
-            add.onMouseUpOutside=function(b,x,y)
-                b.creditHold=nil
-                b.creditGranted=false
-                return originalOutside(b,x,y)
-            end
-            local originalUpdate=add.update
-            add.update=function(b)
-                originalUpdate(b)
-                if not b.creditHold then return end
-                if not b:isMouseOver() or not isMouseButtonDown(0) or self.closed or self.folded or self.foldStart or self.exchange then
-                    b.creditHold=nil
-                elseif getTimestampMs()-b.creditHold>=resourceHoldMs then
-                    b.creditHold=nil
-                    b.creditGranted=economy.grantTestCredits(self.player)
-                    if b.creditGranted then self.player:Say(getText("ContextMenu_GFL2_TestCredits")) end
-                end
-            end
-            self.creditAddButton=add
+            bindResourceHold(self,add,function(w)
+                if economy.grantTestCredits(w.player) then w.player:Say(getText("ContextMenu_GFL2_TestCredits")) end
+            end)
         end
         self.resourceButtons[i]=chip
     end
@@ -986,101 +923,21 @@ function W:requestWeaponDraw(count)
     local signatureWeapon=self.signatureWeapon
     if not signatureWeapon then return end
     local previousMisses=economy.weaponMisses(self.player)
-    self:roomTransaction("DrawWeapon",signatureWeapon.id,count,function()
-        return economy.drawWeapon(self.player,signatureWeapon,count)
-    end,function(status,results)
+    local function localDraw()
+        local status,results=economy.drawWeapon(self.player,signatureWeapon,count)
+        return status,results,previousMisses
+    end
+    self:roomTransaction("DrawWeapon",signatureWeapon.id,count,localDraw,function(status,results,misses)
         if status=="short" then self.drawNotice=tr("RoomDrawShort");return end
         if not results then return end
         self.drawNotice=nil
         local portrait=signatureWeapon.icon:gsub("^media/textures/Item_", "media/ui/GFL2/WeaponIcons/")
         if not image(portrait) then portrait=signatureWeapon.icon end
         self.drawAnimation={started=getTimestampMs()+140,results=results,won=status=="unlocked",
-            weapon=true,rewardName=getText(signatureWeapon.name),portrait=portrait,misses=previousMisses,button=count==1 and 1 or 2}
+            weapon=true,rewardName=getText(signatureWeapon.name),portrait=portrait,
+            misses=misses~=nil and misses or previousMisses,button=count==1 and 1 or 2}
         self:layoutOverview()
     end)
-end
-
-function W:claimSignatureWeapon()
-    local signatureWeapon=self.signatureWeapon
-    if not signatureWeapon or self.tab~="weaponDraw" then return end
-    self:roomTransaction("ClaimWeapon",signatureWeapon.id,nil,function()
-        return economy.claimWeapon(self.player,signatureWeapon)
-    end,function(status)
-        if status=="ok" then
-            self.drawNotice=nil
-            self.player:Say(getText("ContextMenu_GFL2_WeaponClaimed"))
-        elseif status=="alreadyCarried" then
-            self.drawNotice=getText("ContextMenu_GFL2_WeaponCarried")
-        else
-            self.drawNotice=getText("ContextMenu_GFL2_WeaponClaimFailed")
-        end
-        self:layoutOverview()
-    end)
-end
-
-function W:claimSignatureMagazine()
-    local signatureWeapon=self.signatureWeapon
-    if not signatureWeapon or self.tab~="weaponDraw" or self.drawAnimation or self.exchange then return end
-    self:roomTransaction("ClaimMagazine",signatureWeapon.id,nil,function()
-        return economy.claimMagazine(self.player,signatureWeapon)
-    end,function(status)
-        self.drawNotice=getText(status=="ok" and "ContextMenu_GFL2_MagazineClaimed" or "ContextMenu_GFL2_MagazineClaimFailed")
-    end)
-end
-
-function W:applyWeaponSkin(skin)
-    local weapon=self.signatureWeapon
-    if not weapon or self.tab~="weaponDraw" or self.drawAnimation or self.exchange then return end
-    self:roomTransaction("WeaponSkin",weapon.id..":"..skin,nil,function()
-        return economy.setWeaponSkin(self.player,weapon,skin)
-    end,function(status)
-        if status=="ok" and self.signatureWeapon==weapon then
-            self.drawNotice=nil
-            self:layoutOverview()
-        end
-    end)
-end
-
-function W:layoutWeaponSkins(weapon,variants,visible,selected)
-    local p=self.weaponSkinPanel
-    p:setVisible(visible)
-    if not visible then return end
-    local width=math.max(160,math.floor(self.width*.205))
-    p:setX(math.floor(self.width*.035));p:setY(106);p:setWidth(width)
-    if p.weaponId~=weapon.id then
-        for _,row in ipairs(self.weaponSkinRows) do p:removeChild(row) end
-        self.weaponSkinRows={}
-        p.weaponId=weapon.id
-        local row=button(p,8,8,width-16,getText("ContextMenu_GFL2_WeaponDefaultSkin"),self,function(w)w:applyWeaponSkin("")end)
-        row.skinId="";self.weaponSkinRows[1]=row
-        for _,skin in ipairs(variants) do
-            local id=skin.id
-            local original=data.weaponStyle.skins[id]
-            local title=(getTextOrNull and getTextOrNull("UI_GFL2_WeaponSkin_"..id)) or original
-            local b=button(p,8,8,width-16,title,self,function(w)w:applyWeaponSkin(id)end)
-            b.skinId=id;b.roomLocalizedPaint=title~=original
-            self.weaponSkinRows[#self.weaponSkinRows+1]=b
-        end
-    end
-    local function arrange(rowWidth)
-        local y=8
-        for _,row in ipairs(self.weaponSkinRows) do
-            if row.roomLocalizedPaint then row.roomWrappedTitle=describe(row.roomTitle,rowWidth-16) end
-            local lines=row.roomWrappedTitle and #row.roomWrappedTitle or 1
-            row:setY(y);row:setWidth(rowWidth)
-            row:setHeight(math.max(34,lines*descriptionHeight()+12))
-            row.roomLook=row.skinId==selected and "primary" or "drawOnce"
-            y=y+row.height+5
-        end
-        return y+8
-    end
-    local total=arrange(width-16)
-    local maxHeight=math.floor((self.fullHeight-p.y)*.5)
-    if total>maxHeight then total=arrange(width-30) end
-    p:setHeight(math.min(total,maxHeight))
-    p:setScrollHeight(total)
-    p:setYScroll(clamp(p:getYScroll(),p.height-p:getScrollHeight(),0))
-    p:bringToTop()
 end
 
 function W:updateDrawAnimation()
@@ -1133,151 +990,6 @@ function W:drawRecruitmentResults()
             end
         end
     end
-end
-
-function W:closeExchange()
-    local exchange=self.exchange
-    if not exchange then return end
-    self.exchange=nil
-    exchange.slider.dragInside=false;exchange.slider:setCapture(false)
-    self:removeChild(exchange.overlay)
-end
-
-function W:closeWorkshopPrompt()
-    local prompt=self.workshopPrompt
-    if not prompt then return end
-    self.workshopPrompt=nil
-    self:removeChild(prompt.overlay)
-end
-
-function W:requestWorkshopPage()
-    local character=self.byCharacter and self.byCharacter[self.character]
-    if self.closed or self.folded or self.foldStart or self.exchange or self.workshopPrompt
-        or self.roomPage~="appearance" or self.tab~="overview" or not character or not character.locked then return end
-    local id=(data.roomWorkshopItems or {})[character.name]
-    if type(id)~="string" or not id:match("^%d+$") then return end
-    local name=character.name
-    self.preview:onMouseUp()
-    local overlay=ISPanel:new(0,0,self.width,self.height)
-    overlay:initialise();overlay.background=false
-    overlay.prerender=function(p)p:drawRect(0,0,p.width,p.height,.72,.04,.07,.08)end
-    overlay.onMouseDown=function()return true end
-    overlay.onMouseUp=overlay.onMouseDown;overlay.onMouseWheel=overlay.onMouseDown
-    local width=math.min(560,self.width-80)
-    local card=ISPanel:new(math.floor((self.width-width)/2),math.floor((self.height-240)/2),width,240)
-    card:initialise();card.background=false;overlay:addChild(card)
-    card.prerender=function(p)
-        surface(p,0,0,p.width,p.height,.98)
-        label(p,tr("RoomWorkshopConfirm"),p.width/2,28,26,p.width-48,.96,.96,.94,1,true)
-        label(p,name,p.width/2,91,31,p.width-48,.95,.81,.51,1,true)
-        label(p,tr("RoomWorkshopDestination"),p.width/2,137,16,p.width-48,.80,.85,.86,1,true)
-    end
-    local prompt={overlay=overlay,card=card,id=id,name=name}
-    local buttonWidth=math.floor((width-72)/2)
-    prompt.cancel=button(card,24,184,buttonWidth,tr("RoomExchangeCancel"),self,function(w)w:closeWorkshopPrompt()end)
-    prompt.confirm=button(card,48+buttonWidth,184,buttonWidth,tr("RoomWorkshopAccept"),self,function(w)
-        if w.workshopPrompt~=prompt then return end
-        w:closeWorkshopPrompt()
-        if isSteamOverlayEnabled() then activateSteamOverlayToWorkshopItem(id)
-        else openUrl("https://steamcommunity.com/sharedfiles/filedetails/?id="..id) end
-    end)
-    prompt.cancel:setHeight(36);prompt.confirm:setHeight(36);prompt.confirm.roomLook="primary"
-    self.workshopPrompt=prompt
-    self:addChild(overlay)
-end
-
-function W:updateExchange(quantity)
-    local s=self.exchange
-    s.maximum=economy.available(self.player,s.key,s.weapon)
-    s.quantity=clamp(math.floor(quantity+.5),1,math.max(1,s.maximum))
-    s.slider:setValues(1,math.max(2,s.maximum),1,10,true)
-    s.slider:setCurrentValue(s.quantity,true)
-    s.slider.disabled=s.maximum<=1
-    s.less:setEnable(s.quantity>1);s.minimum:setEnable(s.quantity>1)
-    s.more:setEnable(s.quantity<s.maximum);s.maximumButton:setEnable(s.quantity<s.maximum)
-    s.confirm:setEnable(s.maximum>0)
-end
-
-function W:openExchange(key,weapon)
-    if self.folded or self.foldStart or self.drawAnimation then return end
-    local buyingAmmo=key=="ammo"
-    local ammo=buyingAmmo and economy.weaponAmmo(weapon)
-    if buyingAmmo and not ammo then return end
-    self:closeExchange()
-    local overlay=ISPanel:new(0,0,self.width,self.height);overlay:initialise();overlay.background=false
-    overlay.prerender=function(p)p:drawRect(0,0,p.width,p.height,.72,.05,.09,.10)end
-    overlay.onMouseDown=function()return true end
-    overlay.onMouseUp=overlay.onMouseDown
-    overlay.onMouseWheel=overlay.onMouseDown
-    local width=math.min(810,math.floor(self.width*.78))
-    local height=math.min(433,self.height-76)
-    local card=ISPanel:new(math.floor((self.width-width)/2),math.floor((self.height-height)/2),width,height)
-    card:initialise();card.background=false;overlay:addChild(card)
-    local s={key=key,weapon=weapon,ammo=ammo,overlay=overlay,quantity=1}
-    local buyingCredits=key=="credits"
-    local cost=buyingCredits and 1 or (buyingAmmo and ammo.price or economy.cost[key])
-    local title=buyingAmmo and (ammo.name or tr("RoomAmmoBuy")) or tr(resourceTitles[key])
-    local rateLabel=buyingCredits and tr("RoomCashRate") or buyingAmmo and string.format(tr("RoomAmmoRate"),ammo.price)
-        or tr(key=="targeted" and "RoomTargetedPermitRate" or "RoomPermitRate")
-    card.prerender=function(p)
-        p:drawRect(0,0,p.width,p.height,.98,.86,.89,.89)
-        p:drawRect(0,0,p.width,5,.96,.27,.40,.42)
-        p:drawRect(29,44,144,144,.34,.46,.59,.61)
-        if buyingAmmo then
-            if ammo.texture then p:drawTextureScaledAspect(ammo.texture,43,57,116,116,1,1,1,1)
-            else resourceIcon(p,"ammo",55,69,92) end
-        else
-            resourceIcon(p,key,39,53,124)
-        end
-        label(p,title,198,45,29,p.width-280,.07,.13,.15)
-        p:drawRect(198,84,p.width-239,1,.41,.28,.40,.43)
-        label(p,rateLabel,198,94,17,p.width-239,.23,.35,.38)
-        label(p,tr("RoomExchangeQuantity"),p.width/2-90,p.height-154,17,124,.13,.22,.24)
-        number(p,s.quantity,p.width/2+40,p.height-154,17,.14,.27,.31)
-        label(p,tr("RoomExchangeSpend"),p.width/2-100,p.height-76,17,80,.19,.34,.39)
-        if not buyingCredits then resourceIcon(p,"credits",p.width/2-26,p.height-83,27) end
-        number(p,s.quantity*cost,p.width/2+5,p.height-76,17,.14,.27,.31)
-        label(p,tr(buyingCredits and "RoomCash" or "RoomCredits"),p.width/2+90,p.height-76,16,78,.19,.34,.39)
-        if buyingCredits then
-            label(p,tr("RoomCredits"),198,133,16,85,.19,.34,.39)
-            number(p,s.quantity*economy.creditsPerCash,290,130,22,.12,.29,.35)
-        end
-        local message=s.message or (s.maximum==0 and tr("RoomNotEnough"))
-        if message then label(p,message,p.width/2,p.height-107,15,p.width-50,.59,.24,.15,1,true) end
-    end
-    local left=math.floor(width*.15)
-    local right=math.floor(width*.85)
-    s.minimum=button(card,left-31,height-128,60,tr("RoomExchangeMin"),self,function(w)w:updateExchange(1)end)
-    s.less=button(card,left+35,height-128,33,"-",self,function(w)w:updateExchange(s.quantity-1)end)
-    s.more=button(card,right-68,height-128,33,"+",self,function(w)w:updateExchange(s.quantity+1)end)
-    s.maximumButton=button(card,right-29,height-128,60,tr("RoomExchangeMax"),self,function(w)w:updateExchange(s.maximum)end)
-    s.slider=ISSliderPanel:new(left+77,height-126,right-left-154,23,self,function(w,value)w:updateExchange(value)end)
-    s.slider:initialise();s.slider:instantiate();s.slider:setDoButtons(false);card:addChild(s.slider)
-    button(card,width-54,14,34,"X",self,function(w)w:closeExchange()end)
-    button(card,math.floor(width*.23),height-48,math.floor(width*.24),tr("RoomExchangeCancel"),self,function(w)w:closeExchange()end)
-    s.confirm=button(card,math.floor(width*.53),height-48,math.floor(width*.24),tr("RoomExchangeBuy"),self,function(w)
-        if buyingAmmo then
-            w:roomTransaction("BuyAmmo",weapon.id,s.quantity,function()
-                return economy.buyAmmo(w.player,weapon,s.quantity)
-            end,function(status)
-                if w.exchange~=s then return end
-                s.message=tr(status=="ok" and "RoomExchangeDone" or "RoomNotEnough")
-                w:updateExchange(s.quantity)
-            end)
-        else
-            w:roomTransaction("Exchange",key,s.quantity,function()
-                return economy.buy(w.player,key,s.quantity) and "ok" or "short"
-            end,function(status)
-                if w.exchange~=s then return end
-                s.message=tr(status=="ok" and "RoomExchangeDone" or "RoomNotEnough")
-                w:updateExchange(s.quantity)
-            end)
-        end
-    end)
-    s.confirm:setSound("activate","GFL2RoomConfirm")
-    self.exchange=s
-    self:addChild(overlay)
-    self:updateExchange(1)
 end
 
 function W:createExpressionFooter()
@@ -1337,546 +1049,15 @@ function W:useExpressionSlot(index)
     self.actions.expressionRemember(self.player)
 end
 
-local function motionTrack(slider,x,y,width,seek)
-    local over=not slider.disabled and slider:isMouseOver() and (not seek or slider:getMouseY()>=13)
-    local hover=hoverAmount(slider,over or (not slider.disabled and (slider.dragInside or slider.joypadFocused)))
-    local h=slider.dragInside and not slider.disabled and 4 or 3
-    slider:drawRect(x,y,width,h,.92,.15+.07*hover,.21+.08*hover,.24+.08*hover)
-    if slider.disabled then return end
-    local fill=width*clamp(slider.currentValue,0,1)
-    if fill>0 then slider:drawRect(x,y,fill,h,1,seek and .94 or .53,seek and .71 or .77,seek and .38 or .73) end
-    if seek and over and not slider.dragInside then
-        local tick=clamp(slider:getMouseX(),x,x+width-1)
-        slider:drawRect(tick,y-3,1,h+6,.76*hover,.85,.90,.88)
-    end
-    local knob=image(art.."knob.png")
-    local size=slider.dragInside and 12 or 8+2*hover
-    if knob then slider:drawTextureScaled(knob,x+fill-size/2,y+(h-size)/2,size,size,1,
-        seek and 1 or .76,seek and .80 or .92,seek and .52 or .87) end
-end
-
-function W:createMotionPage()
-    self.motionPanelWidth=math.min(550,self.fullWidth)
-    self.motionPanelHeight=math.min(450,self.fullHeight)
-    local height=self.motionPanelHeight-64
-    local listWidth=math.floor((self.motionPanelWidth-32)*.45)
-    local library=ISPanel:new(12,54,listWidth,height)
-    library:initialise();library.background=false;self:addChild(library);self.motionLibraryBox=library
-    library.prerender=function(p)
-        surface(p,0,0,p.width,p.height,.95)
-        label(p,tr("MotionLibrary"),12,12,22,p.width-24)
-        if #p.parent.motionList.items==0 then
-            label(p,tr("MotionNoFiles"),12,54,18,p.width-24,.62,.73,.75)
-        end
-    end
-    local list=ISScrollingListBox:new(8,43,library.width-16,height-123)
-    list:initialise();list.itemheight=42
-    list.backgroundColor={r=.035,g=.055,b=.065,a=0}
-    list.doDrawItem=function(s,y,row,alt)
-        local scroll=s:getYScroll()
-        if y+row.height+scroll<=0 or y+scroll>=s.height then return y+row.height end
-        local overRow=s.mouseoverselected==row.index and s:isMouseOver() and not s:isMouseOverScrollBar()
-        local hover=hoverAmount(row,overRow)
-        if row.index==s.selected then
-            s:drawRect(0,y,s.width-14,row.height-2,.93,.15+.04*hover,.19+.05*hover,.20+.05*hover)
-            s:drawRect(0,y+4,2,row.height-10,1,1,.71,.38)
-        else
-            if alt then s:drawRect(0,y,s.width-14,row.height-2,.42,.055,.085,.105) end
-            if hover>0 then s:drawRect(0,y,s.width-14,row.height-2,.76*hover,.18,.28,.30) end
-        end
-        local overStar=overRow and s:getMouseX()<=30
-        local starAlpha=row.favorite and 1 or (overStar and .95 or (.40+.35*hover))
-        drawStarIcon(s,15,y+math.floor((row.height-2)/2),overStar and 16 or 14,row.favorite==true,starAlpha)
-        label(s,row.text,31,y+5,17,s.width-48)
-        label(s,row.source,31,y+24,13,s.width-48,.58,.70,.72)
-        return y+row.height
-    end
-    local motionListDown=list.onMouseDown
-    list.onMouseDown=function(s,x,y)
-        if not s:isMouseOverScrollBar() and x>=0 and x<=30 then
-            local rowIdx=s:rowAt(x,y)
-            local item=rowIdx and s.items[rowIdx]
-            if item and item.item then
-                self:toggleMotionFavorite(item.item)
-                return true
-            end
-        end
-        return motionListDown(s,x,y)
-    end
-    list:setOnMouseDownFunction(self,function(w,filename)w.motionSelected=filename;w.motionMessage=nil;w:refreshMotionControls()end)
-    library:addChild(list);self.motionList=list
-    local width=library.width-16
-    local half=math.floor((width-6)/2)
-    self.motionAddPath=button(library,8,height-70,width,tr("MotionAddPath"),self,self.onAddMotionPath)
-    self.motionRefresh=button(library,8,height-34,half,tr("MotionRefresh"),self,self.refreshMotionLibrary)
-    self.motionRemovePath=button(library,14+half,height-34,width-half-6,tr("MotionRemovePath"),self,self.onRemoveMotionPath)
-
-    local box=ISPanel:new(20+listWidth,54,self.motionPanelWidth-32-listWidth,height)
-    box:initialise();box.background=false;self:addChild(box);self.motionBox=box
-    box.prerender=function(p)
-        local w=p.parent
-        local textWidth=p.width-24
-        surface(p,0,0,p.width,p.height,.95)
-        label(p,tr("MotionControls"),12,12,22,textWidth)
-        local state=w.motionPlayback
-        if state and state.name~="" then
-            local frame=state.frame or 0
-            for i=0,2 do
-                local h=4+math.floor(5*(.5+.5*math.sin(frame*.24+i*1.3)))
-                p:drawRect(12+i*4,56-h,2,h,1,1,.71,.38)
-            end
-        end
-        label(p,w.motionStatus or tr("MotionStopped"),28,40,17,textWidth-16,.69,.86,.88)
-        if w.motionPlayingLabel then label(p,w.motionPlayingLabel,12,60,17,textWidth) end
-        label(p,tr("MotionSpeed"),12,118,15,textWidth-66,.65,.73,.77)
-        textInSlot(p,string.format("%.2fx",w.motionSpeed.currentValue),p.width-12,118,15,60,.82,.88,.90,1,1)
-        p:drawRect(12,162,textWidth,1,.28,.41,.55,.60)
-        label(p,tr("MotionSelected"),12,171,14,textWidth,.65,.73,.77)
-        label(p,w.motionSelectedLabel or tr("MotionNoSelection"),12,189,16,textWidth)
-        p:drawRect(12,284,textWidth,1,.28,.41,.55,.60)
-        label(p,tr("MotionPhysics"),12,293,16,textWidth,.65,.73,.77)
-        if w.motionMessage then
-            label(p,w.motionMessage,12,348,17,textWidth,1,.74,.42)
-        end
-    end
-    width=box.width-24
-    local third=math.floor((width-12)/3)
-    half=math.floor((width-6)/2)
-    local function control(x,y,w,key,command)
-        return button(box,x,y,w,tr(key),self,
-            function(w)w:onMotionCommand(command)end)
-    end
-    self.motionButtons={
-        play=control(12,211,width,"MotionPlay","play"),
-        pause=control(12,245,third,"MotionPause","pause"),
-        restart=control(18+third,245,third,"MotionRestart","restart"),
-        stop=control(24+2*third,245,width-2*third-12,"MotionStop","stop"),
-        physics=control(12,316,half,"MotionPhysicsOn","physics"),
-        reset=control(18+half,316,width-half-6,"MotionPhysicsReset","reset"),
-    }
-    self.motionButtons.play.roomLook="primary"
-    for _,key in ipairs({"play","pause","restart","stop"})do self.motionButtons[key].roomIcon=key end
-    self:createMotionTimeline(box,width)
-    local speed=ISSliderPanel:new(12,135,width,21,self,function(w,value)
-        if math.abs(value-(w.motionPlayback.speed or 1))<.0001 then return end
-        w:onMotionCommand("speed",tostring(value))
-    end)
-    speed:initialise();speed:instantiate()
-    speed:setDoButtons(false);speed:setValues(0,1,.01,.1,true)
-    speed.sliderBarDim.x=6;speed.sliderBarDim.w=width-12
-    speed.currentValue=1;speed.disabled=true
-    local speedDown=speed.onMouseDown
-    speed.onMouseDown=function(s,x,y)
-        if not s.disabled then return speedDown(s,x,y) end
-    end
-    speed.render=function(s)motionTrack(s,s.sliderBarDim.x,math.floor(s.height/2)-1,s.sliderBarDim.w,false)end
-    box:addChild(speed);self.motionSpeed=speed
-end
-
-local function clockText(frame)
-    local seconds=math.floor(frame/30)
-    return string.format("%02d:%02d",math.floor(seconds/60),seconds%60)
-end
-
-function W:createMotionTimeline(box,width)
-    local slider=ISSliderPanel:new(12,81,width,34,self)
-    slider:initialise();slider:instantiate()
-    slider:setDoButtons(false);slider:setValues(0,1,.00001,.01,true)
-    slider.currentValue=0;slider.disabled=true
-    slider:paginate()
-    slider.sliderBarDim.x=6;slider.sliderBarDim.w=width-12
-    local mouseDown=slider.onMouseDown
-    slider.cancel=function(s)
-        if not s.dragInside then return end
-        s.dragInside=false;s.seekRevision=nil;s:setCapture(false)
-    end
-    slider.onMouseDown=function(s,x,y)
-        if s.disabled or y<13 then return false end
-        mouseDown(s,x,y)
-        if not s.dragInside then return false end
-        s.seekRevision=s.target.motionPlayback.revision
-        s:setCapture(true)
-        return true
-    end
-    slider.onMouseUp=function(s,x)
-        if not s.dragInside then return false end
-        local revision=s.seekRevision
-        local fraction=clamp((x-s.sliderBarDim.x)/s.sliderBarDim.w,0,1)
-        s:cancel()
-        local w=s.target
-        local error=GFL2ReadyRoom.motionCommand(w.player,"seek",revision..":"..tostring(fraction))
-        w.motionMessage=error~="" and error or nil;w:refreshMotionControls()
-        return true
-    end
-    slider.onMouseUpOutside=slider.onMouseUp
-    slider.render=function(s)
-        local state=s.target.motionPlayback
-        local duration=state and state.endFrame or 0
-        local frame=s.dragInside and duration*s.currentValue or state and state.frame or 0
-        motionTrack(s,s.sliderBarDim.x,25,s.sliderBarDim.w,true)
-        local current=math.floor(frame/30)
-        local total=math.floor(duration/30)
-        if current~=s.lastSecond then s.lastSecond=current;s.clock=clockText(frame) end
-        if total~=s.lastDuration then s.lastDuration=total;s.total=clockText(duration) end
-        textInSlot(s,s.disabled and "--:--" or s.clock,0,0,18,s.width/2,.82,.88,.90,1)
-        textInSlot(s,s.disabled and "--:--" or s.total,s.width,0,18,s.width/2,.58,.67,.71,1,1)
-    end
-    box:addChild(slider);self.motionSeek=slider
-end
-
-function W:loadMotionFavorites()
-    local favs={}
-    if GFL2ReadyRoom and GFL2ReadyRoom.motionFavorites then
-        local saved=GFL2ReadyRoom.motionFavorites()
-        for i=1,#saved do favs[saved[i]]=true end
-    else
-        local stored=self.player and self.player:getModData().GFL2MotionFavorites
-        if type(stored)=="table" then
-            for k,v in pairs(stored) do if v then favs[k]=true end end
-        end
-    end
-    self.motionFavorites=favs
-    return favs
-end
-
-function W:toggleMotionFavorite(file)
-    if not file or file=="" then return end
-    local favs=self.motionFavorites or self:loadMotionFavorites()
-    local nextState=not favs[file]
-    favs[file]=nextState or nil
-    if GFL2ReadyRoom and GFL2ReadyRoom.setMotionFavorite then
-        GFL2ReadyRoom.setMotionFavorite(file,nextState)
-    end
-    if self.player then
-        local md=self.player:getModData()
-        md.GFL2MotionFavorites=md.GFL2MotionFavorites or {}
-        md.GFL2MotionFavorites[file]=nextState or nil
-    end
-    roomSound("Select")
-    self:refreshMotionLibrary()
-end
-
-function W:refreshMotionLibrary()
-    local files=GFL2ReadyRoom.motionLibrary()
-    local favs=self:loadMotionFavorites()
-    local ordered={}
-    for i=1,#files do if favs[files[i]] then ordered[#ordered+1]=files[i] end end
-    for i=1,#files do if not favs[files[i]] then ordered[#ordered+1]=files[i] end end
-    self.motionList:clear()
-    local selected=nil
-    for i=1,#ordered do
-        local file=ordered[i]
-        local row=self.motionList:addItem(motionDisplayName(file),file,
-            isLocalMotion(file) and file or motionDisplayName(file))
-        local kind=file:sub(1,7)=="sample:" and "MotionExample" or (isLocalMotion(file) and "MotionLocal" or "MotionFolder")
-        row.source=tr(kind)
-        row.favorite=favs[file]==true
-        if file==self.motionSelected then selected=i end
-    end
-    self.motionList.selected=selected or (#ordered>0 and 1 or 0)
-    self.motionSelected=ordered[self.motionList.selected]
-    self.motionMessage=nil;self:refreshMotionControls()
-end
-
-function W:closeMotionPathDialog()
-    if self.motionPathDialog then
-        local dialog=self.motionPathDialog
-        self.motionPathDialog=nil
-        if dialog.isOverlay then
-            self:removeChild(dialog)
-        elseif dialog:isVisible() then
-            dialog:destroy()
-        end
-    end
-end
-
-function W:openMotionPathDialog(removing)
-    if self.motionPathDialog then return end
-    if not GFL2ReadyRoom or not GFL2ReadyRoom.browseMotionDirectory or not GFL2ReadyRoom.motionPaths then
-        local width=math.min(610,self.width-32)
-        local x=self:getAbsoluteX()+math.floor((self.width-width)/2)
-        local y=self:getAbsoluteY()+math.floor((self.height-125)/2)
-        local selected=self.motionSelected
-        local initial=removing and isLocalMotion(selected) and selected:match("^(.*[/\\])[^/\\]+$") or ""
-        local title=tr(removing and "MotionRemovePathTitle" or "MotionPathTitle")
-        local dialog=ISTextBox:new(x,y,width,125,"",initial,self,function(w,b)
-            local box=w.motionPathDialog
-            box:showErrorMessage(false)
-            if b.internal=="OK" then
-                local path=box.entry:getText()
-                local error
-                if removing then error=GFL2ReadyRoom.removeMotionPath(path)
-                else error=GFL2ReadyRoom.addMotionPath(path).error end
-                if error and error~="" then box:showErrorMessage(true,error);return end
-                w:refreshMotionLibrary()
-            end
-            w.motionPathDialog=nil
-        end,self.player:getPlayerNum())
-        local drawDialog=dialog.prerender
-        dialog.prerender=function(box)
-            drawDialog(box)
-            label(box,title,12,4,18,box.width-24)
-        end
-        self.motionPathDialog=dialog
-        dialog:initialise();dialog:addToUIManager();dialog.entry:focus()
-        return
-    end
-
-    local overlay=ISPanel:new(0,0,self.width,self.height)
-    overlay:initialise();overlay.background=false;overlay.isOverlay=true
-    overlay.prerender=function(p)p:drawRect(0,0,p.width,p.height,.74,.035,.055,.065)end
-    overlay.onMouseDown=function()return true end
-    overlay.onMouseUp=overlay.onMouseDown;overlay.onMouseWheel=overlay.onMouseDown
-
-    local cardW=math.min(526,self.width-24)
-    local cardH=math.min(416,self.height-28)
-    local card=ISPanel:new(math.floor((self.width-cardW)/2),math.floor((self.height-cardH)/2),cardW,cardH)
-    card:initialise();card.background=false;overlay:addChild(card)
-
-    local state={removing=removing==true,currentPath="",parentPath="",vmdCount=0,added=false,errorMsg=nil}
-    local title=tr(removing and "MotionFolderManageTitle" or "MotionFolderPickerTitle")
-    card.prerender=function(p)
-        surface(p,0,0,p.width,p.height,.98)
-        p:drawRect(0,0,p.width,2,.92,.50,.76,.76)
-        label(p,title,14,10,21,p.width-58,.96,.97,.95)
-        p:drawRect(12,38,p.width-24,1,.26,.50,.66,.68)
-        if state.errorMsg and state.errorMsg~="" then
-            label(p,state.errorMsg,14,p.height-66,15,p.width-28,1,.64,.38)
-        end
-    end
-    local closeBtn=button(card,cardW-40,7,28,"X",self,function(w)w:closeMotionPathDialog()end)
-    closeBtn:setHeight(26)
-
-    local listTop=removing and 48 or 112
-    local listH=cardH-listTop-(removing and 48 or 72)
-    local folderList=ISScrollingListBox:new(12,listTop,cardW-24,listH)
-    folderList:initialise();folderList.itemheight=34
-    folderList.backgroundColor={r=.04,g=.065,b=.078,a=.86}
-    folderList.borderColor={r=.38,g=.52,b=.56,a=.42}
-    card:addChild(folderList)
-
-    local pathEntry,upBtn,addBtn
-    local function formatCount(n)
-        local fmt=tr("MotionFolderVmdCount")
-        local ok,res=pcall(string.format,fmt,n)
-        return ok and res or (tostring(n).." VMD")
-    end
-
-    local function loadManageList()
-        folderList:clear()
-        local paths=GFL2ReadyRoom.motionPaths()
-        for i=1,#paths do
-            local p=paths[i]
-            folderList:addItem(p,{path=p,kind="saved"})
-        end
-        if #paths==0 then
-            state.errorMsg=tr("MotionFolderNoneAdded")
-        else
-            state.errorMsg=nil
-        end
-    end
-
-    local function browseTo(targetPath)
-        local res=GFL2ReadyRoom.browseMotionDirectory(targetPath or "")
-        if res and res.error and res.error~="" then
-            state.errorMsg=res.error
-            return
-        end
-        state.errorMsg=nil
-        state.currentPath=res.path or ""
-        state.parentPath=res.parent or ""
-        state.root=res.root==true
-        state.vmdCount=res.vmdCount or 0
-        state.added=res.added==true
-        if pathEntry then pathEntry:setText(state.currentPath) end
-        if upBtn then upBtn:setEnable(not state.root) end
-        if addBtn then
-            local canAdd=not state.root and state.currentPath~="" and not state.added
-            addBtn:setEnable(canAdd)
-            if state.added and not state.root then
-                addBtn.roomTitle=tr("MotionFolderAdded")
-            elseif state.vmdCount>0 then
-                addBtn.roomTitle=tr("MotionFolderAddCurrent").." ("..formatCount(state.vmdCount)..")"
-            else
-                addBtn.roomTitle=tr("MotionFolderAddCurrent")
-            end
-        end
-        folderList:clear()
-        local dirs=res.dirs or {}
-        for i=1,#dirs do
-            local d=dirs[i]
-            local display=d.key and tr(d.key) or d.name
-            folderList:addItem(display,d)
-        end
-        folderList:setYScroll(0)
-        if #dirs==0 then
-            state.errorMsg=tr("MotionFolderEmpty")
-        end
-    end
-
-    folderList.doDrawItem=function(s,y,row,alt)
-        local scroll=s:getYScroll()
-        if y+row.height+scroll<=0 or y+scroll>=s.height then return y+row.height end
-        local over=s.mouseoverselected==row.index and s:isMouseOver() and not s:isMouseOverScrollBar()
-        local hover=hoverAmount(row,over)
-        if alt then s:drawRect(0,y,s.width-14,row.height-2,.36,.055,.085,.102) end
-        if hover>0 then s:drawRect(0,y,s.width-14,row.height-2,.72*hover,.16,.27,.30) end
-        local item=row.item
-        if state.removing then
-            local btnW=58
-            local btnX=s.width-16-btnW
-            textInSlot(s,item.path,10,y+4,row.height-10,btnX-18,.90,.93,.93,1)
-            local overBtn=over and s:getMouseX()>=btnX and s:getMouseX()<=btnX+btnW
-            s:drawRect(btnX,y+4,btnW,row.height-10,overBtn and .95 or .78,.36,.16,.14)
-            s:drawRectBorder(btnX,y+4,btnW,row.height-10,.70,.88,.48,.38)
-            textInSlot(s,tr("MotionFolderRemove"),btnX+btnW/2,y+4,row.height-10,btnW-6,.97,.90,.86,1,.5)
-        else
-            local badgeW=0
-            local rightX=s.width-20
-            if item.added then
-                local tag=tr("MotionFolderAdded")
-                local w=58
-                s:drawRect(rightX-w,y+6,w,row.height-14,.84,.13,.31,.30)
-                s:drawRectBorder(rightX-w,y+6,w,row.height-14,.65,.48,.82,.78)
-                textInSlot(s,tag,rightX-w/2,y+6,row.height-14,w-4,.86,.97,.94,1,.5)
-                rightX=rightX-w-6;badgeW=badgeW+w+6
-            end
-            if (item.vmdCount or 0)>0 then
-                local tag=formatCount(item.vmdCount)
-                local w=74
-                s:drawRect(rightX-w,y+6,w,row.height-14,.86,.32,.22,.11)
-                s:drawRectBorder(rightX-w,y+6,w,row.height-14,.72,1,.71,.38)
-                textInSlot(s,tag,rightX-w/2,y+6,row.height-14,w-4,1,.92,.76,1,.5)
-                rightX=rightX-w-6;badgeW=badgeW+w+6
-            end
-            local tagColor=item.kind=="quick" and {1,.82,.48} or item.kind=="drive" and {.60,.86,.88} or {.91,.94,.93}
-            s:drawRect(10,y+11,6,10,.85,tagColor[1],tagColor[2],tagColor[3])
-            textInSlot(s,row.text,24,y+4,row.height-10,s.width-48-badgeW,tagColor[1],tagColor[2],tagColor[3],1)
-        end
-        return y+row.height
-    end
-
-    local folderDown=folderList.onMouseDown
-    folderList.onMouseDown=function(s,x,y)
-        if s:isMouseOverScrollBar() then return folderDown(s,x,y) end
-        local idx=s:rowAt(x,y)
-        local row=idx and s.items[idx]
-        if row and row.item then
-            if state.removing then
-                local btnW=58;local btnX=s.width-16-btnW
-                if x>=btnX and x<=btnX+btnW then
-                    local err=GFL2ReadyRoom.removeMotionPath(row.item.path)
-                    if err and err~="" then state.errorMsg=err
-                    else
-                        roomSound("Select")
-                        self:refreshMotionLibrary()
-                        loadManageList()
-                    end
-                    return true
-                end
-            else
-                roomSound("Select")
-                browseTo(row.item.path)
-                return true
-            end
-        end
-        return folderDown(s,x,y)
-    end
-
-    if removing then
-        local closeBottom=button(card,cardW-116,cardH-38,104,tr("RoomExchangeCancel"),self,function(w)w:closeMotionPathDialog()end)
-        closeBottom:setHeight(28)
-        loadManageList()
-    else
-        local quickBtn=button(card,12,46,92,tr("MotionFolderQuick"),self,function()browseTo("")end)
-        quickBtn:setHeight(26)
-        upBtn=button(card,110,46,72,tr("MotionFolderUp"),self,function()browseTo(state.parentPath)end)
-        upBtn:setHeight(26)
-        local goW=58
-        if ISTextEntryBox then
-            pathEntry=ISTextEntryBox:new("",12,78,cardW-24-goW-6,26)
-            pathEntry:initialise();pathEntry:instantiate()
-            card:addChild(pathEntry)
-        end
-        local goBtn=button(card,cardW-12-goW,78,goW,tr("MotionFolderGo"),self,function()
-            if pathEntry then browseTo(pathEntry:getText()) end
-        end)
-        goBtn:setHeight(26)
-
-        local cancelBtn=button(card,12,cardH-38,96,tr("RoomExchangeCancel"),self,function(w)w:closeMotionPathDialog()end)
-        cancelBtn:setHeight(28)
-        addBtn=button(card,116,cardH-38,cardW-128,tr("MotionFolderAddCurrent"),self,function(w)
-            local target=state.currentPath
-            if (not target or target=="") and pathEntry then target=pathEntry:getText() end
-            local res=GFL2ReadyRoom.addMotionPath(target or "")
-            if res and res.error and res.error~="" then
-                state.errorMsg=res.error
-                return
-            end
-            w:refreshMotionLibrary()
-            w:closeMotionPathDialog()
-        end)
-        addBtn:setHeight(28);addBtn.roomLook="primary"
-        browseTo("")
-    end
-
-    self.motionPathDialog=overlay
-    self:addChild(overlay)
-    overlay:bringToTop()
-end
-
-function W:onAddMotionPath()
-    self:openMotionPathDialog(false)
-end
-
-function W:onRemoveMotionPath()
-    self:openMotionPathDialog(true)
-end
-
-function W:refreshMotionControls()
-    local state=GFL2ReadyRoom.motionState(self.player)
-    self.motionPlayback=state
-    local active=state.name~="";local b=self.motionButtons
-    local slider=self.motionSeek
-    local duration=state.endFrame or 0
-    slider.disabled=not active or duration<=0 or self.waiting
-    if slider.dragInside and (slider.disabled or slider.seekRevision~=state.revision) then slider:cancel() end
-    if not slider.dragInside then slider.currentValue=not slider.disabled and clamp((state.frame or 0)/duration,0,1) or 0 end
-    local speed=self.motionSpeed
-    speed.disabled=slider.disabled
-    if speed.disabled then speed.dragInside=false end
-    speed.currentValue=state.speed or 1
-    self.motionStatus=tr(active and ((state.paused or state.speed==0) and "MotionPaused" or "MotionPlaying") or "MotionStopped")
-    if self.motionPlayingFile~=state.name then
-        self.motionPlayingFile=state.name
-        self.motionPlayingLabel=active and motionDisplayName(state.name) or nil
-    end
-    if self.motionSelectionFile~=self.motionSelected then
-        self.motionSelectionFile=self.motionSelected
-        self.motionSelectedLabel=self.motionSelected and motionDisplayName(self.motionSelected) or nil
-    end
-    b.play:setEnable(self.motionSelected~=nil and not self.waiting and GFL2CharacterRuntime.isEnabled(self.player))
-    for _,key in ipairs({"pause","restart","stop","physics","reset"})do b[key]:setEnable(active and not self.waiting)end
-    b.reset:setEnable(active and state.physics and not self.waiting)
-    b.pause.roomTitle=tr(state.paused and "MotionResume" or "MotionPause")
-    b.pause.roomActive=active and state.paused
-    b.pause.roomIcon=state.paused and "play" or "pause"
-    b.physics.roomTitle=tr(state.physics and "MotionPhysicsOn" or "MotionPhysicsOff")
-end
-
-function W:onMotionCommand(command,value)
-    local error=GFL2ReadyRoom.motionCommand(self.player,command,value or self.motionSelected or "")
-    self.motionMessage=error~="" and error or nil;self:refreshMotionControls()
-end
-
 function W:layoutPreview()
     if self.roomPage=="motions" then return end
+    local top=self:titleBarHeight()
     if self.tab=="grip" then
         self.preview:setX(18);self.preview:setWidth(self.rightX-32)
-        self.preview:setY(57);self.preview:setHeight(self.fullHeight-77)
+        self.preview:setY(top);self.preview:setHeight(self.fullHeight-top)
     else
         self.preview:setX(math.floor(self.width*.23));self.preview:setWidth(math.floor(self.width*.54))
-        self.preview:setY(math.floor(self.fullHeight*.08));self.preview:setHeight(math.floor(self.fullHeight*.86))
+        self.preview:setY(top);self.preview:setHeight(self.fullHeight-top)
     end
 end
 
@@ -1920,10 +1101,8 @@ end
 function W:setRoomPage(page)
     if self.roomPage==page or self.folded or self.foldStart then return end
     if page=="motions" and not motionEntryVisible(self) then return end
-    self:closeWorkshopPrompt()
-    self:closeMotionPathDialog()
+    self:closeAllModals()
     self.motionSeek:cancel()
-    self:closeExchange()
     if page=="motions" then
         GFL2ReadyRoom.release(self.player)
         self.appearanceX,self.appearanceY=self:getX(),self:getY()
@@ -1945,9 +1124,7 @@ end
 
 function W:toggleRoomFold()
     if self.drawAnimation then return end
-    self:closeWorkshopPrompt()
-    self:closeExchange()
-    self:closeMotionPathDialog()
+    self:closeAllModals()
     self.motionSeek:cancel()
     self:endTabMotion()
     self.folded=not self.folded
@@ -1963,98 +1140,6 @@ function W:toggleRoomFold()
     self.foldTo=self.folded and self:titleBarHeight() or height
     self.foldButton:setTooltip(tr(self.folded and "RoomUnfold" or "RoomFold"))
     self:roomVisibility()
-end
-
-function W:layoutWeaponDescription(weapon)
-    local p=self.content
-    local x=math.floor(self.fullWidth*.045)-12
-    local width=math.floor(self.fullWidth*.32)+24
-    local top=self:titleBarHeight()+12
-    if self.weaponSkinPanel:getIsVisible() then top=self.weaponSkinPanel.y+self.weaponSkinPanel.height+8 end
-    local bottom=self.fullHeight-14
-    local textWidth=width-24
-    local lines=describe(getText(weapon.description),textWidth)
-    if 65+#lines*descriptionHeight()>bottom-top then
-        textWidth=textWidth-16
-        lines=describe(getText(weapon.description),textWidth)
-    end
-    local total=65+#lines*descriptionHeight()
-    local y=math.max(top,bottom-total)
-    p:setX(x);p:setY(y);p:setWidth(width);p:setHeight(math.min(total,bottom-y))
-    p:setScrollHeight(total);p:setYScroll(clamp(p:getYScroll(),p.height-total,0))
-    p.weaponLines,p.weaponTextWidth=lines,textWidth
-end
-
-function W:createWeaponPreview(signatureWeapon)
-    if self.weaponPreview then
-        self.weaponPreview:onMouseUp()
-        self:removeChild(self.weaponPreview)
-    end
-    local top=self:titleBarHeight()+4
-    local bottom=self.drawButtons[1].y-64
-    -- Use a wide upper-center showcase stage so signature weapons fill the screen clearly.
-    local height=math.max(240,bottom-top)
-    local width=math.min(math.floor(self.fullWidth*.92),math.floor(height*1.98))
-    local scene=ISUI3DScene:new(math.floor((self.fullWidth-width)/2),top,width,height)
-    scene.background=false
-    scene:initialise()
-    scene:instantiate()
-    local java=scene.javaObject
-    local id=signatureWeapon.id
-    local model=weaponSkins.model(id,economy.weaponProgress(self.player,id).skin) or id
-    local script=getScriptManager():getModelScript(model)
-    local muzzle=script and script:getAttachmentById("muzzle")
-    -- The muzzle's local roll also describes which side of the barrel is up.
-    local tilt=muzzle and (180-muzzle:getRotate():z())%360 or 0
-    scene:setView("UserDefined")
-    java:fromLua3("setViewRotation",-82+tilt,0,90)
-    java:fromLua1("setDrawGrid",false)
-    local zoom=math.floor(signatureWeapon.previewZoom or 14)
-    local maxZoom=math.min(20,math.max(zoom+3,18))
-    java:fromLua1("setMaxZoom",maxZoom)
-    java:fromLua1("setZoom",zoom)
-    java:fromLua2("createModel",id,model)
-    local translation=java:fromLua1("getObjectTranslation",id)
-    if not GFL2ReadyRoom.centerWeaponPreview(model,translation) then
-        scene.prerender=function(p)
-            if GFL2ReadyRoom.centerWeaponPreview(model,translation) then p.prerender=nil end
-        end
-    end
-    scene.onMouseWheel=function(_,delta)
-        zoom=clamp(zoom-delta,1,maxZoom)
-        java:fromLua1("setZoom",zoom)
-        return true
-    end
-    scene.onMouseDown=function(p)
-        p.orbit=true
-        p:setCapture(true)
-        return true
-    end
-    scene.onMouseMove=function(p,dx,dy)
-        if not p.orbit then return false end
-        p.pitch=clamp((p.pitch or -82)+dy*.35,-175,-5)
-        p.heading=((p.heading or 0)+dx*.35)%360
-        java:fromLua3("setViewRotation",p.pitch+tilt,p.heading,90)
-        return true
-    end
-    scene.onMouseMoveOutside=scene.onMouseMove
-    scene.onMouseUp=function(p)
-        p.orbit=false
-        p:setCapture(false)
-        return true
-    end
-    scene.onMouseUpOutside=scene.onMouseUp
-    self:addChild(scene)
-    if self.content then self.content:bringToTop() end
-    if self.weaponSkinPanel then self.weaponSkinPanel:bringToTop() end
-    if self.weaponAmmoButton then self.weaponAmmoButton:bringToTop() end
-    if self.weaponSkinButton then self.weaponSkinButton:bringToTop() end
-    if self.magazineClaimButton then self.magazineClaimButton:bringToTop() end
-    if self.weaponClaimButton then self.weaponClaimButton:bringToTop() end
-    for _,b in ipairs(self.drawButtons or {}) do b:bringToTop() end
-    scene.weaponId=id
-    scene.skinModel=model
-    self.weaponPreview=scene
 end
 
 function W:layoutOverview()
@@ -2396,13 +1481,6 @@ function W:requestMotionPage()
     else self.toolNotice=self:toolMessage() end
 end
 
-function W:toggleBodyPhysics()
-    if not self:canEditCurrent() then return end
-    if self.actions.bodyPhysics(self.player,not GFL2CharacterRuntime.modelPhysicsEnabled(self.player)) then
-        self:layoutOverview()
-    end
-end
-
 function W:requestPhysicsReset()
     if not self:canEditCurrent() then
         self.toolNotice=self:toolMessage()
@@ -2600,330 +1678,6 @@ function W:updateTabMotion()
         widget.roomEnterAlpha=.65+.35*phase
     end
 end
-function W:partRows(extrasOnly)
-            local names=self.selected and self.selected.meta.primaryCategories or {data.text.Head,data.text.Top,data.text.Bottom}
-            local primary={};for _,name in ipairs(names)do primary[name]=true end
-            local groups=GFL2CharacterRuntime.groupCount(self.player);local categories={};local extra={}
-            for group=0,groups-1 do
-                local name=GFL2CharacterRuntime.groupLabel(self.player,group)
-                local normalized=data.categories[name] or name
-                local blink=false
-                for option=0,GFL2CharacterRuntime.optionCount(self.player,group)-1 do
-                    local optionLabel=GFL2CharacterRuntime.optionLabel(self.player,group,option)
-                    if optionLabel==data.text.EyeOpen or optionLabel==data.text.EyeClosed then blink=true;break end
-                end
-                if not blink then
-                    local row={index=group,label=normalized}
-                    if primary[normalized] then categories[normalized]=row else table.insert(extra,row) end
-                else
-                    primary[normalized]=nil
-                end
-            end
-            local ordered={}
-            if extrasOnly then ordered=extra else
-                for _,name in ipairs(names)do
-                    if primary[name] then table.insert(ordered,categories[name] or {label=name}) end
-                end
-            end
-            return ordered
-end
-local function localizedLabel(kind,value)
-    return (getTextOrNull and getTextOrNull("UI_GFL2_"..kind.."_"..value)) or value
-end
-function W:drawGroups(ordered,y,width)
-    local step=descriptionHeight()
-    local textHeight=math.max(20,step-2)
-    local tileHeight=math.max(77,step+48)
-    local rowStep=tileHeight+8
-    for _,row in ipairs(ordered) do
-        self:addLabel(localizedLabel("PartGroup",row.label),y,textHeight)
-        y=y+textHeight+10
-        if row.index then
-            local group=row.index
-            local count=GFL2CharacterRuntime.optionCount(self.player,group)
-            local selectedOption=GFL2CharacterRuntime.selectedOption(self.player,group)
-            local pictures=self.selected.meta.partImages
-            local groupPictures=pictures and pictures[GFL2CharacterRuntime.groupLabel(self.player,group)]
-            for option=0,count-1 do
-                local cardWidth=(width-16)/3
-                local x=(option%3)*(cardWidth+8)
-                local yy=y+math.floor(option/3)*rowStep
-                local optionLabel=GFL2CharacterRuntime.optionLabel(self.player,group,option)
-                self:addTile(x,yy,cardWidth,tileHeight,localizedLabel("PartOption",optionLabel),
-                    groupPictures and groupPictures[optionLabel],selectedOption==option,function(s)
-                        if s.actions.choice(s.player,group,option) then s:refreshControls(true) end
-                    end)
-            end
-            y=y+math.ceil(count/3)*rowStep+10
-        else
-            local p=ISPanel:new(0,y,width,textHeight+16);p:initialise();p.background=false
-            p.prerender=function(s)label(s,tr("NoCategory"),5,6,17,s.width-10,.56,.66,.69)end
-            self.content:addChild(p);table.insert(self.widgets,p);y=y+textHeight+26
-        end
-    end
-    return y
-end
-function W:addSettingsSection(title,y,width)
-    local p=ISPanel:new(0,y,width,26);p:initialise();p.background=false
-    p.prerender=function(s)
-        s:drawRect(0,6,3,13,.90,.53,.79,.76)
-        label(s,title,9,2,18,s.width-12,.88,.94,.93)
-        s:drawRect(0,24,s.width,1,.24,.58,.74,.74)
-    end
-    self.content:addChild(p);table.insert(self.widgets,p)
-    return y+34
-end
-
-local function attachSliderTooltip(slider,text)
-    slider.doToolTip=false
-    slider.tooltip=text
-    local basePrerender=slider.prerender
-    slider.prerender=function(s)
-        if basePrerender then basePrerender(s) end
-        if s.dragInside then hideTooltip(s)
-        elseif ISButton and ISButton.updateTooltip then ISButton.updateTooltip(s) end
-    end
-end
-
-function W:buildSettingsTab(y,width,editable)
-    y=self:addSettingsSection(tr("SettingsAudio"),y,width)
-    local voiceVal=self.actions.getVoiceVolume and self.actions.getVoiceVolume(self.player) or 50
-    self:addLabel(tr("VoiceVolume"),y,18,width-82)
-    local voiceSlider=ISSliderPanel:new(5,y+25,width-10,20,self,function(w,value)
-        if w.actions.setVoiceVolume then w.actions.setVoiceVolume(w.player,value,false) end
-    end)
-    voiceSlider:initialise();voiceSlider:instantiate();voiceSlider:setDoButtons(false)
-    voiceSlider:setValues(0,100,1,10,true);voiceSlider:setCurrentValue(voiceVal,true)
-    attachSliderTooltip(voiceSlider,getText("ContextMenu_GFL2_VoiceVolumeTip"))
-    local renderVoice=voiceSlider.render
-    voiceSlider.render=function(s)
-        renderVoice(s)
-        local v=math.floor(s.currentValue+.5)
-        local txt=v<=0 and tr("VoiceMuted") or tostring(v)
-        local r,g,b=v<=0 and .96 or .81,v<=0 and .74 or .90,v<=0 and .44 or .92
-        textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
-    end
-    voiceSlider.roomSlider=true;self.content:addChild(voiceSlider);table.insert(self.widgets,voiceSlider)
-    y=y+60
-
-    y=self:addSettingsSection(tr("SettingsPhysics"),y,width)
-    if not editable then
-        self:addLabel(self:toolMessage(),y,17,width);y=y+36
-    else
-        local hasChest=GFL2CharacterRuntime.hasChestPhysics and GFL2CharacterRuntime.hasChestPhysics(self.player)
-        if hasChest then
-            local chestVal=GFL2CharacterRuntime.chestStrength and GFL2CharacterRuntime.chestStrength(self.player) or 100
-            self:addLabel(tr("ChestPhysics"),y,18,width-82)
-            local chestSlider=ISSliderPanel:new(5,y+25,width-10,20,self,function(w,value)
-                if w.actions.chestStrength then w.actions.chestStrength(w.player,value,false) end
-            end)
-            chestSlider:initialise();chestSlider:instantiate();chestSlider:setDoButtons(false)
-            chestSlider:setValues(0,100,1,10,true);chestSlider:setCurrentValue(chestVal,true)
-            attachSliderTooltip(chestSlider,getText("ContextMenu_GFL2_ChestPhysicsTip"))
-            local renderChest=chestSlider.render
-            chestSlider.render=function(s)
-                renderChest(s)
-                local v=math.floor(s.currentValue+.5)
-                local txt=v<=0 and tr("ChestOff") or string.format("%d%%",v)
-                local r,g,b=v<=0 and .96 or .81,v<=0 and .74 or .90,v<=0 and .44 or .92
-                textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
-            end
-            chestSlider.roomSlider=true;self.content:addChild(chestSlider);table.insert(self.widgets,chestSlider)
-            y=y+58
-        else
-            self:addLabel(tr("ChestPhysics"),y,18,width);y=y+26
-            self:addLabel(tr("RoomChestUnavailable"),y,15,width);y=y+28
-        end
-
-        local physicsOn=GFL2CharacterRuntime.modelPhysicsEnabled(self.player)
-        local clothBtn=button(self.content,0,y,width,tr("ClothHairPhysics"),self,function(w,btn)
-            local nextOn=not GFL2CharacterRuntime.modelPhysicsEnabled(w.player)
-            if w.actions.bodyPhysics(w.player,nextOn) then
-                btn.roomActive=nextOn
-                btn:setTooltip(getText(nextOn and "ContextMenu_GFL2_ClothHairPhysicsOn" or "ContextMenu_GFL2_ClothHairPhysicsOff"))
-            end
-        end)
-        clothBtn:setHeight(38)
-        clothBtn.roomLook="settingsToggle"
-        clothBtn.roomActive=not not physicsOn
-        clothBtn:setTooltip(getText(physicsOn and "ContextMenu_GFL2_ClothHairPhysicsOn" or "ContextMenu_GFL2_ClothHairPhysicsOff"))
-        table.insert(self.widgets,clothBtn)
-        y=y+54
-    end
-
-    local resetBtn=button(self.content,0,y,width,tr("SettingsReset"),self,function(w)
-        if w.actions.setVoiceVolume then w.actions.setVoiceVolume(w.player,50,true) end
-        if w:canEditCurrent() then
-            if GFL2CharacterRuntime.hasChestPhysics and GFL2CharacterRuntime.hasChestPhysics(w.player) and w.actions.chestStrength then
-                w.actions.chestStrength(w.player,100,true)
-            end
-            if not GFL2CharacterRuntime.modelPhysicsEnabled(w.player) then
-                w.actions.bodyPhysics(w.player,true)
-            end
-        end
-        w:refreshControls(true)
-    end)
-    resetBtn:setHeight(34);resetBtn.roomLook="quiet"
-    table.insert(self.widgets,resetBtn)
-    return y+42
-end
-
-function W:refreshControls(keepScroll)
-    self:endTabMotion()
-    if self.folded or self.foldStart then return end
-    if self.roomPage=="motions" then self:refreshMotionControls();return end
-    local editable=self:canEditCurrent()
-    self:layoutPreview()
-    self.gripAimButton:setVisible(false)
-    self.preview:setVisible(self.tab~="weaponDraw")
-    local scroll=keepScroll and self.content:getYScroll() or 0
-    self:clearContent()
-    local enabled=GFL2CharacterRuntime.isEnabled(self.player)
-    self.restoreButton:setEnable(enabled)
-    self.content:setX(self.tab=="skins" and self.overviewX-57 or self.rightX)
-    self.content:setWidth(self.tab=="skins" and self.overviewWidth+64 or self.rightWidth)
-    self.content:setY(self.tab=="skins" and math.floor(self.height*.19) or 91)
-    self.content:setHeight(self.tab=="skins" and math.floor(self.height*.57) or self.height-self.content.y-112)
-    local y=8;local width=self.rightWidth-32;local showExpressionSlots=false
-    if self.tab=="overview" then
-        y=0
-    elseif self.tab=="outfitDraw" or self.tab=="weaponDraw" then
-        y=0
-    elseif self.tab=="skins" then
-        local character=self.byCharacter[self.character]
-        if character and not character.locked then self:carousel(character) end
-        y=self.content.height
-    elseif self.tab=="settings" then
-        y=self:buildSettingsTab(y,width,editable)
-    elseif not editable then
-        self:addLabel(self:toolMessage(),8);y=44
-    else
-        if self.tab=="expression" then
-            local id=self.currentId
-            local rows=GFL2ReadyRoom.expressionRows(self.player,id)
-            y=self:drawExpressionPresets(rows,y,width)
-            showExpressionSlots=#rows>0
-            if showExpressionSlots then
-                self.content:setHeight(self.fullHeight-116-self.content.y-6)
-                if GFL2ReadyRoom.motionState(self.player).name~="" then
-                    self:addLabel(tr("ExpressionVmd"),y);y=y+28
-                end
-                local group
-                for _,row in ipairs(rows)do
-                    if group~=row.group then group=row.group;self:addLabel(tr(group),y);y=y+31 end
-                    local field=row.index
-                    self:addLabel(localizedLabel("ExpressionControl",row.label),y,18,width-60)
-                    local slider=ISSliderPanel:new(5,y+24,width-10,20,self,function(w,value)
-                        local error=GFL2ReadyRoom.expressionSet(w.player,id,field,value/100)
-                        if error~="" then print("[GFL2Exilium] "..error);w.status=tr("Error")
-                        else w.actions.expressionEdited(w.player) end
-                    end)
-                    slider:initialise();slider:instantiate();slider:setDoButtons(false);slider:setValues(0,100,1,10,true)
-                    slider:setCurrentValue(row.value*100,true)
-                    local render=slider.render
-                    slider.render=function(s)
-                        render(s)
-                        textInSlot(s,string.format("%d%%",math.floor(s.currentValue+.5)),s.width,-21,18,50,.81,.88,.92,1,1)
-                    end
-                    slider.roomSlider=true;self.content:addChild(slider);table.insert(self.widgets,slider);y=y+49
-                end
-            else self:addLabel(tr("ExpressionEmpty"),y);y=y+30 end
-        elseif self.tab=="grip" then
-            local id=self.currentId
-            local family=GFL2ReadyRoom.gripFamily(self.player)
-            self.gripFamily=family
-            if family=="" then
-                self:addLabel(getText("ContextMenu_GFL2_GripEquipItem"),y);y=y+32
-            else
-                local canAim=GFL2ReadyRoom.canAimGrip(self.player)
-                if not canAim then self.gripAiming=false end
-                local aiming=self.gripAiming==true
-                if canAim then
-                    local mode=aiming and "ContextMenu_GFL2_GripStanding" or "ContextMenu_GFL2_GripAim"
-                    self.gripAimButton.roomTitle=getText(mode)
-                    self.gripAimButton.roomActive=aiming
-                    self.gripAimButton:setVisible(true)
-                end
-                self:addLabel(GFL2ReadyRoom.gripItemName(self.player),y);y=y+32
-                local values=GFL2ReadyRoom.gripValues(self.player,family,aiming)
-                local groups={
-                    {getText("ContextMenu_GFL2_GripItemPosition"),12,20,{"X","Y","Z"},""},
-                    {tr("GripSupport"),0,12,{"X","Y","Z"},""},
-                    {tr("GripSupportWrist"),6,90,{"X","Y","Z"},"°"},
-                    {tr("GripPrimary"),3,12,{"X","Y","Z"},""},
-                    {tr("GripPrimaryWrist"),9,90,{"X","Y","Z"},"°"},
-                    {getText("ContextMenu_GFL2_GripCurl"),15,100,
-                        {getText("ContextMenu_GFL2_GripLeftHand"),getText("ContextMenu_GFL2_GripRightHand")},"%"},
-                }
-                local resetWidth=64
-                for _,group in ipairs(groups)do
-                    local title,start,limit,axes,unit=unpack(group)
-                    self:addLabel(title,y);y=y+28
-                    local inset=unit=="%" and 76 or 34
-                    for i,axis in ipairs(axes)do
-                        local field=start+i-1
-                        self:addLabel(axis,y,17)
-                        local slider=ISSliderPanel:new(inset,y+2,width-inset-resetWidth-8,20,self,function(w,value)
-                            if not GFL2ReadyRoom.gripSet(w.player,id,family,field,value,aiming)then w.status=tr("Error") end
-                        end)
-                        slider:initialise();slider:instantiate();slider:setDoButtons(true);slider:setValues(-limit,limit,.1,1,true)
-                        slider:setCurrentValue(values[field+1] or 0,true)
-                        local render=slider.render
-                        slider.render=function(s)
-                            render(s)
-                            textInSlot(s,string.format("%+.1f",s.currentValue)..unit,s.width,20,18,76,.81,.88,.92,1,1)
-                        end
-                        slider.roomSlider=true;self.content:addChild(slider);table.insert(self.widgets,slider)
-                        local reset=button(self.content,width-resetWidth,y,resetWidth,getText("ContextMenu_GFL2_GripResetValue"),self,function(w)
-                            if GFL2ReadyRoom.gripSet(w.player,id,family,field,0,aiming) then
-                                slider:setCurrentValue(0,true)
-                            else w.status=tr("Error") end
-                        end)
-                        table.insert(self.widgets,reset);y=y+46
-                    end
-                end
-                local b=button(self.content,0,y+4,width,tr("Reset"),self,function(w)
-                    if GFL2ReadyRoom.gripSet(w.player,id,family,-1,0,aiming)then w:refreshControls(true) end
-                end)
-                table.insert(self.widgets,b);y=y+42
-            end
-        elseif self.tab=="parts" then
-            y=self:drawGroups(self:partRows(false),y,width)
-            y=self:drawGroups(self:partRows(true),y,width)
-            for row=0,GFL2CharacterRuntime.materialCount(self.player)-1 do
-                local index=GFL2CharacterRuntime.materialIndex(self.player,row);local available=GFL2CharacterRuntime.materialAvailable(self.player,index)
-                local b=button(self.content,0,y,width,GFL2CharacterRuntime.materialLabel(self.player,index),self,function(s)
-                    if s.actions.material(s.player,index,not GFL2CharacterRuntime.materialVisible(s.player,index))then s:refreshControls(true)end
-                end)
-                b:setEnable(available);b.roomActive=GFL2CharacterRuntime.materialVisible(self.player,index);table.insert(self.widgets,b);y=y+34
-            end
-            if GFL2CharacterRuntime.presetCount(self.player)>0 then
-                self:addLabel(tr("Presets"),y);y=y+30
-                for index=0,GFL2CharacterRuntime.presetCount(self.player)-1 do
-                    local b=button(self.content,0,y,width,GFL2CharacterRuntime.presetLabel(self.player,index),self,function(s)if s.actions.preset(s.player,index)then s:refreshControls(true)end end)
-                    table.insert(self.widgets,b);y=y+34
-                end
-            end
-            local half=math.floor((width-8)/2)
-            local reset=button(self.content,0,y,half,tr("Reset"),self,self.onReset)
-            local reload=button(self.content,half+8,y,half,tr("Reload"),self,self.onReload)
-            table.insert(self.widgets,reset);table.insert(self.widgets,reload);y=y+38
-        end
-    end
-    if self.tab=="grip" or self.tab=="expression" or self.tab=="parts" or self.tab=="settings" then
-        for _,widget in ipairs(self.widgets) do widget:setX(widget.x+12) end
-        y=y+8
-        self.content:setHeight(math.min(self.content.height,y))
-    end
-    if showExpressionSlots then self.expressionFooter:setY(self.content.y+self.content.height+6) end
-    self:refreshExpressionSlots(showExpressionSlots)
-    self:updateWear()
-    self.content:setScrollHeight(math.max(y,self.content.height))
-    self.content:setYScroll(clamp(scroll,self.content.height-self.content:getScrollHeight(),0))
-    self.status=self.waiting and tr("Loading") or enabled and tr("Saved") or tr("Original")
-    self:layoutOverview()
-    self.content:setVisible(self.tab~="overview" and self.tab~="outfitDraw" and (self.tab~="weaponDraw" or self.signatureWeapon~=nil))
-end
 function W:selectSkin(entry)
     local character=self.byCharacter[self.character]
     if not character or character.unlockRequired or self.waiting or entry.outfitLocked or self.currentId==entry.id then return false end
@@ -2950,7 +1704,7 @@ function W:onCharacter(character)
         roomSound("Select")
         self.character=character.name
         self.drawNotice=nil
-        self.yaw=0;self.zoom=1.03;self.cameraPan=0;self.cameraFocus=0
+        self.yaw=0;self.zoom=DEFAULT_ZOOM;self.cameraPan=0;self.cameraFocus=0
         self.cameraTransition=nil;self.cameraBeforeExpression=nil
         if self.preview.dragging then self.preview:onMouseUp() end
         local entry=character.baseSkin or character.skins[1]
@@ -2960,56 +1714,6 @@ function W:onCharacter(character)
         self:previewEntry(entry)
         self:setTab("overview")
     end
-end
-function W:drawExpressionPresets(rows,y,width)
-    local labels={}
-    for _,row in ipairs(rows)do labels[row.label]=row.index end
-    local eyes=self.selected.meta.groups and self.selected.meta.groups.eyes
-    local group
-    if eyes then
-        for i=0,GFL2CharacterRuntime.groupCount(self.player)-1 do
-            if GFL2CharacterRuntime.groupLabel(self.player,i)==eyes.label then group=i;break end
-        end
-    end
-    local blinkLabels=data.roomBlinkLabels or {}
-    local blink=labels[blinkLabels[1]] or labels[blinkLabels[2]]
-    if group~=nil or blink~=nil then
-        local half=math.floor((width-8)/2)
-        for i,key in ipairs({"EyeOpen","EyeClosed"})do
-            local option=i-1
-            local b=button(self.content,option*(half+8),y,half,tr(key),self,function(w)
-                if not w:canEditCurrent() then return end
-                if group~=nil then
-                    if not w.actions.choice(w.player,group,option)then return end
-                else
-                    if GFL2ReadyRoom.expressionSet(w.player,w.currentId,blink,option)~="" then return end
-                    w.actions.expressionRemember(w.player)
-                end
-                w:refreshControls(true)
-            end)
-            b.roomActive=group~=nil and GFL2CharacterRuntime.selectedOption(self.player,group)==option
-            table.insert(self.widgets,b)
-        end
-        y=y+36
-    end
-    local presets=data.roomFacialPresets or {}
-    if #rows==0 or #presets==0 then return y end
-    self:addLabel(tr("RoomFacePresets"),y,19);y=y+29
-    local cell=math.floor((width-(#presets-1)*6)/#presets)
-    for i,preset in ipairs(presets)do
-        local payload=expressionPreset(preset,labels)
-        if payload then
-            local b=button(self.content,(i-1)*(cell+6),y,cell,tr(preset[1]),self,function(w)
-                if not w:canEditCurrent() then return end
-                local error=GFL2ReadyRoom.expressionLoad(w.player,w.currentId,payload)
-                if error~="" then print("[GFL2Exilium] "..error);return end
-                w.actions.expressionRemember(w.player)
-                w:refreshControls(true)
-            end)
-            table.insert(self.widgets,b)
-        end
-    end
-    return y+38
 end
 
 function W:onRestore()self.actions.disable(self.player);if GFL2ReadyRoom then GFL2ReadyRoom.release(self.player)end;self.waiting=false;self.selected=nil;self:refresh()end
@@ -3342,10 +2046,8 @@ end
 function W:close()
     if self.closed then return end
     self.closed=true
-    if self.creditAddButton then self.creditAddButton.creditHold=nil end
     if self.weaponPreview and self.weaponPreview.orbit then self.weaponPreview:onMouseUp() end
-    self:closeWorkshopPrompt()
-    self:closeExchange()
+    self:closeAllModals()
     if W.instances[self.playerIndex]==self then W.instances[self.playerIndex]=nil end
     self:setVisible(false)
     self:removeFromUIManager()
@@ -3354,11 +2056,37 @@ function W:close()
     self:refreshExpressionSlots(false)
     if self.motionSeek then self.motionSeek:cancel() end
     if self.motionSpeed then self.motionSpeed.dragInside=false end
-    self:closeMotionPathDialog()
     if self.carouselPanel then self.carouselPanel.dragging=false;self.carouselPanel:setCapture(false)end
     self:clearContent();self.preview:onMouseUp();self.sidebar.roomDown=false;self.sidebar:setCapture(false)
     if GFL2ReadyRoom then GFL2ReadyRoom.release(self.player)end
 end
+
+local roomCtx={
+    art=art,
+    data=function() return data end,
+    tr=tr,
+    image=image,
+    clamp=clamp,
+    surface=surface,
+    label=label,
+    textInSlot=textInSlot,
+    number=number,
+    button=button,
+    hideTooltip=hideTooltip,
+    describe=describe,
+    descriptionHeight=descriptionHeight,
+    hoverAmount=hoverAmount,
+    roomSound=roomSound,
+    resourceIcon=resourceIcon,
+    resourceTitles=resourceTitles,
+    economy=economy,
+    weaponSkins=weaponSkins,
+}
+require("GFL2Room/Dialogs").install(W,roomCtx)
+require("GFL2Room/Motion").install(W,roomCtx)
+require("GFL2Room/Weapon").install(W,roomCtx)
+require("GFL2Room/Tabs").install(W,roomCtx)
+
 function W.open(player,actions)
     if not GFL2ReadyRoom then player:Say(getText("ContextMenu_GFL2Character_JavaUnavailable"));return end
     local index=player:getPlayerNum()
@@ -3381,7 +2109,7 @@ function W.open(player,actions)
     window.title=getText("ContextMenu_GFL2Character_Menu")
     window.player=player;window.playerIndex=index;window.actions=actions
     window.multiplayerSession=isClient()
-    window.resizable=false;window.drawFrame=false;window.yaw=0;window.zoom=1.03
+    window.resizable=false;window.drawFrame=false;window.yaw=0;window.zoom=DEFAULT_ZOOM
     window.cameraPan=0;window.cameraFocus=0
     window:initialise();window:addToUIManager();W.instances[index]=window
     window:setVisible(true);window:bringToTop();return window
