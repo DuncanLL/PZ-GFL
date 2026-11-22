@@ -2,7 +2,7 @@
 import re
 import numpy as np
 
-ALIASES={'chestl','chestr','breastl','breastr','bustl','bustr','左胸','右胸','左乳','右乳'}
+ALIASES={'chestl','chestr','breastl','breastr','bustl','bustr','左胸','右胸','左乳','右乳','左chest','右chest','左胸1','右胸1'}
 def array(value):return np.ascontiguousarray(value,dtype='f4')
 def vertex_weights(vertex):
     w=vertex.weight
@@ -18,8 +18,8 @@ def inspect(path):
     bones={i for i,b in enumerate(model.bones)if key(b.name)in ALIASES or key(b.name_e)in ALIASES}
     weighted={bone for v in model.vertices for bone,w in vertex_weights(v)if w>1e-6 and bone in bones}
     bodies=[i for i,r in enumerate(model.rigids)if r.bone in weighted and r.mode in [1,2]]
-    joints=[j for j in model.joints if j.dest_rigid in bodies]
-    usable=bool(bodies)and all(sum(j.dest_rigid==i for j in joints)==1 for i in bodies)
+    driven_bones={model.rigids[i].bone for i in bodies}
+    usable=bool(weighted)and driven_bones==weighted
     return model,dict(bones=sorted(weighted),usable=usable)
 
 def regions(model,bones,unit_scale):

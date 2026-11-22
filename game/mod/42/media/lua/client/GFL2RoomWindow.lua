@@ -473,6 +473,7 @@ function W:createChildren()
     self.closeButton.onclick=function(w)w:back()end
     self.closeButton.prerender=function(b)surface(b,0,0,b.width,b.height,b.mouseOver and .99 or .86)end
     self.closeButton.render=function(b)chevron(b,b.width/2,b.height/2,"left",28,1)end
+    if self.closeButton.setSound then self.closeButton:setSound("activate","GFL2RoomPage") end
     self.collapseButton:setVisible(false);self.pinButton:setVisible(false);self.infoButton:setVisible(false)
     local previewTop=self:titleBarHeight()
     self.preview=ISPanel:new(math.floor(self.width*.5-390),previewTop,780,self.height-previewTop);self.preview:initialise();self.preview.background=false
@@ -860,7 +861,7 @@ function W:createRoomResources()
     end
 end
 
-local drawStep,missLife,hitLife=215,205,1180
+local drawStep,missLife,hitLife=260,250,1180
 
 -- Single-player settles immediately. In multiplayer only a server reply can start the animation.
 function W:roomTransaction(command,target,count,localAction,onResult)
@@ -961,6 +962,16 @@ function W:updateDrawAnimation()
             self:layoutOverview()
         end
     end
+end
+
+function W:drawDisplayedMisses(fallbackMisses)
+    local a=self.drawAnimation
+    if not a then return fallbackMisses end
+    local base=a.misses~=nil and a.misses or fallbackMisses
+    local elapsed=getTimestampMs()-a.started
+    if elapsed<0 then return base end
+    local revealed=math.min(#a.results,1+math.floor(elapsed/drawStep))
+    return base+revealed
 end
 
 function W:drawRecruitmentResults()
@@ -1856,8 +1867,8 @@ function W:prerender()
     if self.tab=="weaponDraw" and signatureWeapon then
         local progress=economy.weaponProgress(self.player,signatureWeapon.id)
         if not progress.acquired or self.drawAnimation then
-            local misses=self.drawAnimation and self.drawAnimation.misses or economy.weaponMisses(self.player)
-            self:drawElitePity(economy.weaponGuarantee-misses)
+            local misses=self:drawDisplayedMisses(economy.weaponMisses(self.player))
+            self:drawElitePity(math.max(0,economy.weaponGuarantee-misses))
         elseif self.drawNotice then
             local left=self.drawButtons[1].x
             label(self,self.drawNotice,left,self.weaponClaimButton.y-32,16,self.weaponClaimButton.x+self.weaponClaimButton.width-left)
@@ -1901,8 +1912,8 @@ function W:prerender()
         self:drawRect(x,y+bodyTop-10,width,1,.25,.66,.76,.76)
         description(self,text,x,y+bodyTop,width)
         if inPool then
-            local misses=self.drawAnimation and self.drawAnimation.misses or economy.outfitMisses(self.player,self.browsed.id)
-            self:drawPity("RoomOutfitPity",economy.outfitGuarantee-misses)
+            local misses=self:drawDisplayedMisses(economy.outfitMisses(self.player,self.browsed.id))
+            self:drawPity("RoomOutfitPity",math.max(0,economy.outfitGuarantee-misses))
         elseif self.toolNotice then
             label(self,self.toolNotice,self.wearButton.x,self.wearButton.y-31,16,self.wearButton.width)
         end
@@ -1954,8 +1965,8 @@ function W:drawLockedCharacterInfo(character)
     local nameTop=card.element and 15+phaseHeight or 0
     local tagsTop=nameTop+math.max(38,step+6)
     local baseHeight=card.element and tagsTop+24 or math.max(45,step+6)
-    local misses=self.drawAnimation and self.drawAnimation.misses or economy.characterMisses(self.player)
-    local remaining=economy.characterGuarantee-misses
+    local misses=self:drawDisplayedMisses(economy.characterMisses(self.player))
+    local remaining=math.max(0,economy.characterGuarantee-misses)
     local bottom=self.height-42
     local biography,tags,headerHeight,blockHeight
     for attempt=1,2 do
