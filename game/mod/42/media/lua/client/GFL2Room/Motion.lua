@@ -4,9 +4,12 @@ function M.install(W,ctx)
     local art=ctx.art
     local button=ctx.button
     local clamp=ctx.clamp
+    local drawCornerTicks=ctx.drawCornerTicks
+    local drawShadow=ctx.drawShadow
     local hoverAmount=ctx.hoverAmount
     local image=ctx.image
     local label=ctx.label
+    local modalProgress=ctx.modalProgress
     local roomSound=ctx.roomSound
     local surface=ctx.surface
     local textInSlot=ctx.textInSlot
@@ -64,10 +67,13 @@ function M.install(W,ctx)
         local library=ISPanel:new(12,54,listWidth,height)
         library:initialise();library.background=false;self:addChild(library);self.motionLibraryBox=library
         library.prerender=function(p)
-            surface(p,0,0,p.width,p.height,.95)
-            label(p,tr("MotionLibrary"),12,12,22,p.width-24)
+            drawShadow(p,0,0,p.width,p.height,.92)
+            surface(p,0,0,p.width,p.height,.94)
+            drawCornerTicks(p,0,0,p.width,p.height,.90,6)
+            p:drawRect(0,0,p.width,2,.92,.95,.54,.16)
+            label(p,tr("MotionLibrary"),12,12,22,p.width-24,.96,.97,.97)
             if #p.parent.motionList.items==0 then
-                label(p,tr("MotionNoFiles"),12,54,18,p.width-24,.62,.73,.75)
+                label(p,tr("MotionNoFiles"),12,54,18,p.width-24,.68,.76,.78)
             end
         end
         local list=ISScrollingListBox:new(8,43,library.width-16,height-123)
@@ -117,25 +123,28 @@ function M.install(W,ctx)
         box.prerender=function(p)
             local w=p.parent
             local textWidth=p.width-24
-            surface(p,0,0,p.width,p.height,.95)
-            label(p,tr("MotionControls"),12,12,22,textWidth)
+            drawShadow(p,0,0,p.width,p.height,.92)
+            surface(p,0,0,p.width,p.height,.94)
+            drawCornerTicks(p,0,0,p.width,p.height,.90,6)
+            p:drawRect(0,0,p.width,2,.92,.95,.54,.16)
+            label(p,tr("MotionControls"),12,12,22,textWidth,.96,.97,.97)
             local state=w.motionPlayback
             if state and state.name~="" then
                 local frame=state.frame or 0
                 for i=0,2 do
                     local h=4+math.floor(5*(.5+.5*math.sin(frame*.24+i*1.3)))
-                    p:drawRect(12+i*4,56-h,2,h,1,1,.71,.38)
+                    p:drawRect(12+i*4,56-h,2,h,1,.96,.58,.18)
                 end
             end
-            label(p,w.motionStatus or tr("MotionStopped"),28,40,17,textWidth-16,.69,.86,.88)
-            if w.motionPlayingLabel then label(p,w.motionPlayingLabel,12,60,17,textWidth) end
-            label(p,tr("MotionSpeed"),12,118,15,textWidth-66,.65,.73,.77)
-            textInSlot(p,string.format("%.2fx",w.motionSpeed.currentValue),p.width-12,118,15,60,.82,.88,.90,1,1)
-            p:drawRect(12,162,textWidth,1,.28,.41,.55,.60)
-            label(p,tr("MotionSelected"),12,171,14,textWidth,.65,.73,.77)
-            label(p,w.motionSelectedLabel or tr("MotionNoSelection"),12,189,16,textWidth)
-            p:drawRect(12,284,textWidth,1,.28,.41,.55,.60)
-            label(p,tr("MotionPhysics"),12,293,16,textWidth,.65,.73,.77)
+            label(p,w.motionStatus or tr("MotionStopped"),28,40,17,textWidth-16,.76,.88,.90)
+            if w.motionPlayingLabel then label(p,w.motionPlayingLabel,12,60,17,textWidth,.95,.96,.96) end
+            label(p,tr("MotionSpeed"),12,118,15,textWidth-66,.70,.78,.80)
+            textInSlot(p,string.format("%.2fx",w.motionSpeed.currentValue),p.width-12,118,15,60,.88,.92,.94,1,1)
+            p:drawRect(12,162,textWidth,1,.16,.80,.88,.90)
+            label(p,tr("MotionSelected"),12,171,14,textWidth,.70,.78,.80)
+            label(p,w.motionSelectedLabel or tr("MotionNoSelection"),12,189,16,textWidth,.94,.96,.96)
+            p:drawRect(12,284,textWidth,1,.16,.80,.88,.90)
+            label(p,tr("MotionPhysics"),12,293,16,textWidth,.70,.78,.80)
             if w.motionMessage then
                 label(p,w.motionMessage,12,348,17,textWidth,1,.74,.42)
             end
@@ -291,30 +300,38 @@ function M.install(W,ctx)
         if not GFL2ReadyRoom or not GFL2ReadyRoom.browseMotionDirectory or not GFL2ReadyRoom.motionPaths then return end
         self:closeAllModals()
 
+        local openedAt=getTimestampMs()
         local overlay=ISPanel:new(0,0,self.width,self.height)
         overlay:initialise();overlay.background=false;overlay.isOverlay=true
-        overlay.prerender=function(p)p:drawRect(0,0,p.width,p.height,.74,.035,.055,.065)end
-        overlay.onMouseDown=function()return true end
-        overlay.onMouseUp=overlay.onMouseDown;overlay.onMouseWheel=overlay.onMouseDown
-
         local cardW=math.min(526,self.width-24)
         local cardH=math.min(416,self.height-28)
-        local card=ISPanel:new(math.floor((self.width-cardW)/2),math.floor((self.height-cardH)/2),cardW,cardH)
+        local targetY=math.floor((self.height-cardH)/2)
+        local card=ISPanel:new(math.floor((self.width-cardW)/2),targetY,cardW,cardH)
         card:initialise();card.background=false;overlay:addChild(card)
+        overlay.prerender=function(p)
+            local t=modalProgress(openedAt,150)
+            p:drawRect(0,0,p.width,p.height,.76*t,.018,.026,.034)
+            card:setY(targetY+math.floor((1-t)*12+.5))
+        end
+        overlay.onMouseDown=function()return true end
+        overlay.onMouseUp=overlay.onMouseDown;overlay.onMouseWheel=overlay.onMouseDown
 
         local state={removing=removing==true,currentPath="",parentPath="",vmdCount=0,added=false,errorMsg=nil}
         local title=tr(removing and "MotionFolderManageTitle" or "MotionFolderPickerTitle")
         card.prerender=function(p)
-            surface(p,0,0,p.width,p.height,.98)
-            p:drawRect(0,0,p.width,2,.92,.50,.76,.76)
-            label(p,title,14,10,21,p.width-58,.96,.97,.95)
-            p:drawRect(12,38,p.width-24,1,.26,.50,.66,.68)
+            local t=modalProgress(openedAt,150)
+            drawShadow(p,0,0,p.width,p.height,.95*t)
+            surface(p,0,0,p.width,p.height,.97*t)
+            drawCornerTicks(p,0,0,p.width,p.height,t,8)
+            p:drawRect(0,0,p.width,2,.96*t,.95,.54,.16)
+            label(p,title,14,10,21,p.width-58,.96,.97,.97,t)
+            p:drawRect(12,38,p.width-24,1,.16*t,.80,.88,.90)
             if state.errorMsg and state.errorMsg~="" then
-                label(p,state.errorMsg,14,p.height-66,15,p.width-28,1,.64,.38)
+                label(p,state.errorMsg,14,p.height-66,15,p.width-28,1,.64,.38,t)
             end
         end
         local closeBtn=button(card,cardW-40,7,28,"X",self,function(w)w:closeMotionPathDialog()end)
-        closeBtn:setHeight(26)
+        closeBtn:setHeight(26);closeBtn.roomLook="bare"
 
         local listTop=removing and 48 or 112
         local listH=cardH-listTop-(removing and 48 or 72)

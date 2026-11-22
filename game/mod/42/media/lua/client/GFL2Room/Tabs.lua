@@ -7,6 +7,7 @@ function M.install(W,ctx)
     local getData=ctx.data
     local hideTooltip=ctx.hideTooltip
     local label=ctx.label
+    local styleSlider=ctx.styleSlider
     local textInSlot=ctx.textInSlot
     local tr=ctx.tr
 
@@ -104,9 +105,9 @@ function M.install(W,ctx)
     function W:addSettingsSection(title,y,width)
         local p=ISPanel:new(0,y,width,26);p:initialise();p.background=false
         p.prerender=function(s)
-            s:drawRect(0,6,3,13,.90,.53,.79,.76)
-            label(s,title,9,2,18,s.width-12,.88,.94,.93)
-            s:drawRect(0,24,s.width,1,.24,.58,.74,.74)
+            s:drawRect(0,6,2,13,.96,.95,.54,.16)
+            label(s,title,9,2,18,s.width-12,.94,.96,.96)
+            s:drawRect(0,24,s.width,1,.16,.80,.88,.90)
         end
         self.content:addChild(p);table.insert(self.widgets,p)
         return y+34
@@ -121,13 +122,14 @@ function M.install(W,ctx)
         end)
         voiceSlider:initialise();voiceSlider:instantiate();voiceSlider:setDoButtons(false)
         voiceSlider:setValues(0,100,1,10,true);voiceSlider:setCurrentValue(voiceVal,true)
+        if styleSlider then styleSlider(voiceSlider) end
         attachSliderTooltip(voiceSlider,getText("ContextMenu_GFL2_VoiceVolumeTip"))
         local renderVoice=voiceSlider.render
         voiceSlider.render=function(s)
             renderVoice(s)
             local v=math.floor(s.currentValue+.5)
             local txt=v<=0 and tr("VoiceMuted") or tostring(v)
-            local r,g,b=v<=0 and .96 or .81,v<=0 and .74 or .90,v<=0 and .44 or .92
+            local r,g,b=v<=0 and .96 or .86,v<=0 and .68 or .93,v<=0 and .32 or .95
             textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
         end
         voiceSlider.roomSlider=true;self.content:addChild(voiceSlider);table.insert(self.widgets,voiceSlider)
@@ -146,13 +148,14 @@ function M.install(W,ctx)
                 end)
                 chestSlider:initialise();chestSlider:instantiate();chestSlider:setDoButtons(false)
                 chestSlider:setValues(0,100,1,10,true);chestSlider:setCurrentValue(chestVal,true)
+                if styleSlider then styleSlider(chestSlider,"amber") end
                 attachSliderTooltip(chestSlider,getText("ContextMenu_GFL2_ChestPhysicsTip"))
                 local renderChest=chestSlider.render
                 chestSlider.render=function(s)
                     renderChest(s)
                     local v=math.floor(s.currentValue+.5)
                     local txt=v<=0 and tr("ChestOff") or string.format("%d%%",v)
-                    local r,g,b=v<=0 and .96 or .81,v<=0 and .74 or .90,v<=0 and .44 or .92
+                    local r,g,b=v<=0 and .78 or 1,v<=0 and .82 or .78,v<=0 and .84 or .34
                     textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
                 end
                 chestSlider.roomSlider=true;self.content:addChild(chestSlider);table.insert(self.widgets,chestSlider)
@@ -269,10 +272,12 @@ function M.install(W,ctx)
                 end)
                 slider:initialise();slider:instantiate();slider:setDoButtons(false);slider:setValues(0,100,1,10,true)
                 slider:setCurrentValue(row.value*100,true)
+                if styleSlider then styleSlider(slider) end
                 local render=slider.render
                 slider.render=function(s)
                     render(s)
-                    textInSlot(s,string.format("%d%%",math.floor(s.currentValue+.5)),s.width,-21,18,50,.81,.88,.92,1,1)
+                    local v=math.floor(s.currentValue+.5)
+                    textInSlot(s,string.format("%d%%",v),s.width,-21,18,50,v>0 and .94 or .72,v>0 and .96 or .80,v>0 and .96 or .84,1,1)
                 end
                 slider.roomSlider=true;w.content:addChild(slider);table.insert(w.widgets,slider);y=y+49
             end
@@ -322,10 +327,13 @@ function M.install(W,ctx)
                 end)
                 slider:initialise();slider:instantiate();slider:setDoButtons(true);slider:setValues(-limit,limit,.1,1,true)
                 slider:setCurrentValue(values[field+1] or 0,true)
+                if styleSlider then styleSlider(slider,aiming and "amber" or nil) end
                 local render=slider.render
                 slider.render=function(s)
                     render(s)
-                    textInSlot(s,string.format("%+.1f",s.currentValue)..unit,s.width,20,18,76,.81,.88,.92,1,1)
+                    local nz=math.abs(s.currentValue)>=.05
+                    textInSlot(s,string.format("%+.1f",s.currentValue)..unit,s.width,20,18,76,
+                        nz and (aiming and 1 or .92) or .70,nz and (aiming and .78 or .96) or .78,nz and (aiming and .34 or .95) or .82,1,1)
                 end
                 slider.roomSlider=true;w.content:addChild(slider);table.insert(w.widgets,slider)
                 local reset=button(w.content,width-resetWidth,y,resetWidth,getText("ContextMenu_GFL2_GripResetValue"),w,function(win)
