@@ -5,17 +5,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
-import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL33;
 import zombie.characters.IsoGameCharacter;
-import zombie.core.Core;
 import zombie.core.SpriteRenderer;
+import zombie.core.opengl.GLStateRenderThread;
 import zombie.core.skinnedmodel.advancedanimation.AnimatedModel.AnimatedModelInstanceRenderData;
 import zombie.core.skinnedmodel.model.ModelInstance;
 import zombie.core.skinnedmodel.model.ModelInstanceRenderData;
 import zombie.core.skinnedmodel.model.ModelSlotRenderData;
+import zombie.core.skinnedmodel.model.VertexBufferObject;
 import zombie.core.skinnedmodel.shader.Shader;
 import zombie.core.skinnedmodel.shader.ShaderManager;
+import zombie.core.textures.Texture;
 import zombie.iso.IsoCamera;
 
 /** Adapts shared, CPU-skinned frames to the stock static character shader. */
@@ -139,16 +140,18 @@ public final class VanillaWorld {
         if(draw.body!=data.modelInstance)return draw.painted;
         ReadyRoomPreview.State saved=new ReadyRoomPreview.State();
         Shader shader=null;
+        boolean shaderStarted=false;
         try {
             var mesh=draw.session.plainMesh(draw.snapshot.frame());
             var textures=draw.session.preparePlainMaterials(draw.snapshot.materials());
             mesh.bindGeometry(draw.snapshot.frame());
             shader=ShaderManager.instance.getOrCreateShader("basicEffect",true,false);
             if(shader==null||shader.getID()==0)return false;
-            GL20.glUseProgram(shader.getID());
-            Core core=Core.getInstance();
-            shader.getShaderProgram().setValue("ModelViewProjection",
-                    new Matrix4f(core.projectionMatrixStack.peek()).mul(core.modelViewMatrixStack.peek()));
+            shader.Start();
+            shaderStarted=true;
+            // Must go through VertexBufferObject so ShaderProgram's cached modelView/projection
+            // stays in sync with the GPU uniform for subsequent static world items (e.g. radios at 25%/50% zoom).
+            VertexBufferObject.setModelViewProjection(shader);
             shader.startCharacter(slot,data);
             shader.setTransformMatrix(placement(data,draw.session.scale,draw.furnitureDrop),false);
             shader.setScale(slot.finalScale);
@@ -170,8 +173,16 @@ public final class VanillaWorld {
             else draw.session.fail(failure);
             return false;
         } finally {
+            if(shaderStarted) {
+                shader.setScale(1f);
+            }
             saved.restore();
+            if(shaderStarted) {
+                shader.End();
+            }
+            Texture.lastTextureID=-1;
             SpriteRenderer.ringBuffer.restoreVbos=true;SpriteRenderer.ringBuffer.restoreBoundTextures=true;
+            GLStateRenderThread.restore();
         }
     }
 
