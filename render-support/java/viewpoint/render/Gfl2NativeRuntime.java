@@ -106,11 +106,17 @@ public final class Gfl2NativeRuntime {
         Gfl2NativeRegistry.frame(frameRenderer==null?null:drawnData);
     }
     public static void beforeLighting(FrameContext frame){
-        if(frameRenderer==null)return;
+        beforeLighting(WorldRenderer.models,frame);
+    }
+    public static void beforeLighting(ModelPass models,FrameContext frame){
+        if(frameRenderer==null||models==null||models!=WorldRenderer.models)return;
         try{frameRenderer.prepass(frame);}catch(Exception e){throw new IllegalStateException("Native source depth/GBuffer",e);}
     }
     public static void shadows(org.joml.Matrix4f matrix,int[] candidates,int count,ModelBatches.Filter filter){
-        if(frameRenderer==null)return;
+        shadows(WorldRenderer.models,matrix,candidates,count,filter);
+    }
+    public static void shadows(ModelPass models,org.joml.Matrix4f matrix,int[] candidates,int count,ModelBatches.Filter filter){
+        if(frameRenderer==null||models==null||models!=WorldRenderer.models)return;
         try{frameRenderer.cast(matrix,candidates,count,filter);}catch(Exception e){throw new IllegalStateException("Native original ShadowCaster",e);}
     }
     public static void draw(FrameContext frame){

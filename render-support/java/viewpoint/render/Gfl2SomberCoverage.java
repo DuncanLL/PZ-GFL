@@ -9,6 +9,10 @@ public final class Gfl2SomberCoverage {
     private static int activeProgram, enabledLocation, previousTexture, previousSampler;
 
     public static void bind(FrameContext frame) {
+        bind(WorldRenderer.post, frame);
+    }
+    public static void bind(PostPass post, FrameContext frame) {
+        if (post == null || post != WorldRenderer.post) return;
         if (!Gfl2NativePackSelection.somberActorPost()) return;
         int texture = Gfl2NativeRuntime.somberCoverageTexture(frame.index);
         if (texture == 0) return;
@@ -27,6 +31,10 @@ public final class Gfl2SomberCoverage {
         enabledLocation = enabled;
     }
     public static void release() {
+        release(WorldRenderer.post);
+    }
+    public static void release(PostPass post) {
+        if (post == null || post != WorldRenderer.post) return;
         if (activeProgram == 0) return;
         GL41.glProgramUniform1i(activeProgram, enabledLocation, 0);
         int previousUnit = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);

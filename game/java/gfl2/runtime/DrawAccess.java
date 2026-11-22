@@ -43,6 +43,7 @@ final class DrawAccess {
         try { return f.get(object); } catch (IllegalAccessException e) { throw new IllegalStateException(e); }
     }
     static ModelInstance instance(ModelDraws draws,int n) { return ((ModelInstance[])get(INSTANCES,draws))[n]; }
+    static void instance(ModelDraws draws,int n,ModelInstance value) { ((ModelInstance[])get(INSTANCES,draws))[n]=value; }
     static ModelMesh mesh(ModelDraws draws,int n) { return ((ModelMesh[])get(MESHES,draws))[n]; }
     static float[] values(ModelDraws draws) { return (float[])get(VALUES,draws); }
     static int poseBones(ModelDraws draws,int n){return POSE_BONES==null?0:((int[])get(POSE_BONES,draws))[n];}

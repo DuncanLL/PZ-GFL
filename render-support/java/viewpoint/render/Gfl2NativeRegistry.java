@@ -31,9 +31,14 @@ public final class Gfl2NativeRegistry {
     public static String profileKey(int a,int b){
         State s=current;return active(s)&&s.data.model(a,b)!=null?s.key:null;
     }
+    public static boolean owns(ModelPass models,ModelDraws draws,int index){
+        return models!=null&&models==WorldRenderer.models&&owns(draws,index);
+    }
     public static boolean owns(ModelDraws draws,int index){
         Gfl2PackData data=frameData;
-        if(data==null||index<0||index>=draws.count)return false;
+        if(data==null||draws==null||index<0||index>=draws.count)return false;
+        ModelPass main=WorldRenderer.models;
+        if(main!=null&&draws!=main.draws())return false;
         var mesh=draws.meshes[index];
         return mesh!=null&&mesh.getPath()!=null&&mesh.getPath().getPath().startsWith("gfl2:pmx-part-gf2-")
             &&data.modelForPalette(draws,draws.palette[index])!=null;

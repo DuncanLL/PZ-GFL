@@ -21,7 +21,6 @@ public final class RuntimeHooks implements ClassFileTransformer {
         Map<String,Integer> hooks=new LinkedHashMap<>(NATIVE);
         hooks.put(SomberPostHooks.POST,2);
         EclipseHooks.EXPECTED.forEach((name,count)->{if(!name.equals(SOURCE_INPUTS))hooks.merge(name,count,Integer::sum);});
-        if(EclipseHooks.EXPECTED.isEmpty())hooks.remove(MODEL_BATCHES);
         if (Gfl2SealedSources.enabled()) {
             hooks.put(IRIS_SOURCE, 2);
             hooks.put(NATIVE_SOURCE, 1);

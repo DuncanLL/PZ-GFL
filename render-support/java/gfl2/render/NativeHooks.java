@@ -30,7 +30,9 @@ public final class NativeHooks {
                         if(nativeWorld){call(RUN,"beginNativeFrame","()V");hits[0]++;}
                         if(world||gbuffer||caster)return;Label old=new Label();
                         if(shown||shadowFilter){
-                            mv.visitVarInsn(Opcodes.ALOAD,shadowFilter?0:1);mv.visitVarInsn(Opcodes.ILOAD,2);call(REG,"owns","(Lviewpoint/render/ModelDraws;I)Z");
+                            if(shown)mv.visitVarInsn(Opcodes.ALOAD,0);
+                            mv.visitVarInsn(Opcodes.ALOAD,shadowFilter?0:1);mv.visitVarInsn(Opcodes.ILOAD,2);
+                            call(REG,"owns",shown?"(Lviewpoint/render/ModelPass;Lviewpoint/render/ModelDraws;I)Z":"(Lviewpoint/render/ModelDraws;I)Z");
                             mv.visitJumpInsn(Opcodes.IFEQ,old);mv.visitInsn(Opcodes.ICONST_0);mv.visitInsn(Opcodes.IRETURN);
                         }else if(freeze){
                             mv.visitVarInsn(Opcodes.ALOAD,0);call("gfl2/motion/PmxOriginalInputs","key","(L"+PMX+";)Ljava/lang/String;");mv.visitVarInsn(Opcodes.ASTORE,4);
@@ -46,8 +48,8 @@ public final class NativeHooks {
                         mv.visitLabel(old);
                     }
                     @Override public void visitInsn(int opcode){
-                        if(gbuffer&&opcode==Opcodes.RETURN){mv.visitVarInsn(Opcodes.ALOAD,1);call(RUN,"beforeLighting","(Lviewpoint/render/FrameContext;)V");}
-                        if(caster&&opcode==Opcodes.RETURN){mv.visitVarInsn(Opcodes.ALOAD,1);mv.visitVarInsn(Opcodes.ALOAD,2);mv.visitVarInsn(Opcodes.ILOAD,3);mv.visitVarInsn(Opcodes.ALOAD,4);call(RUN,"shadows","(Lorg/joml/Matrix4f;[IILviewpoint/render/ModelBatches$Filter;)V");}
+                        if(gbuffer&&opcode==Opcodes.RETURN){mv.visitVarInsn(Opcodes.ALOAD,0);mv.visitVarInsn(Opcodes.ALOAD,1);call(RUN,"beforeLighting","(Lviewpoint/render/ModelPass;Lviewpoint/render/FrameContext;)V");}
+                        if(caster&&opcode==Opcodes.RETURN){mv.visitVarInsn(Opcodes.ALOAD,0);mv.visitVarInsn(Opcodes.ALOAD,1);mv.visitVarInsn(Opcodes.ALOAD,2);mv.visitVarInsn(Opcodes.ILOAD,3);mv.visitVarInsn(Opcodes.ALOAD,4);call(RUN,"shadows","(Lviewpoint/render/ModelPass;Lorg/joml/Matrix4f;[IILviewpoint/render/ModelBatches$Filter;)V");}
                         super.visitInsn(opcode);
                         if(freeze&&firstReturn&&opcode==Opcodes.ARETURN){firstReturn=false;mv.visitLabel(nativeBody);}
                     }

@@ -72,7 +72,7 @@ def build_combined(with_eclipse=False):
             classes,relocator=relocate_eclipse(cfg,native,eclipse,staging)
             classpaths.append(classes)
             files.extend([relocator,ROOT/'tools/build_eclipse_support.py'])
-            replacements.update({BRIDGE+'EclipseHooks.class',RENDER+'Gfl2SourceHost.class'})
+            replacements.update({BRIDGE+'EclipseHooks.class',RENDER+'Gfl2SourceHost.class',RENDER+'Gfl2StockModelReplay.class'})
         overrides=staging/'combined'
         compile_java(cfg,sources,overrides,[*classpaths,native['jar'],host,cfg['zombiebuddy_jar'],BUILD/'GFL2Exilium.jar',*game.glob('*.jar')])
         rows={}

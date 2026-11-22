@@ -53,9 +53,15 @@ final class ModelSession {
     private boolean preserveAimWeapon;
     private FurnitureSeat furnitureSeat;
     private float furnitureDrop;
+    private volatile ModelInstance drawMarker;
 
     float furnitureDrop() { return furnitureDrop; }
     float furnitureBlend() { return furnitureSeat == null ? 0 : furnitureSeat.blend; }
+    ModelInstance drawMarker(IsoGameCharacter actor) {
+        if (drawMarker == null) drawMarker = new ModelInstance();
+        drawMarker.character = actor;
+        return drawMarker;
+    }
     private int[] sourceIndices;
     private SkinningData sourceSkin;
     private final boolean[] required;
@@ -304,7 +310,7 @@ final class ModelSession {
         ViewpointMode.retire(()->{
             try{ResourceCleanup.close(viewpointModel,plainMesh,plainTextures,gpu,model);}
             catch(Throwable e){Main.error(e);}
-            finally{viewpointModel=null;plainMesh=null;plainTextures=null;gpu=null;frozen=fullFrame=previousFrozen=olderFrozen=null;}
+            finally{viewpointModel=null;plainMesh=null;plainTextures=null;gpu=null;frozen=fullFrame=previousFrozen=olderFrozen=null;ModelInstance m=drawMarker;drawMarker=null;if(m!=null)m.character=null;}
         });
     }
 }

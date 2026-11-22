@@ -73,8 +73,10 @@ public final class Bridge {
             int added=prepared.submitPreparedFrozen(draws,targetPlacement,data,material->new Part(command,material),draw.materials.shadow(),draw.materials.doubleSided());
             if(added==0)return;
             draw.customEnd=draws.count();
+            ModelInstance marker=session.drawMarker(actor);
             boolean continuous=false;
             for(int n=originalEnd;n<draw.customEnd;n++) {
+                DrawAccess.instance(draws,n,marker);
                 DrawAccess.style(draws,body,n);continuous|=backend.followDraw(draws,n,frame.number);
                 if(draw.low!=null)draws.bounds(n,targetPlacement,draw.low,draw.high,1);
             }

@@ -16,9 +16,11 @@ public final class SomberPostHooks {
                     @Override public void visitInsn(int opcode){
                         if(opcode==Opcodes.RETURN){
                             found[bind?0:1]++;
+                            mv.visitVarInsn(Opcodes.ALOAD,0);
                             if(bind) mv.visitVarInsn(Opcodes.ALOAD,1);
                             mv.visitMethodInsn(Opcodes.INVOKESTATIC,"viewpoint/render/Gfl2SomberCoverage",
-                                bind?"bind":"release",desc,false);
+                                bind?"bind":"release",
+                                bind?"(Lviewpoint/render/PostPass;Lviewpoint/render/FrameContext;)V":"(Lviewpoint/render/PostPass;)V",false);
                         }
                         super.visitInsn(opcode);
                     }

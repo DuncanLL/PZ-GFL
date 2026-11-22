@@ -60,6 +60,66 @@ public final class UnifiedStartupCheck {
         }
     }
 
+    private static void checkSecondaryPassIsolation(Instrumentation agent) throws Exception {
+        Class<?> modelPass = Class.forName("viewpoint.render.ModelPass");
+        Class<?> postPass = Class.forName("viewpoint.render.PostPass");
+        Class<?> modelBatches = Class.forName("viewpoint.render.ModelBatches");
+        Set<String> observed = new HashSet<>();
+        ClassFileTransformer observer = new ClassFileTransformer() {
+            @Override public byte[] transform(ClassLoader loader, String type, Class<?> klass, ProtectionDomain domain, byte[] bytes) {
+                if (!MODEL_PASS.equals(type) && !"viewpoint/render/PostPass".equals(type) && !"viewpoint/render/ModelBatches".equals(type)) return null;
+                new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
+                    @Override public MethodVisitor visitMethod(int access, String methodName, String methodDesc, String sig, String[] errors) {
+                        return new MethodVisitor(Opcodes.ASM9) {
+                            @Override public void visitMethodInsn(int op, String owner, String name, String desc, boolean iface) {
+                                observed.add(type + "." + methodName + methodDesc + "->" + owner + "." + name + desc);
+                            }
+                        };
+                    }
+                }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                return null;
+            }
+        };
+        agent.addTransformer(observer, true);
+        try { agent.retransformClasses(modelPass, postPass, modelBatches); }
+        finally { agent.removeTransformer(observer); }
+        for (String expected : List.of(
+            "viewpoint/render/ModelPass.gbuffer(Lviewpoint/render/FrameContext;)V->viewpoint/render/Gfl2NativeRuntime.beforeLighting(Lviewpoint/render/ModelPass;Lviewpoint/render/FrameContext;)V",
+            "viewpoint/render/ModelPass.shadow(Lorg/joml/Matrix4f;[IILviewpoint/render/ModelBatches$Filter;)V->viewpoint/render/Gfl2NativeRuntime.shadows(Lviewpoint/render/ModelPass;Lorg/joml/Matrix4f;[IILviewpoint/render/ModelBatches$Filter;)V",
+            "viewpoint/render/ModelPass.shown(Lviewpoint/render/ModelDraws;I)Z->viewpoint/render/Gfl2NativeRegistry.owns(Lviewpoint/render/ModelPass;Lviewpoint/render/ModelDraws;I)Z",
+            "viewpoint/render/PostPass.inputs(Lviewpoint/render/FrameContext;)V->viewpoint/render/Gfl2SomberCoverage.bind(Lviewpoint/render/PostPass;Lviewpoint/render/FrameContext;)V",
+            "viewpoint/render/PostPass.release()V->viewpoint/render/Gfl2SomberCoverage.release(Lviewpoint/render/PostPass;)V",
+            "viewpoint/render/ModelBatches.inOrder([IILviewpoint/render/ModelBatches$Filter;Lviewpoint/render/ModelBatches$State;)I->viewpoint/render/Gfl2StockModelReplay.filter(Lviewpoint/render/ModelDraws;Lviewpoint/render/ModelBatches$Filter;)Lviewpoint/render/ModelBatches$Filter;"
+        )) require(observed.contains(expected), "Missing pass-scoped hook call: " + expected);
+        Class<?> frameContext = Class.forName("viewpoint.render.FrameContext");
+        Class<?> matrix4f = Class.forName("org.joml.Matrix4f");
+        Class<?> batchFilter = Class.forName("viewpoint.render.ModelBatches$Filter");
+        Class.forName("viewpoint.render.Gfl2NativeRuntime")
+            .getDeclaredMethod("beforeLighting", modelPass, frameContext).invoke(null, null, null);
+        Class.forName("viewpoint.render.Gfl2NativeRuntime")
+            .getDeclaredMethod("shadows", modelPass, matrix4f, int[].class, int.class, batchFilter)
+            .invoke(null, null, null, null, 0, null);
+        var owns = Class.forName("viewpoint.render.Gfl2NativeRegistry")
+            .getDeclaredMethod("owns", modelPass, viewpoint.render.ModelDraws.class, int.class);
+        require(Boolean.FALSE.equals(owns.invoke(null, null, new viewpoint.render.ModelDraws(), 0)),
+            "Null ModelPass claimed character ownership");
+        Class.forName("viewpoint.render.Gfl2SomberCoverage")
+            .getDeclaredMethod("bind", postPass, frameContext).invoke(null, null, null);
+        Class.forName("viewpoint.render.Gfl2SomberCoverage")
+            .getDeclaredMethod("release", postPass).invoke(null, new Object[]{null});
+        var sampleDraws = new viewpoint.render.ModelDraws();
+        int rec = sampleDraws.add(null, null, null, new org.joml.Matrix4f(), -1, -1, 0, viewpoint.render.ModelDraws.COLOUR);
+        var marker = new zombie.core.skinnedmodel.model.ModelInstance();
+        var drawAccess = Class.forName("gfl2.runtime.DrawAccess");
+        var setInstance = drawAccess.getDeclaredMethod("instance", viewpoint.render.ModelDraws.class, int.class, zombie.core.skinnedmodel.model.ModelInstance.class);
+        setInstance.setAccessible(true);
+        setInstance.invoke(null, sampleDraws, rec, marker);
+        var getInstance = drawAccess.getDeclaredMethod("instance", viewpoint.render.ModelDraws.class, int.class);
+        getInstance.setAccessible(true);
+        require(getInstance.invoke(null, sampleDraws, rec) == marker && marker.model == null && marker.tex == null && marker.parent == null && marker.modelScript == null,
+            "Lightweight ModelInstance draw marker mismatch");
+    }
+
     private static List<String> drawOrder(Instrumentation agent) throws Exception {
         List<String> order = new ArrayList<>();
         ClassFileTransformer observer = new ClassFileTransformer() {
@@ -217,10 +277,11 @@ public final class UnifiedStartupCheck {
             prepare();
             require(drawOrder(agent).equals(ORDER), "First model preparation has incorrect draw advice: "+drawOrder(agent));
             checkHeldPresentation();
+            checkSecondaryPassIsolation(agent);
             prepare();
             require(drawOrder(agent).equals(ORDER), "Model preparation applied duplicate advice");
             report.put("native_available_before_first_draw",true).put("eclipse_available_before_first_draw",hasEclipse)
-                .put("native_callback_order",ORDER).put("held_presentation_hook",true);
+                .put("native_callback_order",ORDER).put("held_presentation_hook",true).put("secondary_pass_isolation",true);
         }
         require(Files.readString(selection).equals(chosen) && Arrays.equals(Files.readAllBytes(custom),new byte[]{7,8,9}),
             "Player shader selection or custom pack was modified");
