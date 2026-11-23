@@ -1,5 +1,6 @@
 package gfl2.runtime;
 
+import java.lang.reflect.Field;
 import java.util.IdentityHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import org.joml.Matrix4f;
@@ -23,6 +24,17 @@ import zombie.iso.IsoCamera;
 public final class VanillaWorld {
     private static final ConcurrentHashMap<ModelSlotRenderData,Draw> QUEUED=new ConcurrentHashMap<>();
     private static final ThreadLocal<ModelSlotRenderData> WORLD=new ThreadLocal<>();
+    private static final Field SLOT_READY=readyField();
+
+    private static Field readyField() {
+        try {
+            Field f=ModelSlotRenderData.class.getDeclaredField("ready");
+            f.setAccessible(true);
+            return f;
+        } catch(ReflectiveOperationException ignored) {
+            return null;
+        }
+    }
 
     private record Hand(ModelInstance root,Matrix4f correction) {}
 
@@ -114,6 +126,13 @@ public final class VanillaWorld {
         return new Hand(root,correction);
     }
 
+    public static void keepReady(ModelSlotRenderData slot) {
+        if(SLOT_READY==null||slot==null)return;
+        Draw draw=QUEUED.get(slot);
+        if(draw==null||draw.session.retired||draw.session.failed)return;
+        try { SLOT_READY.setBoolean(slot,true); } catch(IllegalAccessException ignored) {}
+    }
+
     public static void begin(ModelSlotRenderData slot) {
         Draw draw=QUEUED.get(slot);
         if(draw==null)WORLD.remove();
@@ -125,9 +144,10 @@ public final class VanillaWorld {
     public static boolean replace(ModelSlotRenderData slot,ModelInstanceRenderData data) {
         Draw draw=QUEUED.get(slot);
         if(draw==null||draw.session.retired||draw.session.failed)return false;
+        if(WORLD.get()!=slot)return true;
         Hand hand=draw.hand(data);
         if(hand!=null) {
-            if(WORLD.get()==slot&&draw.painted&&hand.correction()!=null&&data.model.isStatic) {
+            if(draw.painted&&hand.correction()!=null&&data.model.isStatic) {
                 // RenderList keeps the per-slot properties for queued/instanced equipment draws.
                 Matrix4f transform=draw.heldTransforms.computeIfAbsent(data,part->
                     new Matrix4f(hand.correction()).mul(new Matrix4f(part.xfrm).transpose()).transpose());
@@ -136,7 +156,6 @@ public final class VanillaWorld {
             }
             return false;
         }
-        if(WORLD.get()!=slot)return true;
         if(draw.body!=data.modelInstance)return draw.painted;
         ReadyRoomPreview.State saved=new ReadyRoomPreview.State();
         Shader shader=null;

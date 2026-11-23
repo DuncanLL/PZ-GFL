@@ -10,6 +10,11 @@ public final class VanillaWorldPatch {
         @Patch.OnExit public static void exit(@Patch.This ModelSlotRenderData slot) { VanillaWorld.capture(slot); }
     }
 
+    @Patch(className="zombie.core.skinnedmodel.model.ModelSlotRenderData",methodName="checkReady")
+    public static final class Ready {
+        @Patch.OnExit public static void exit(@Patch.This ModelSlotRenderData slot) { VanillaWorld.keepReady(slot); }
+    }
+
     @Patch(className="zombie.core.skinnedmodel.model.ModelSlotRenderData",methodName="performRenderCharacter")
     public static final class Pass {
         @Patch.OnEnter public static void enter(@Patch.This ModelSlotRenderData slot) { VanillaWorld.begin(slot); }

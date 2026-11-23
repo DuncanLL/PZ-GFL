@@ -98,5 +98,11 @@
     "ContextMenu_GFL2_ClothHairPhysicsOn": "衣服与头发物理已开启",
     "ContextMenu_GFL2_ClothHairPhysicsOff": "衣服与头发物理已关闭（不占用物理性能）",
     "ContextMenu_GFL2_ChestPhysicsTip": "0 为彻底关闭且不占用性能，100 为默认完整效果",
-    "ContextMenu_GFL2_VoiceVolumeTip": "调整角色语音音量（50 为默认音量，0 为静音）"
+    "ContextMenu_GFL2_VoiceVolumeTip": "调整角色语音音量（50 为默认音量，0 为静音）",
+    "ContextMenu_GFL2_Planeta": "游星",
+    "ContextMenu_GFL2_PlanetaDescription": "托洛洛被配给的高性能突击步枪，以卡拉什-阿尔法为原型，枪身重量更轻，射击精度更高。它的设计风格轻盈且独辟蹊径，兼具实用主义的理性与探索未知的浪漫，与其主人非常相似。",
+    "ContextMenu_GFL2_SilverWingedPistis": "银翼匹丝缇",
+    "ContextMenu_GFL2_SilverWingedPistisDescription": "伊格蕾塔被配给的高性能手枪，以沙漠之鹰为原型，在加强破坏力的同时减轻了后坐力，赋予了她直面危险的勇气。用鹰啸般凌厉的枪火，照亮狩猎真相的远途。",
+    "ContextMenu_GFL2_Sibyl": "西比尔",
+    "ContextMenu_GFL2_SibylDescription": "纳美西丝被配给的定制型狙击枪，以复仇女神为原型，显著提升了极端射程下的绝对精度与稳定性——或许这一次，她能够借此触碰真理。"
 }

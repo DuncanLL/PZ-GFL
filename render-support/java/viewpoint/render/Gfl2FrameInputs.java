@@ -44,7 +44,13 @@ public final class Gfl2FrameInputs {
     public Inputs build(Map<String,float[]> nativeValues,float[] placement,float[] eye,
                         float[] previousPlacement,float[] previousEye,int width,int height,
                         double elapsedSeconds,boolean history,float[] points,float[] torches,float[] spots){
-        if(width<=0||height<=0||eye.length!=3||!Double.isFinite(elapsedSeconds))throw new IllegalArgumentException("Invalid native frame");
+        return build(nativeValues,placement,eye,previousPlacement,previousEye,width,height,width,height,elapsedSeconds,history,points,torches,spots);
+    }
+
+    public Inputs build(Map<String,float[]> nativeValues,float[] placement,float[] eye,
+                        float[] previousPlacement,float[] previousEye,int width,int height,int outputWidth,int outputHeight,
+                        double elapsedSeconds,boolean history,float[] points,float[] torches,float[] spots){
+        if(width<=0||height<=0||outputWidth<=0||outputHeight<=0||eye.length!=3||!Double.isFinite(elapsedSeconds))throw new IllegalArgumentException("Invalid native frame");
         Matrix4d view=matrix(nativeValues.get("gbufferModelView")),projection=matrix(nativeValues.get("gbufferProjection")),inverseView=matrix(nativeValues.get("gbufferModelViewInverse"));
         Matrix4d current=object(placement,eye),previous=object(history?previousPlacement:placement,history?previousEye:eye);
         Matrix4d cameraToWorld=new Matrix4d(inverseView).scale(1,1,-1);
@@ -53,7 +59,9 @@ public final class Gfl2FrameInputs {
         values.put("unity_ObjectToWorld",floats(current));values.put("unity_WorldToObject",floats(new Matrix4d(current).invert()));
         values.put("unity_WorldTransformParams",new float[]{0,0,0,(float)Math.signum(current.determinant3x3())});
         values.put("unity_SpecCube0_HDR",new float[]{1,1,0,0});values.put("_MainLightPosition",new float[]{light[0],light[1],light[2],0});values.put("_MainLightColor",new float[]{0,0,0,1});
-        float[] screen={width,height,(float)(1+1d/width),(float)(1+1d/height)};values.put("_ScreenParams",screen);values.put("_ScaledScreenParams",screen);
+        float[] screen={outputWidth,outputHeight,(float)(1+1d/outputWidth),(float)(1+1d/outputHeight)};
+        float[] scaled={width,height,(float)(1+1d/width),(float)(1+1d/height)};
+        values.put("_ScreenParams",screen);values.put("_ScaledScreenParams",scaled);
         values.put("_Time",new float[]{(float)(elapsedSeconds/20),(float)elapsedSeconds,(float)(elapsedSeconds*2),(float)(elapsedSeconds*3)});
         values.put("_WorldSpaceCameraPos",new float[]{0,0,0});values.put("glstate_matrix_projection",floats(projection));values.put("unity_MatrixVP",floats(new Matrix4d(projection).mul(view)));
         values.put("unity_MatrixV",floats(view));values.put("unity_MatrixInvV",floats(inverseView));values.put("unity_CameraToWorld",floats(cameraToWorld));values.put("_ShadowThresholdLightDirection",new float[]{light[0],light[1],light[2],0});

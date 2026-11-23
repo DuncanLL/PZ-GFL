@@ -98,5 +98,11 @@
     "ContextMenu_GFL2_ClothHairPhysicsOn": "衣装・髪物理がオンになっています",
     "ContextMenu_GFL2_ClothHairPhysicsOff": "衣装・髪物理がオフになっています（負荷なし）",
     "ContextMenu_GFL2_ChestPhysicsTip": "0で完全オフ（負荷なし）、100で標準効果",
-    "ContextMenu_GFL2_VoiceVolumeTip": "キャラボイスの音量を調整（50が標準、0でミュート）"
+    "ContextMenu_GFL2_VoiceVolumeTip": "キャラボイスの音量を調整（50が標準、0でミュート）",
+    "ContextMenu_GFL2_Planeta": "遊星",
+    "ContextMenu_GFL2_PlanetaDescription": "トロロに支給された高性能アサルトライフル。AK-Alfaをベースに軽量化と高精度化が図られている。軽やかで独創的な設計は、実用主義の理性と未知を探求するロマンを兼ね備えており、持ち主によく似ている。",
+    "ContextMenu_GFL2_SilverWingedPistis": "シルバー・ピスティス",
+    "ContextMenu_GFL2_SilverWingedPistisDescription": "イーグレッタに支給された高性能ハンドガン。デザートイーグルをベースに破壊力を高めつつ反動を抑え、危険に立ち向かう勇気を与えてくれる。鷹の鳴き声のように鋭い銃火が、真実を追う長い旅路を照らす。",
+    "ContextMenu_GFL2_Sibyl": "シビュラ",
+    "ContextMenu_GFL2_SibylDescription": "ネメシスに支給されたカスタム狙撃銃。OM 50 ネメシスをベースに、超長距離での絶対的な精度と安定性を大幅に高めている――今度こそ、真理へと手が届くのかもしれない。"
 }

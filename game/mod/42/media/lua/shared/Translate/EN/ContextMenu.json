@@ -98,5 +98,11 @@
     "ContextMenu_GFL2_ClothHairPhysicsOn": "Cloth & hair physics enabled",
     "ContextMenu_GFL2_ClothHairPhysicsOff": "Cloth & hair physics disabled (zero physics cost)",
     "ContextMenu_GFL2_ChestPhysicsTip": "0 completely disables chest physics with zero cost; 100 is full default",
-    "ContextMenu_GFL2_VoiceVolumeTip": "Adjust character voice volume (50 is default, 0 mutes)"
+    "ContextMenu_GFL2_VoiceVolumeTip": "Adjust character voice volume (50 is default, 0 mutes)",
+    "ContextMenu_GFL2_Planeta": "Planeta",
+    "ContextMenu_GFL2_PlanetaDescription": "Tololo's assigned high-performance assault rifle, modeled after the AK-Alfa with reduced weight and higher precision. Light and inventive in design, it balances pragmatic rationality with the romance of exploring the unknown—much like its owner.",
+    "ContextMenu_GFL2_SilverWingedPistis": "Silver-Winged Pistis",
+    "ContextMenu_GFL2_SilverWingedPistisDescription": "Eagletta's assigned high-performance handgun, modeled after the Desert Eagle with enhanced stopping power and reduced recoil, giving her the courage to face danger head-on. With gunfire as fierce as a falcon's cry, it lights the long hunt for truth.",
+    "ContextMenu_GFL2_Sibyl": "Sibyl",
+    "ContextMenu_GFL2_SibylDescription": "Nemesis's assigned custom sniper rifle, modeled after the OM 50 Nemesis with markedly improved precision and stability at extreme ranges—perhaps this time, it will let her touch the truth."
 }

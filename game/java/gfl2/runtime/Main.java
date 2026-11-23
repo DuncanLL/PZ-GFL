@@ -335,6 +335,22 @@ public class Main {
             return "";
         }catch(Exception failure){return failure.toString();}
     }
+    public static synchronized String queueRemoteDefault(IsoPlayer actor,String id) {
+        if(actor==null||actor.isLocalPlayer())return "Invalid remote player";
+        if(id==null||id.isEmpty()){disable(actor);return "";}
+        try {
+            Entry model=entry(id);
+            JSONObject profile=new JSONObject(Files.readString(model.profile()));
+            JSONObject remote=new JSONObject()
+                .put("appearance",profile.getJSONObject("appearance"))
+                .put("weapon_tuning",profile.optJSONObject("weapon_tuning"));
+            cancelPreparation(actor);
+            switchFailures.remove(actor);
+            pending.put(actor,new Pending(model,remote.toString(),true));
+            refreshPoseOwners();
+            return "";
+        }catch(Exception failure){return failure.toString();}
+    }
     public static synchronized String queueOwnedAppearance(IsoPlayer actor,String id,String appearance,String localSettings) {
         if(actor==null||!actor.isLocalPlayer())return "Invalid local player";
         try {
@@ -441,6 +457,7 @@ public class Main {
         pending.remove(actor);cancelPreparation(actor);switchFailures.remove(actor);ModelSession old=active.remove(actor);if(old!=null) old.retire();refreshPoseOwners();
     }
     public static synchronized void clear() {
+        GripCalibration.flush();
         for(ModelSession session:preparing.values())session.retire();preparing.clear();
         for(ModelSession session:active.values()) session.retire();active.clear();pending.clear();switchFailures.clear();refreshPoseOwners();
         directory=null;entries.clear();hiddenEntries.clear();enabledPacks=List.of();

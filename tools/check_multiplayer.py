@@ -48,4 +48,9 @@ try:
    module=f'GFL2Voice/{name}'
    env.rawset(module,run((media/folder/f'{module}.lua').read_text('utf8'),module))
  print(run('return verifyVoiceLifecycle()','voice-assertions'))
+ run((test/'mfs-compat-fixture.lua').read_text('utf8'),'mfs-fixture')
+ env.rawset('TimedActions/ISInsertMagazine', True)
+ env.rawset('GFL2SignatureMagazines',run((media/'shared/GFL2SignatureMagazines.lua').read_text('utf8'),'sig-magazines'))
+ run((media/'client/ZZ_GFL2ModernFirearmsCompat.lua').read_text('utf8'),'mfs-compat')
+ print(run('return verifyMfsCompat()','mfs-assertions'))
 finally:jpype.shutdownJVM()

@@ -173,7 +173,8 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
                 Actor actor=caster.actor;
                 int first=actor.draws.get(0).index,identity=(int)draws.palettes[actor.palette*12+24];float[] placement=Arrays.copyOfRange(draws.values,first*68,first*68+16);
                 Gfl2FrameInputs builder=builders.computeIfAbsent(actor.model.getString("pmx_sha256"),id->new Gfl2FrameInputs(actor.model,data.manifest.getJSONObject("original_camera_fill")));
-                Map<String,float[]> input=new LinkedHashMap<>(builder.build(nativeValues,placement,eye,placement,eye,frame.width,frame.height,frame.time,false,new float[0],new float[0],new float[0]).values());
+                int outW=frame.outputWidth>0?frame.outputWidth:frame.width,outH=frame.outputHeight>0?frame.outputHeight:frame.height;
+                Map<String,float[]> input=new LinkedHashMap<>(builder.build(nativeValues,placement,eye,placement,eye,frame.width,frame.height,outW,outH,frame.time,false,new float[0],new float[0],new float[0]).values());
                 input.put("unity_MatrixVP",sourceVp.get(new float[16]));input.put("unity_MatrixV",view.get(new float[16]));input.put("unity_MatrixInvV",inverse.get(new float[16]));input.put("unity_CameraToWorld",inverse.get(new float[16]));input.put("glstate_matrix_projection",new Matrix4f(sourceVp).mul(inverse).get(new float[16]));
                 int attributes=materials.attributeTexture(actor.model),nativeShadow=((int[])Gfl2NativeEnvironment.field(Gfl2NativeEnvironment.world("shadows"),"views"))[0];Map<String,Local> locals=new HashMap<>();
                 for(Draw draw:caster.draws){
@@ -198,7 +199,8 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
                 Actor actor=actors.get(actorIndex);if(actorIndex>0)target.clearActorStencil();int first=actor.draws.get(0).index,identity=(int)draws.palettes[actor.palette*12+24];float[] placement=Arrays.copyOfRange(draws.values,first*68,first*68+16),eye={frame.eyeX,frame.eyeY,frame.eyeZ};
                 History old=histories.get(identity);boolean history=old!=null&&old.asset.equals(actor.model.getString("pmx_sha256"))&&old.frame==frames-1&&!frame.scene.cameraCut;
                 Gfl2FrameInputs builder=builders.computeIfAbsent(actor.model.getString("pmx_sha256"),id->new Gfl2FrameInputs(actor.model,data.manifest.getJSONObject("original_camera_fill")));
-                var packet=builder.build(values,placement,eye,history?old.placement:placement,history?old.eye:eye,width,height,frame.time,history,new float[0],new float[0],new float[0]);
+                int outW=frame.outputWidth>0?frame.outputWidth:width,outH=frame.outputHeight>0?frame.outputHeight:height;
+                var packet=builder.build(values,placement,eye,history?old.placement:placement,history?old.eye:eye,width,height,outW,outH,frame.time,history,new float[0],new float[0],new float[0]);
                 Map<String,float[]> input=new LinkedHashMap<>(packet.values());var shadow=environment.shadow(Arrays.copyOfRange(draws.values,first*68+24,first*68+27),eye);
                 input.put("_MainLightWorldToShadow",shadow.sourceMatrices());input.put("_MainLightShadowParams",new float[]{shadow.enabled()?1:0,1,0,0});input.put("_MainLightShadowmapSize",new float[]{1f/shadow.size(),1f/shadow.size(),shadow.size(),shadow.size()});input.put("_CascadeDepthBiasArray",new float[4]);input.put("_CascadeNormalBiasArray",new float[4]);
                 Map<String,Local> locals=new HashMap<>();int attributes=materials.attributeTexture(actor.model);
@@ -284,7 +286,8 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
         float[] engine=Arrays.copyOfRange(draws.values,first*68+20,first*68+24);environment.actorLight(engine);actorEngineLight=engine;
         int identity=(int)draws.palettes[actor.palette*12+24];History old=histories.get(identity);boolean history=old!=null&&old.asset.equals(actor.model.getString("pmx_sha256"))&&old.frame==frames-1&&!frame.scene.cameraCut;
         Gfl2FrameInputs builder=builders.computeIfAbsent(actor.model.getString("pmx_sha256"),id->new Gfl2FrameInputs(actor.model,data.manifest.getJSONObject("original_camera_fill")));
-        Gfl2FrameInputs.Inputs packet=builder.build(nativeValues,placement,eye,history?old.placement:placement,history?old.eye:eye,width,height,frame.time,history,localLights.points,new float[0],new float[0]);
+        int outW=frame.outputWidth>0?frame.outputWidth:width,outH=frame.outputHeight>0?frame.outputHeight:height;
+        Gfl2FrameInputs.Inputs packet=builder.build(nativeValues,placement,eye,history?old.placement:placement,history?old.eye:eye,width,height,outW,outH,frame.time,history,localLights.points,new float[0],new float[0]);
         localLights.neutralAttenuation(packet.values());
         nativeLightCount=packet.nativeLightCount();unsupportedCarBeams=packet.unsupportedCarBeams();
         Map<String,float[]> input=new LinkedHashMap<>(packet.values());float[] center=Arrays.copyOfRange(draws.values,first*68+24,first*68+27);var shadow=environment.shadow(center,eye);

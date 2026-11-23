@@ -13,6 +13,7 @@ local automaticRPM = {
     ["GFL2.HeavyStrings"] = 650,
     ["GFL2.Lowenjunges"] = 650,
     ["GFL2.MaidsRules"] = 750,
+    ["GFL2.Planeta"] = 700,
     ["GFL2.SavageBeast"] = 850,
     ["GFL2.Schlitzohr"] = 600,
     ["GFL2.Scylla"] = 850,

@@ -544,6 +544,7 @@ public class ReadyRoomPreview {
         }catch(Exception e){System.err.println("[GFL2ReadyRoom] Preview unavailable: "+e);return false;}
     }
     public static synchronized void release(IsoGameCharacter actor) {
+        GripCalibration.flush();
         GripRoomPreview.release(actor);
         BrowseState state=browsePreviews.remove(actor);
         if(state!=null){state.discardRequest();state.present(null,false);}

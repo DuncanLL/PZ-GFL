@@ -3,14 +3,17 @@ package gfl2.runtime;
 import gfl2.motion.WorldPoseRetargeter.GripAdjustment;
 import java.lang.ref.WeakReference;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import org.joml.Matrix4f;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import se.krka.kahlua.j2se.J2SEPlatform;
 import se.krka.kahlua.vm.KahluaTable;
@@ -23,12 +26,19 @@ import zombie.inventory.InventoryItem;
 import zombie.inventory.types.HandWeapon;
 import zombie.inventory.types.WeaponType;
 
-/** Per-save, per-character calibration keyed by the held item's full type. */
+/** Persistent per-character calibration keyed by the held item's full type. */
 final class GripCalibration {
     private static final String STORE="GFL2GripCalibration";
     private static final int POSITION_AXES=6, ITEM_AXIS=12, CURL_AXIS=15, COUNT=17;
     private static final long TRANSITION_NANOS=150_000_000L;
     private static final Map<IsoGameCharacter,AimBlend> blends=Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Object storeLock=new Object();
+    private static final Map<String,Map<String,Object>> standingStore=new HashMap<>();
+    private static final Map<String,Map<String,Object>> aimingStore=new HashMap<>();
+    private static volatile Path overrideStoreFile;
+    private static boolean loadedStore;
+    private static long dirtyRevision, savedRevision, lastEditNanos;
+    private static Thread flushThread;
 
     private static final class AimBlend {
         final String modelId;
@@ -154,9 +164,227 @@ final class GripCalibration {
         return saved;
     }
 
+    static void setStoreFileForTest(Path file) {
+        synchronized(storeLock){
+            overrideStoreFile=file;
+            loadedStore=false;
+            dirtyRevision=savedRevision=0;
+            standingStore.clear();
+            aimingStore.clear();
+        }
+    }
+
+    private static Path storeFile() {
+        Path override=overrideStoreFile;
+        if(override!=null)return override;
+        var fs=ZomboidFileSystem.instance;
+        if(fs==null)return null;
+        String cache=fs.getCacheDir();
+        if(cache==null||cache.isBlank())return null;
+        return Path.of(cache,"GFL2Exilium","grip-calibration.json").toAbsolutePath().normalize();
+    }
+
+    private static Map<String,Map<String,Object>> modeStore(boolean aiming) {
+        return aiming?aimingStore:standingStore;
+    }
+
+    private static KahluaTable copyRow(KahluaTable old) {
+        KahluaTable copy=J2SEPlatform.getInstance().newTable();
+        boolean edited=false;
+        for(int axis=0;axis<COUNT;axis++){
+            double v=value(old,axis);
+            if(v!=0){
+                copy.rawset(axis+1,Double.valueOf(v));
+                edited=true;
+            }
+        }
+        return edited?copy:null;
+    }
+
+    private static void loadModeJsonLocked(JSONObject section,Map<String,Map<String,Object>> target) {
+        if(section==null)return;
+        for(String owner:section.keySet()){
+            JSONObject weapons=section.optJSONObject(owner);
+            if(weapons==null)continue;
+            var map=new HashMap<String,Object>();
+            for(String weapon:weapons.keySet()){
+                Object raw=weapons.get(weapon);
+                if(Boolean.FALSE.equals(raw)){
+                    map.put(weapon,Boolean.FALSE);
+                }else if(raw instanceof JSONArray arr){
+                    KahluaTable row=J2SEPlatform.getInstance().newTable();
+                    boolean edited=false;
+                    int n=Math.min(arr.length(),COUNT);
+                    for(int axis=0;axis<n;axis++){
+                        double v=arr.optDouble(axis,0);
+                        if(Double.isFinite(v)&&Math.abs(v)<=limit(axis)&&v!=0){
+                            row.rawset(axis+1,Double.valueOf(v));
+                            edited=true;
+                        }
+                    }
+                    if(edited)map.put(weapon,row);
+                }
+            }
+            if(!map.isEmpty())target.put(owner,map);
+        }
+    }
+
+    private static JSONObject dumpModeJsonLocked(Map<String,Map<String,Object>> source) {
+        var section=new JSONObject();
+        for(var ownerEntry:source.entrySet()){
+            var weapons=new JSONObject();
+            for(var weaponEntry:ownerEntry.getValue().entrySet()){
+                Object val=weaponEntry.getValue();
+                if(Boolean.FALSE.equals(val)){
+                    weapons.put(weaponEntry.getKey(),false);
+                }else if(val instanceof KahluaTable row){
+                    var arr=new JSONArray();
+                    boolean edited=false;
+                    for(int axis=0;axis<COUNT;axis++){
+                        double v=value(row,axis);
+                        arr.put(v);
+                        if(v!=0)edited=true;
+                    }
+                    if(edited)weapons.put(weaponEntry.getKey(),arr);
+                }
+            }
+            if(!weapons.isEmpty())section.put(ownerEntry.getKey(),weapons);
+        }
+        return section;
+    }
+
+    private static void ensureLoadedLocked() {
+        if(loadedStore)return;
+        loadedStore=true;
+        Path file=storeFile();
+        if(file==null||!Files.isRegularFile(file))return;
+        try {
+            JSONObject root=new JSONObject(Files.readString(file));
+            loadModeJsonLocked(root.optJSONObject("standing"),standingStore);
+            loadModeJsonLocked(root.optJSONObject("aiming"),aimingStore);
+        }catch(Exception e){
+            System.err.println("[GFL2Exilium] Grip calibration load: "+e);
+        }
+    }
+
+    private static Object persistentRowLocked(Map<String,Map<String,Object>> store,Character character,String id,String weapon) {
+        String owner=character==null?id:character.key();
+        var ownerMap=store.get(owner);
+        if(ownerMap!=null&&ownerMap.containsKey(weapon))return ownerMap.get(weapon);
+        if(character!=null){
+            var selfMap=store.get(id);
+            Object found=selfMap==null?null:selfMap.get(weapon);
+            if(found==null)for(String skin:character.skins()){
+                if(skin.equals(id))continue;
+                var sib=store.get(skin);
+                if(sib!=null&&sib.containsKey(weapon)){found=sib.get(weapon);break;}
+            }
+            if(found instanceof KahluaTable old){
+                KahluaTable copy=copyRow(old);
+                if(copy!=null){
+                    store.computeIfAbsent(owner,unused->new HashMap<>()).put(weapon,copy);
+                    return copy;
+                }
+            }else if(Boolean.FALSE.equals(found)){
+                store.computeIfAbsent(owner,unused->new HashMap<>()).put(weapon,Boolean.FALSE);
+                return Boolean.FALSE;
+            }
+        }
+        return null;
+    }
+
+    private static void scheduleSaveLocked() {
+        if(storeFile()==null)return;
+        dirtyRevision++;
+        lastEditNanos=System.nanoTime();
+        if(flushThread==null||!flushThread.isAlive()){
+            flushThread=new Thread(GripCalibration::backgroundFlushLoop,"GFL2-GripCalibration-Writer");
+            flushThread.setDaemon(true);
+            flushThread.start();
+        }
+    }
+
+    private static void backgroundFlushLoop() {
+        while(true){
+            long waitMs;
+            synchronized(storeLock){
+                if(savedRevision==dirtyRevision){
+                    flushThread=null;
+                    return;
+                }
+                long elapsedMs=(System.nanoTime()-lastEditNanos)/1_000_000L;
+                waitMs=250L-elapsedMs;
+            }
+            if(waitMs>0){
+                try{Thread.sleep(Math.min(waitMs,250L));}
+                catch(InterruptedException ignored){return;}
+                continue;
+            }
+            flush();
+        }
+    }
+
+    static void flush() {
+        Path file;
+        long targetRevision;
+        String json;
+        synchronized(storeLock){
+            if(!loadedStore||savedRevision==dirtyRevision)return;
+            file=storeFile();
+            if(file==null){savedRevision=dirtyRevision;return;}
+            targetRevision=dirtyRevision;
+            json=new JSONObject()
+                .put("version",1)
+                .put("standing",dumpModeJsonLocked(standingStore))
+                .put("aiming",dumpModeJsonLocked(aimingStore))
+                .toString(2);
+        }
+        try {
+            Path dir=Files.createDirectories(file.getParent());
+            Path staged=Files.createTempFile(dir,"grip-calibration-",".tmp");
+            try {
+                Files.writeString(staged,json);
+                try {
+                    Files.move(staged,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+                }catch(AtomicMoveNotSupportedException ignored){
+                    Files.move(staged,file,StandardCopyOption.REPLACE_EXISTING);
+                }
+            }finally{
+                Files.deleteIfExists(staged);
+            }
+        }catch(Exception e){
+            System.err.println("[GFL2Exilium] Grip calibration save: "+e);
+        }finally{
+            synchronized(storeLock){
+                if(savedRevision<targetRevision)savedRevision=targetRevision;
+            }
+        }
+    }
+
     static KahluaTable currentRow(IsoGameCharacter actor,String id,InventoryItem item,boolean aiming) {
-        var store=table(actor.getModData(),aiming?STORE+"Aim":STORE,false);
-        return characterRow(store,id,item,aiming) instanceof KahluaTable row?row:null;
+        Character character=character(id);
+        String weapon=item.getFullType();
+        synchronized(storeLock){
+            ensureLoadedLocked();
+            var pStore=modeStore(aiming);
+            Object cached=persistentRowLocked(pStore,character,id,weapon);
+            if(cached instanceof KahluaTable row)return row;
+            if(Boolean.FALSE.equals(cached))return null;
+            KahluaTable modData=actor==null?null:actor.getModData();
+            var mStore=table(modData,aiming?STORE+"Aim":STORE,false);
+            Object fromModData=characterRow(mStore,id,item,aiming);
+            if(fromModData instanceof KahluaTable legacyRow){
+                KahluaTable imported=copyRow(legacyRow);
+                if(imported!=null){
+                    String owner=character==null?id:character.key();
+                    pStore.computeIfAbsent(owner,unused->new HashMap<>()).put(weapon,imported);
+                    scheduleSaveLocked();
+                    return imported;
+                }
+                return legacyRow;
+            }
+            return null;
+        }
     }
 
     private static double value(KahluaTable row,int axis) {
@@ -185,10 +413,19 @@ final class GripCalibration {
             if(v!=0){next.rawset(i+1,Double.valueOf(v));edited=true;}
         }
         Character character=character(id);
-        KahluaTable store=table(actor.getModData(),aiming?STORE+"Aim":STORE,true);
-        KahluaTable saved=table(store,character==null?id:character.key(),true);
-        if(edited)saved.rawset(key,next);
-        else saved.rawset(key,character!=null||!aiming&&legacy(saved,item)!=null?Boolean.FALSE:null);
+        String owner=character==null?id:character.key();
+        synchronized(storeLock){
+            ensureLoadedLocked();
+            modeStore(aiming).computeIfAbsent(owner,unused->new HashMap<>()).put(key,edited?next:Boolean.FALSE);
+            scheduleSaveLocked();
+        }
+        KahluaTable modData=actor==null?null:actor.getModData();
+        if(modData!=null){
+            KahluaTable store=table(modData,aiming?STORE+"Aim":STORE,true);
+            KahluaTable saved=table(store,owner,true);
+            if(edited)saved.rawset(key,next);
+            else saved.rawset(key,character!=null||!aiming&&legacy(saved,item)!=null?Boolean.FALSE:null);
+        }
         return true;
     }
 

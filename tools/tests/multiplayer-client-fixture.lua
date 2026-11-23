@@ -4,7 +4,8 @@ local function event(name)
 end
 Events = {OnServerCommand=event("server"), OnTick=event("tick"),
     OnDisconnect=event("disconnect"), OnMainMenuEnter=event("menu")}
-function isClient() return true end
+local clientOnline = false
+function isClient() return clientOnline end
 function isServer() return false end
 local actor = {data={},onlineId=4,dead=false}
 function actor:getOnlineID() return self.onlineId end
@@ -20,7 +21,7 @@ function getPlayerByOnlineID(id) if id==4 then return actor elseif id==5 then re
 local sent = {}
 function sendClientCommand(_,_,command,args)
     sent[#sent+1] = {command=command,request=args.request,model=args.model,appearance=args.appearance,attempt=args.attempt,
-        handshake=args.handshake,session=args.session}
+        handshake=args.handshake,session=args.session,sound=args.sound,kind=args.kind}
 end
 
 local actions, face, requestedSettings, voiceUpdates
@@ -147,6 +148,14 @@ function verifyClient(client,economy)
         data.version=1
         callbacks.server("GFL2Exilium",command,data)
     end
+    -- Loaded while isClient()==false (Main Menu pre-load); API must exist and stay dormant until MP starts.
+    assert(type(client.ready)=="function" and type(client.pending)=="function" and type(client.transact)=="function")
+    assert(not client.ready(actor) and not client.pending(actor))
+    assert(not client.transact(actor,"DrawCharacter","pmx-abe3eaaaa9d04264",1,function()end))
+    callbacks.tick()
+    assert(#sent==0)
+    clientOnline=true
+
     callbacks.tick()
     assert(sent[1].command=="Request" and not client.ready(actor))
     receive("Wallet",{player=4,request=0,wallet={targeted=10}})
@@ -306,5 +315,45 @@ function verifyClient(client,economy)
     assert(sent[#sent].command=="Appearance" and sent[#sent].model==model and restoredSettings==nil)
     GFL2CharacterRuntime.networkAppearance=nil
 
-    return "PASS client handshake, retry after wallet snapshot, stale appearance, per-model restore, disconnect and respawn"
+    -- Remote pack version mismatch falls back to queueRemoteDefault, syncs remote voice mute, and relays Voice.
+    peer=setmetatable({},{__index={isLocalPlayer=function()return false end,getUsername=function()return "remote" end,isDead=function()return false end}})
+    expectedDisablePeer=peer
+    local prevRemote=GFL2CharacterRuntime.queueRemoteAppearance
+    local defaultApplied,remoteMuted,remoteSpoken=0,nil,nil
+    GFL2VoiceEngine={
+        syncRemote=function(p,on) assert(p==peer);remoteMuted=on end,
+        playRemote=function(p,snd,k) assert(p==peer);remoteSpoken={sound=snd,kind=k} end,
+    }
+    GFL2CharacterRuntime.queueRemoteAppearance=function(p,id,sig)
+        assert(p==peer)
+        if id=="" then cleared=cleared+1;return "" end
+        if sig~=signature then return "Character pack version mismatch" end
+        applied=applied+1;return ""
+    end
+    GFL2CharacterRuntime.queueRemoteDefault=function(p,id)
+        assert(p==peer and id==model)
+        defaultApplied=defaultApplied+1
+        return ""
+    end
+    receive("Appearance",{player=5,owner="remote",revision=20,model=model,signature=string.rep("c",64),appearance="{}",session=40})
+    clock=clock+300;callbacks.tick()
+    assert(defaultApplied==1 and remoteMuted==true)
+    client.publishVoice(actor,"GFL2PmxLaiya_Shout_A","shout")
+    assert(sent[#sent].command=="Voice" and sent[#sent].sound=="GFL2PmxLaiya_Shout_A" and sent[#sent].kind=="shout")
+    receive("Voice",{player=5,owner="remote",session=40,sound="GFL2PmxLaiya_Shout_A",kind="shout"})
+    assert(remoteSpoken and remoteSpoken.sound=="GFL2PmxLaiya_Shout_A" and remoteSpoken.kind=="shout")
+    remoteSpoken=nil
+    receive("Voice",{player=5,owner="remote",session=99,sound="GFL2PmxLaiya_Shout_A",kind="shout"})
+    assert(remoteSpoken==nil,"mismatched session triggered remote voice")
+    client.resync()
+    clock=clock+300;callbacks.tick()
+    assert(defaultApplied==2,"resync did not retry full sync for default-fallback remote actor")
+    receive("Appearance",{player=5,owner="remote",revision=21,model="",signature="",appearance="",session=40})
+    clock=clock+300;callbacks.tick()
+    assert(remoteMuted==false)
+    receive("Voice",{player=5,owner="remote",session=40,sound="GFL2PmxLaiya_Shout_A",kind="shout"})
+    assert(remoteSpoken==nil,"disabled remote GFL2 actor still played GFL2 voice")
+    GFL2CharacterRuntime.queueRemoteAppearance,GFL2CharacterRuntime.queueRemoteDefault,GFL2VoiceEngine=prevRemote,nil,nil
+
+    return "PASS client pre-load safety, handshake, remote pack-mismatch fallback, voice sync, disconnect and respawn"
 end

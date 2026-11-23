@@ -1,10 +1,18 @@
 local catalog = require "GFL2SignatureWeapon"
 local M = {}
+local owners = {}
+for id, entry in pairs(catalog.byId) do
+    if entry.startsWithMagazine then owners[id .. "Magazine"] = id end
+end
 
 function M.forWeapon(weapon)
-    if not weapon then return end
+    if not weapon or not weapon.getFullType then return end
     local entry = catalog.byId[weapon:getFullType()]
     if entry and entry.startsWithMagazine then return entry.id .. "Magazine" end
+end
+
+function M.ownerOf(magazineType)
+    return type(magazineType) == "string" and owners[magazineType] or nil
 end
 
 local activeMods = getActivatedMods()

@@ -146,6 +146,10 @@ activeMods["GunsOfMarz"]=true
 assert(E.weaponAmmo(gun).box=="MarzGuns.556x45_Box" and E.weaponAmmo(gun).price==2000)
 activeMods={MarzGuns=true}
 assert(E.weaponAmmo(gun).box=="MarzGuns.556x45_Box" and E.weaponAmmo(gun).price==2000)
+activeMods={ModernFirearmsSystem=true,MarzGuns=true}
+assert(E.weaponAmmo(gun).box=="Base.556Box" and E.weaponAmmo(gun).price==2000)
+assert(E.weaponAmmo(smg).box=="Base.Bullets9mmBox" and E.weaponAmmo(smg).price==1200)
+activeMods={}
 activeMods["EscapeFromZomboidFirearms"]=true
 assert(E.weaponAmmo(gun).box=="EscapeFromZomboidFirearms.Box545x39" and E.weaponAmmo(gun).price==2000)
 activeMods={}

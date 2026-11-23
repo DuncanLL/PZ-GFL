@@ -2,7 +2,7 @@
 import re
 import numpy as np
 
-ALIASES={'chestl','chestr','breastl','breastr','bustl','bustr','左胸','右胸','左乳','右乳','左chest','右chest','左胸1','右胸1'}
+ALIASES={'chestl','chestr','breastl','breastr','bustl','bustr','左胸','右胸','左乳','右乳','左chest','右chest','左胸1','右胸1','左胸上2','右胸上2'}
 def array(value):return np.ascontiguousarray(value,dtype='f4')
 def vertex_weights(vertex):
     w=vertex.weight

@@ -188,7 +188,7 @@ do
    tested=tested+1
   end
  end
- assert(tested==26)
+ assert(tested==29)
  card.drawSubTexture=drawIcon
  GFL2ReadyRoom.centerWeaponPreview=originalCenter
  getTextManager=oldMetrics
@@ -303,7 +303,7 @@ if localizedBiographies then
    checked=checked+1
   end
  end
-  assert(checked==26)
+  assert(checked==29)
  local oldScripts=getScriptManager
  function getScriptManager()return {getModelScript=function(_,id)return id end}end
  local paintCount=0
@@ -328,7 +328,7 @@ if localizedBiographies then
    paintCount=paintCount+1
   end
  end
-  assert(paintCount==26)
+  assert(paintCount==29)
  w:layoutWeaponSkins(nil,{},false,"")
  getScriptManager=oldScripts
  if localizedOutfitDescriptions then
@@ -378,7 +378,7 @@ if localizedBiographies then
    end
    shown=shown+1
   end
-  assert(shown==72 and pools>0)
+  assert(shown==80 and pools>0)
   w.tab,w.browsed,w.character=tab,browsed,character
   w.drawText,w.drawTextureScaled=oldText,oldPicture
  end

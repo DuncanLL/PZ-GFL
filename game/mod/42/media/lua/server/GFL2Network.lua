@@ -1,5 +1,3 @@
-if not isServer() then return end
-
 local protocol = require "GFL2MultiplayerProtocol"
 local catalog = require "GFL2MultiplayerCatalog"
 local economy = require "GFL2RoomEconomy"
@@ -8,6 +6,7 @@ local sessions = {}
 local nextSession = 0
 local revision = 0
 local modDataKey = "GFL2ExiliumMultiplayerV1"
+local vanilla = {model = "", signature = "", appearance = ""}
 
 local function account(player)
     local name = player:getUsername()
@@ -17,7 +16,13 @@ local function account(player)
     return accounts[name]
 end
 
-economy.serverWallet = function(player) return account(player).wallet end
+local function accountWallet(player)
+    return account(player).wallet
+end
+
+if isServer and isServer() then
+    economy.serverWallet = accountWallet
+end
 
 local function openModel(id)
     local model = catalog[id]
@@ -49,6 +54,17 @@ local function publish(player, session, state)
     sendServerCommand(protocol.module, "Appearance", row)
 end
 
+local function endSession(session)
+    if not session or not session.appearance then return end
+    local old = session.appearance
+    session.appearance = nil
+    revision = revision + 1
+    sendServerCommand(protocol.module, "Appearance", {
+        version = protocol.version, player = old.player, owner = old.owner, revision = revision,
+        model = "", signature = "", appearance = "", session = session.token,
+    })
+end
+
 local function equippedAppearance(player, row)
     local equipped = row.appearance
     if equipped and canWear(player, equipped.model) then return equipped end
@@ -63,6 +79,7 @@ local function snapshot(player, row, handshake)
         if current == session.player and not current:isDead() then
             if session.appearance then states[#states + 1] = session.appearance end
         else
+            endSession(session)
             sessions[id] = nil
         end
     end
@@ -134,6 +151,8 @@ local function process(player, row, command, args)
 end
 
 Events.OnClientCommand.Add(function(module, command, player, args)
+    if not (isServer and isServer()) then return end
+    economy.serverWallet = accountWallet
     if module ~= protocol.module or not player or type(args) ~= "table" or args.version ~= protocol.version then return end
     local id = player:getOnlineID()
     if id < 0 or player:isDead() or getPlayerByOnlineID(id) ~= player then return end
@@ -145,41 +164,59 @@ Events.OnClientCommand.Add(function(module, command, player, args)
     local row = account(player)
     if not row then return end
     if command == "Request" then
-        if not session or session.player ~= player then
-            nextSession = nextSession + 1
-            sessions[id] = {player = player, token = nextSession}
-        end
         local handshake = protocol.integer(args.handshake, 1, 2147483647) and args.handshake or nil
+        if not session or session.player ~= player then
+            endSession(session)
+            nextSession = nextSession + 1
+            session = {player = player, token = nextSession, handshake = handshake}
+            sessions[id] = session
+        elseif handshake and session.handshake ~= handshake then
+            session.handshake = handshake
+            session.attempt = nil
+        end
         snapshot(player, row, handshake)
     elseif command == "Appearance" then
         if not protocol.appearance(args) then return end
+        local attempt = protocol.integer(args.attempt, 1, 2147483647) and args.attempt or nil
+        if attempt and session.attempt and attempt < session.attempt then return end
         if not canWear(player, args.model) then
             local equipped = equippedAppearance(player, row)
             if not equipped and row.appearance then
                 row.appearance = nil
                 if session.appearance then
-                    publish(player, session, {model = "", signature = "", appearance = ""})
+                    publish(player, session, vanilla)
                 end
             end
-            local attempt = protocol.integer(args.attempt, 1, 2147483647) and args.attempt or nil
             reply(player, "AppearanceRejected", {attempt = attempt, equipped = equipped})
             return
         end
+        if attempt then session.attempt = attempt end
         local state = {model = args.model, signature = args.signature, appearance = args.appearance}
         local previous = session.appearance
+        if not previous and state.model == "" and not row.appearance then return end
         if previous and previous.model == state.model
             and previous.signature == state.signature and previous.appearance == state.appearance then return end
         row.appearance = state.model ~= "" and state or nil
         publish(player, session, state)
+    elseif command == "Voice" then
+        if not session.appearance or not protocol.voice(args) then return end
+        local now = getTimestampMs and getTimestampMs()
+        if now and session.nextVoiceAt and now < session.nextVoiceAt then return end
+        if now then session.nextVoiceAt = now + 250 end
+        sendServerCommand(protocol.module, "Voice", {
+            version = protocol.version, player = id, owner = player:getUsername(),
+            session = session.token, sound = args.sound, kind = args.kind,
+        })
     elseif command == "Exchange" or command == "DrawCharacter" or command == "BuyOutfit" or command == "DrawOutfit" or command == "Wear" or command == "DrawWeapon" or command == "ClaimWeapon" or command == "ClaimMagazine" or command == "WeaponSkin" or command == "BuyAmmo" then
         process(player, row, command, args)
     end
 end)
 
 Events.OnPlayerDeath.Add(function(player)
+    if not (isServer and isServer()) then return end
     local id = player:getOnlineID()
     local session = sessions[id]
     if not session or session.player ~= player then return end
-    if session.appearance then publish(player, session, {model = "", signature = "", appearance = ""}) end
+    endSession(session)
     sessions[id] = nil
 end)

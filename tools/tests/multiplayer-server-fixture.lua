@@ -3,7 +3,8 @@ local function event()
     return {Add = function(fn) luaEnvironment[#luaEnvironment+1] = fn end}
 end
 Events = {OnClientCommand=event(), OnPlayerDeath=event()}
-function isServer() return true end
+local serverOnline = false
+function isServer() return serverOnline end
 function isClient() return false end
 local saves = {}
 ModData = {getOrCreate=function() return saves end}
@@ -96,6 +97,14 @@ function verifyServer()
         args.version=1
         receive("GFL2Exilium",command,owner,args)
     end
+    -- Loaded while isServer()==false (Main Menu / SP); SP economy must stay isolated until server starts.
+    assert(GFL2RoomEconomy.serverWallet == nil)
+    local spPlayer={data={GFL2ReadyRoomWallet={credits=420}},getModData=function(self)return self.data end,getPlayerNum=function()return 0 end}
+    assert(GFL2RoomEconomy.balance(spPlayer,"credits")==420)
+    request(player,"Request",{handshake=10})
+    assert(replies.Wallet==nil)
+    serverOnline=true
+
     local model="pmx-abe3eaaaa9d04264"
     local appearance={model=model,signature=string.rep("a",64),appearance='{"choices":{},"material_visibility":[],"expressions":{"Smile":0.6}}',attempt=1}
     request(player,"Request",{handshake=11})
@@ -204,12 +213,35 @@ function verifyServer()
     onlineA={getUsername=retired.getUsername,getOnlineID=retired.getOnlineID,isDead=retired.isDead}
     request(playerB,"Request",{})
     assert(#replies.Snapshot.states==0,"the reused ID inherited the disconnected actor's appearance")
+    assert(replies.Appearance.player==4 and replies.Appearance.model=="","sweep did not broadcast vanilla clear for disconnected session")
     request(player,"Request",{handshake=13})
     assert(replies.Wallet.player==5)
     player=onlineA
     request(player,"Request",{handshake=14})
     appearance.session=replies.Wallet.session
+    appearance.attempt=3
     request(player,"Appearance",appearance)
+    assert(replies.Appearance.model==model)
+    -- Out-of-order older attempt is ignored; new handshake resets attempt tracking.
+    request(player,"Appearance",{model="",signature="",appearance="",session=appearance.session,attempt=2})
+    assert(replies.Appearance.model==model,"stale attempt cleared newer appearance")
+    -- Voice relay requires active appearance, valid sound name, and respects rate limit.
+    local serverClock=5000
+    getTimestampMs=function() return serverClock end
+    replies.Voice=nil
+    request(player,"Voice",{session=appearance.session,sound="VoiceMaleShoutHey",kind="shout"})
+    assert(replies.Voice==nil,"vanilla sound bypassed voice protocol filter")
+    request(player,"Voice",{session=appearance.session,sound="GFL2PmxLaiya_Shout_A",kind="shout"})
+    assert(replies.Voice and replies.Voice.player==4 and replies.Voice.sound=="GFL2PmxLaiya_Shout_A" and replies.Voice.kind=="shout")
+    replies.Voice=nil
+    serverClock=5100
+    request(player,"Voice",{session=appearance.session,sound="GFL2PmxLaiya_Shout_A",kind="shout"})
+    assert(replies.Voice==nil,"voice cooldown did not rate-limit burst")
+    serverClock=5300
+    request(player,"Voice",{session=appearance.session,sound="GFL2PmxLaiya_SneakShout_A",kind="sneakShout"})
+    assert(replies.Voice and replies.Voice.sound=="GFL2PmxLaiya_SneakShout_A")
+    getTimestampMs=nil
+
     enabled=false
     request(player,"Wear",{target=model,request=3})
     assert(replies.Transaction.result.status=="unavailable")
@@ -219,5 +251,8 @@ function verifyServer()
     request(player,"Appearance",appearance)
     assert(replies.AppearanceRejected.attempt==6 and replies.AppearanceRejected.equipped==nil)
     assert(replies.Appearance.model=="" and saves["player-a"].appearance==nil)
-    return "PASS server economy, outfits, weapons, appearance rollback, death, new-life session and reconnect ownership"
+    replies.Voice=nil
+    request(player,"Voice",{session=appearance.session,sound="GFL2PmxLaiya_Shout_A",kind="shout"})
+    assert(replies.Voice==nil,"player without active GFL2 appearance broadcast voice")
+    return "PASS server pre-load isolation, economy, outfits, weapons, voice relay, session sweep and reconnect ownership"
 end

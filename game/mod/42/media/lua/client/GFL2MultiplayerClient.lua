@@ -1,5 +1,4 @@
 local M = {}
-if not isClient() then return M end
 
 local protocol = require "GFL2MultiplayerProtocol"
 local economy = require "GFL2RoomEconomy"
@@ -10,7 +9,13 @@ local nextUpdate = 0
 local lastSnapshotRevision = 0
 local nextHandshake = 0
 
+local function disableRemoteActor(actor)
+    if GFL2VoiceEngine and GFL2VoiceEngine.syncRemote then GFL2VoiceEngine.syncRemote(actor, false) end
+    GFL2CharacterRuntime.disable(actor)
+end
+
 local function slot(player)
+    if not (isClient and isClient()) or not player then return end
     local id = player:getOnlineID()
     if id < 0 or player:isDead() then return end
     local state = slots[id]
@@ -70,10 +75,24 @@ function M.publish(player, saved)
     send(state, "Appearance", args)
 end
 
+function M.publishVoice(player, sound, kind)
+    if not (isClient and isClient()) or not player or not player.isLocalPlayer or not player:isLocalPlayer() or not player.getOnlineID then return end
+    local state = slot(player)
+    if not state or not state.ready then return end
+    local args = {sound = sound, kind = kind}
+    if not protocol.voice(args) then return end
+    send(state, "Voice", args)
+end
+
 function M.resync()
+    if not (isClient and isClient()) then return end
     for _, state in pairs(slots) do state.nextSync = 0 end
     for _, state in pairs(remote) do
-        if state.failed then state.failed = false;state.applied = false end
+        if state.failed or state.usingDefault then
+            state.failed = false
+            state.usingDefault = false
+            state.applied = false
+        end
     end
 end
 
@@ -92,7 +111,7 @@ local function acceptAppearance(data, fromSnapshot)
         if current.actor then
             if sameSession and not current.actor:isDead() then data.actor = current.actor
             else
-                GFL2CharacterRuntime.disable(current.actor)
+                disableRemoteActor(current.actor)
                 data.previousActor = current.actor
             end
         end
@@ -109,26 +128,42 @@ local function updateRemote()
         if state.actor and state.actor ~= actor then
             local retired = state.actor:isDead()
                 or (raw ~= nil and (raw:isLocalPlayer() or raw:getUsername() ~= state.owner))
-            GFL2CharacterRuntime.disable(state.actor)
+            disableRemoteActor(state.actor)
             if retired then
                 state.previousActor = state.actor
                 state.retired = true
             end
             state.actor = nil
             state.applied = false
+            state.usingDefault = false
         end
         if state.actor and state.applied and GFL2CharacterRuntime.hasModelFailure(state.actor) then
-            GFL2CharacterRuntime.disable(state.actor)
+            disableRemoteActor(state.actor)
             state.actor = nil
             state.failed = true
+            state.usingDefault = false
         end
         if actor and not state.applied and not state.failed and not state.retired then
+            state.usingDefault = false
             local problem = GFL2CharacterRuntime.queueRemoteAppearance(actor, state.model, state.signature, state.appearance)
-            if problem == "" then state.actor = actor;state.applied = true;state.previousActor = nil
+            if problem ~= "" and state.model ~= "" and GFL2CharacterRuntime.queueRemoteDefault then
+                local localSignature = GFL2CharacterRuntime.networkSignature(state.model)
+                if type(localSignature) == "string" and localSignature ~= "" and localSignature ~= state.signature then
+                    problem = GFL2CharacterRuntime.queueRemoteDefault(actor, state.model)
+                    if problem == "" then state.usingDefault = true end
+                end
+            end
+            if problem == "" then
+                state.actor = state.model ~= "" and actor or nil
+                state.applied = true
+                state.previousActor = nil
+                if GFL2VoiceEngine and GFL2VoiceEngine.syncRemote then
+                    GFL2VoiceEngine.syncRemote(actor, state.model ~= "")
+                end
             else
                 state.failed = true
                 print("[GFL2Exilium] Remote appearance: " .. problem)
-                GFL2CharacterRuntime.disable(actor)
+                disableRemoteActor(actor)
             end
         end
     end
@@ -201,9 +236,22 @@ local function acceptWallet(state, data)
 end
 
 Events.OnServerCommand.Add(function(module, command, data)
+    if not (isClient and isClient()) then return end
     if module ~= protocol.module or type(data) ~= "table" or data.version ~= protocol.version or not GFL2CharacterRuntime then return end
     if command == "Appearance" then
         acceptAppearance(data)
+        return
+    end
+    if command == "Voice" then
+        if not protocol.voice(data) or not protocol.integer(data.player, 0, 32767) or type(data.owner) ~= "string" then return end
+        local state = remote[data.player]
+        if not state or state.model == "" or not state.applied or state.retired or not state.actor or state.owner ~= data.owner then return end
+        if state.session and data.session and state.session ~= data.session then return end
+        local actor = state.actor
+        if actor:isLocalPlayer() or actor:isDead() or actor:getUsername() ~= data.owner then return end
+        if GFL2VoiceEngine and GFL2VoiceEngine.playRemote then
+            GFL2VoiceEngine.playRemote(actor, data.sound, data.kind)
+        end
         return
     end
     local state = slots[data.player]
@@ -222,7 +270,7 @@ Events.OnServerCommand.Add(function(module, command, data)
         end
         for id, appearance in pairs(remote) do
             if not present[id] and appearance.revision <= data.revision then
-                if appearance.actor then GFL2CharacterRuntime.disable(appearance.actor) end
+                if appearance.actor then disableRemoteActor(appearance.actor) end
                 remote[id] = nil
             end
         end
@@ -244,7 +292,7 @@ Events.OnServerCommand.Add(function(module, command, data)
 end)
 
 Events.OnTick.Add(function()
-    if not GFL2CharacterRuntime then return end
+    if not (isClient and isClient()) or not GFL2CharacterRuntime then return end
     local now = getTimestampMs()
     if now < nextUpdate then return end
     nextUpdate = now + 250
@@ -293,7 +341,7 @@ end)
 local function clear()
     if GFL2CharacterRuntime then
         for _, state in pairs(remote) do
-            if state.actor then GFL2CharacterRuntime.disable(state.actor) end
+            if state.actor then disableRemoteActor(state.actor) end
         end
     end
     for _, state in pairs(slots) do economy.setSnapshot(state.player, nil) end

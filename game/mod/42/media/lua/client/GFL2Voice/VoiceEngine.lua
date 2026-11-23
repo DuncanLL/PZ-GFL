@@ -5,13 +5,45 @@ require "ISUI/ISEmoteRadialMenu"
 require "ISUI/ISDPadWheels"
 local wrapCaption=require "GFL2Voice/CaptionLayout"
 if GFL2VoiceEngine then return GFL2VoiceEngine end
-GFL2VoiceEngine={version="2.3.0-voice-catalogs",instances={},order={},volumeLevel=50}
+GFL2VoiceEngine={version="2.3.0-voice-catalogs",instances={},order={},volumeLevel=50,clipsBySound={}}
 local M=GFL2VoiceEngine
 local DEFAULT_VOICE_VOLUME=50
+local remoteSilentStates=setmetatable({}, {__mode="k"})
+local remoteHandles=setmetatable({}, {__mode="k"})
+local multiplayerClient
+local function getMultiplayerClient()
+    if GFL2MultiplayerClient then return GFL2MultiplayerClient end
+    if multiplayerClient==nil then
+        local ok,mod=pcall(require,"GFL2MultiplayerClient")
+        multiplayerClient=ok and mod or false
+    end
+    return multiplayerClient or nil
+end
 local function clampVoiceVolume(value)
     local n=tonumber(value)
     if not n then return DEFAULT_VOICE_VOLUME end
     return math.max(0,math.min(100,math.floor(n+0.5)))
+end
+local function subtitle(clip)
+    local language=Translator and Translator.getLanguage():name() or "CN"
+    if language=="JP" and clip.japanese and clip.japanese~="" then return clip.japanese end
+    if language~="CN" and language~="CH" and getTextOrNull then
+        local translated=getTextOrNull("IGUI_GFL2_Subtitle_"..clip.sound)
+        if translated and translated~="" then return translated end
+    end
+    return clip.chinese
+end
+function M.registerClip(clip,captionTag)
+    if type(clip)=="table" and type(clip.sound)=="string" and clip.sound~="" then
+        M.clipsBySound[clip.sound]={clip=clip,captionTag=captionTag or "default"}
+    end
+end
+local function stopRemoteAudio(player)
+    local handle=remoteHandles[player]
+    if not handle then return end
+    remoteHandles[player]=nil
+    local emitter=player.getEmitter and player:getEmitter()
+    if emitter and emitter.stopSoundLocal then emitter:stopSoundLocal(handle) end
 end
 function M.getVolume(player)
     local saved=player and player:getModData().GFL2CharacterRuntime
@@ -32,12 +64,76 @@ function M.setVolume(player,value)
             if voice.applyVolume then voice.applyVolume(player,level) end
         end
     end
+    for remotePlayer,handle in pairs(remoteHandles) do
+        if level<=0 then
+            stopRemoteAudio(remotePlayer)
+        else
+            local emitter=remotePlayer.getEmitter and remotePlayer:getEmitter()
+            if emitter and emitter.setVolume then emitter:setVolume(handle,level/50.0) end
+        end
+    end
     return level
+end
+function M.syncRemote(player,enabled)
+    if not player or not player.getDescriptor or GFL2VoiceRouting.isLocalListener(player) then return end
+    if enabled then
+        local state=remoteSilentStates[player]
+        if not state then
+            state={}
+            remoteSilentStates[player]=state
+        end
+        GFL2PmxSilentVoice.enable(player,state)
+    else
+        stopRemoteAudio(player)
+        local state=remoteSilentStates[player]
+        if state then
+            remoteSilentStates[player]=nil
+            GFL2PmxSilentVoice.disable(player,state)
+        end
+    end
+end
+function M.playRemote(player,sound,kind)
+    if not player or GFL2VoiceRouting.isLocalListener(player) or (player.isDead and player:isDead()) then return false end
+    if type(sound)~="string" or not sound:match("^GFL2Pmx[%w_]+$") then return false end
+    local listener=getSpecificPlayer and getSpecificPlayer(0)
+    if not listener or (listener.isDead and listener:isDead()) then return false end
+    local volume=M.getVolume(listener)
+    if volume<=0 then return false end
+    if player.getX and listener.getX then
+        local dx=player:getX()-listener:getX()
+        local dy=player:getY()-listener:getY()
+        local maxRange=kind=="sneakShout" and 12 or (kind=="shout" or kind=="manual") and 28 or 20
+        if dx*dx+dy*dy>maxRange*maxRange then return false end
+    end
+    stopRemoteAudio(player)
+    if not player.playSoundLocal then return false end
+    local handle=player:playSoundLocal(sound)
+    if not handle or handle==0 then return false end
+    local emitter=player.getEmitter and player:getEmitter()
+    if emitter and emitter.setVolume then emitter:setVolume(handle,volume/50.0) end
+    remoteHandles[player]=handle
+    if kind=="shout" or kind=="sneakShout" or kind=="manual" then
+        local meta=M.clipsBySound[sound]
+        local text=meta and subtitle(meta.clip)
+        if text and text~="" and player.addLineChatElement then
+            local width=(getPlayerScreenWidth and getPlayerScreenWidth(0) or 1280)-32
+            local wrapped=wrapCaption(text,width)
+            if player.SayDebug then player:SayDebug(0,"") end
+            player:addLineChatElement(wrapped,1,1,1,UIFont.Small,30,meta.captionTag)
+        end
+    end
+    return true
 end
 local silentPlayer,silentState,silentSavePending=nil,nil,false
 local silentStates=setmetatable({}, {__mode="k"})
 function M.install(profile)
     if M.instances[profile.id] then return M.instances[profile.id] end
+    local legacyData=_G["GFL2Pmx"..tostring(profile.id).."VoiceData"]
+    if type(legacyData)=="table" and type(legacyData.clips)=="table" then
+        for _,clip in pairs(legacyData.clips) do
+            M.registerClip(clip,profile.captionTag)
+        end
+    end
     local V=profile.facade
     V.version=M.version;V.playbackVersion=M.version
     local Core=profile.core
@@ -103,16 +199,6 @@ local function caption(player,state,text,now)
     state.nextCaption=now+1000
 end
 
-local function subtitle(clip)
-    local language=Translator and Translator.getLanguage():name() or "CN"
-    if language=="JP" and clip.japanese and clip.japanese~="" then return clip.japanese end
-    if language~="CN" and language~="CH" and getTextOrNull then
-        local translated=getTextOrNull("IGUI_GFL2_Subtitle_"..clip.sound)
-        if translated and translated~="" then return translated end
-    end
-    return clip.chinese
-end
-
 local function observe(player,state)
     local moodles=player:getMoodles()
     return Core.observe(state,function(rule)
@@ -147,6 +233,13 @@ local function play(player,state,candidate,now,allowAsleep,alreadyEligible)
     Core.commit(state,candidate,now,clip.duration,cfg)
     local text=subtitle(clip)
     if text and text~="" then caption(player,state,text,now) end
+    if isClient and isClient() then
+        local client=getMultiplayerClient()
+        if client and client.publishVoice then
+            local kind=candidate.kind=="manual" and candidate.key or candidate.kind
+            client.publishVoice(player,clip.sound,kind)
+        end
+    end
     print(profile.logTag.." PLAY "..candidate.cue.." "..candidate.kind.." priority="..candidate.priority)
     return true
 end
@@ -374,6 +467,11 @@ function M.stopAll()
     pending=nil
     for _,voice in ipairs(M.order) do voice.deactivate() end
     stopSilent()
+    for remotePlayer in pairs(remoteHandles) do stopRemoteAudio(remotePlayer) end
+    for remotePlayer,state in pairs(remoteSilentStates) do
+        remoteSilentStates[remotePlayer]=nil
+        GFL2PmxSilentVoice.disable(remotePlayer,state)
+    end
 end
 local function waitForModel()
     if silentSavePending then GFL2PmxSilentVoice.afterSave(silentStates);silentSavePending=false end

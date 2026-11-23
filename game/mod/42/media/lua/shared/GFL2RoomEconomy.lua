@@ -5,6 +5,7 @@ local gomAmmoBoxes={
     ["Base.308Box"]="MarzGuns.308_Box",
     ["Base.Bullets9mmBox"]="MarzGuns.9x19_Box",
     ["Base.Bullets45Box"]="MarzGuns.45_Box",
+    ["Base.Bullets44Box"]="MarzGuns.44_Box",
     ["Base.ShotgunShellsBox"]="MarzGuns.12Gauge_Box_Buckshot",
 }
 local ammoBoxPrices={
@@ -12,6 +13,9 @@ local ammoBoxPrices={
     ["MarzGuns.9x19_Box"]=1200,
     ["Base.Bullets45Box"]=1500,
     ["MarzGuns.45_Box"]=1500,
+    ["Base.Bullets44Box"]=1800,
+    ["MarzGuns.44_Box"]=1800,
+    ["EscapeFromZomboidFirearms.AB_66a0d1f88486c69fce00fdf6"]=1800,
     ["Base.ShotgunShellsBox"]=1800,
     ["MarzGuns.12Gauge_Box_Buckshot"]=1800,
     ["Base.556Box"]=2000,
@@ -81,8 +85,12 @@ local function worldSlot(player)
     return slots[id]
 end
 
+local function hasServerWallet()
+    return isServer and isServer() and E.serverWallet ~= nil
+end
+
 local function wallet(player)
-    if E.serverWallet then return E.serverWallet(player) end
+    if hasServerWallet() then return E.serverWallet(player) end
     if isClient and isClient() then return snapshots[player] or {} end
     local data = player:getModData()
     local slot = worldSlot(player)
@@ -97,7 +105,7 @@ end
 function E.restoreLocal(player)
     local data = player:getModData()
     upgradeSavedKeys(data)
-    if (isClient and isClient()) or E.serverWallet then return end
+    if (isClient and isClient()) or hasServerWallet() then return end
     wallet(player)
     local slot = worldSlot(player)
     if not slot.settings then
@@ -110,7 +118,7 @@ function E.restoreLocal(player)
 end
 
 function E.saveLocal(player)
-    if (isClient and isClient()) or E.serverWallet then return end
+    if (isClient and isClient()) or hasServerWallet() then return end
     wallet(player)
     local slot = worldSlot(player)
     local data = player:getModData()
@@ -143,7 +151,7 @@ function E.available(player,key,weapon)
 end
 
 function E.buy(player,key,count)
-    if isClient and isClient() and not E.serverWallet then return false end
+    if isClient and isClient() and not hasServerWallet() then return false end
     if type(count)~="number" or count<1 or count%1~=0 then return false end
     local room=wallet(player)
     if key=="credits" then
@@ -229,7 +237,7 @@ local function draw(count,tickets,misses,guarantee,chance,roll)
 end
 
 function E.drawCharacter(player,key,count,roll)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     if type(key)~="string" or key=="" or E.characterUnlocked(player,key) then return "unavailable" end
     local tickets=E.balance(player,"targeted")
     local status,results,misses=draw(count,tickets,E.characterMisses(player),E.characterGuarantee,E.characterChance,roll)
@@ -258,7 +266,7 @@ function E.outfitMisses(player,id)
 end
 
 function E.buyOutfit(player,id,price)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     if type(price)~="number" or price<=0 or price%1~=0 or E.outfitOwned(player,id) then return "unavailable" end
     local credits=E.balance(player,"credits")
     if credits<price then return "short" end
@@ -277,7 +285,7 @@ function E.outfitChance(nextPull)
 end
 
 function E.drawOutfit(player,id,count,roll)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     if E.outfitOwned(player,id) then return "unavailable" end
     local tickets=E.balance(player,"outfit")
     local status,results,misses=draw(count,tickets,E.outfitMisses(player,id),E.outfitGuarantee,E.outfitChance,roll)
@@ -295,7 +303,7 @@ function E.grantTestCredits(player)
 end
 
 function E.toggleRecordingUnlocks(player)
-    if E.serverWallet or (isClient and isClient()) or (isServer and isServer()) then return nil end
+    if hasServerWallet() or (isClient and isClient()) or (isServer and isServer()) then return nil end
     local enabled=recordingUnlocks[player]==nil
     recordingUnlocks[player]=enabled and {} or nil
     return enabled
@@ -305,7 +313,7 @@ local legacyWeapon="GFL2.CauseAndEffect"
 
 local function weaponWallet(player)
     local room=wallet(player)
-    if E.serverWallet or (isClient and isClient()) then return room end
+    if hasServerWallet() or (isClient and isClient()) then return room end
     local slots=ModData.getOrCreate("GFL2ExiliumSignatureWeapons")
     local slot=tostring(player:getPlayerNum())
     local progress=slots[slot]
@@ -345,7 +353,7 @@ function E.weaponChance(pull)
 end
 
 function E.drawWeapon(player,weapon,count,roll)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     if E.weaponProgress(player,weapon.id).acquired or not E.characterUnlocked(player,weapon.character) then return "unavailable" end
     local tickets=E.balance(player,"targeted")
     local status,results,misses=draw(count,tickets,E.weaponMisses(player),E.weaponGuarantee,E.weaponChance,roll)
@@ -366,7 +374,7 @@ function E.hasWeaponInInventory(player,id)
 end
 
 function E.claimWeapon(player,weapon)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     local progress=E.weaponProgress(player,weapon.id)
     if not progress.acquired then return "unavailable" end
     if E.hasWeaponInInventory(player,weapon.id) then return "alreadyCarried" end
@@ -381,7 +389,7 @@ function E.claimWeapon(player,weapon)
 end
 
 function E.setWeaponSkin(player,weapon,skin)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     local progress=E.weaponProgress(player,weapon.id)
     local model=weaponSkins.model(weapon.id,skin)
     if not progress.acquired or (skin~="" and not model) then return "unavailable" end
@@ -414,7 +422,7 @@ function E.weaponMagazine(weapon)
 end
 
 function E.claimMagazine(player,weapon)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     local magazine=E.weaponMagazine(weapon)
     if not magazine or not E.weaponProgress(player,weapon.id).acquired then return "unavailable" end
     local inventory=player:getInventory()
@@ -430,11 +438,15 @@ function E.weaponAmmo(weapon)
     if not scripts or not scripts.FindItem then return nil end
     local mods=getActivatedMods and getActivatedMods()
     local usesEFZ=mods and mods:contains("EscapeFromZomboidFirearms")
-    local usesGOM=not usesEFZ and mods and (mods:contains("GunsOfMarz") or mods:contains("MarzGuns"))
+    local usesMFS=not usesEFZ and mods and mods:contains("ModernFirearmsSystem")
+    local usesGOM=not usesEFZ and not usesMFS and mods and (mods:contains("GunsOfMarz") or mods:contains("MarzGuns"))
     local box,itemScript
     if usesEFZ and weapon.efzAmmoBox then
         itemScript=scripts:FindItem(weapon.efzAmmoBox)
         if itemScript then box=weapon.efzAmmoBox end
+    elseif usesMFS then
+        itemScript=scripts:FindItem(weapon.ammoBox)
+        if itemScript then box=weapon.ammoBox end
     elseif usesGOM and gomAmmoBoxes[weapon.ammoBox] then
         local gomBox=gomAmmoBoxes[weapon.ammoBox]
         itemScript=scripts:FindItem(gomBox)
@@ -463,7 +475,7 @@ function E.weaponAmmo(weapon)
 end
 
 function E.buyAmmo(player,weapon,count)
-    if isClient and isClient() and not E.serverWallet then return "unavailable" end
+    if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     if type(count)~="number" or count<1 or count%1~=0 or count>1000 then return "unavailable" end
     if not weapon or not E.weaponProgress(player,weapon.id).acquired then return "unavailable" end
     local ammo=E.weaponAmmo(weapon)

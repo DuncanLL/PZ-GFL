@@ -7,9 +7,13 @@ GFL2CatalogVoice={}
 
 function GFL2CatalogVoice.install(id,modelId,clips)
     local prefix="GFL2Pmx"..id
+    local captionTag=prefix:lower().."voice"
     GFL2VoiceIdentity.registerVoice(modelId,id)
     for cue,clip in pairs(clips) do
         clip.sound=prefix.."_"..cue
+        if GFL2VoiceEngine.registerClip then
+            GFL2VoiceEngine.registerClip(clip,captionTag)
+        end
     end
     local native=GFL2PmxNativeVoice.create({
         prefix=prefix.."Silent",suffixes=GFL2PmxSilentVoiceData.suffixes,
@@ -17,7 +21,7 @@ function GFL2CatalogVoice.install(id,modelId,clips)
     return GFL2VoiceEngine.install({
         id=id,facade={},core=GFL2PmxFullVoiceCore.create(),native=native,
         resolve=function(_,cue) return clips[cue] end,
-        captionTag=prefix:lower().."voice",logTag="["..prefix.."Voice]",
+        captionTag=captionTag,logTag="["..prefix.."Voice]",
         cues={shout="Shout_A",sneakShout="SneakShout_A"},killCue="Kill_A",
     })
 end

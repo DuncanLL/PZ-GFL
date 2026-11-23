@@ -13,4 +13,10 @@ function P.appearance(data)
         and type(data.appearance) == "string" and #data.appearance >= 2 and #data.appearance <= 8192
 end
 
+function P.voice(data)
+    if type(data) ~= "table" or type(data.sound) ~= "string" then return false end
+    if #data.sound < 9 or #data.sound > 64 or not data.sound:match("^GFL2Pmx[%w_]+$") then return false end
+    return data.kind == nil or (type(data.kind) == "string" and #data.kind <= 16)
+end
+
 return P

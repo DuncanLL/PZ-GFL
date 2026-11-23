@@ -126,6 +126,20 @@
     ],
     "GFL2Mechty": [
       "pmx-4cc23c77ded8ee9b"
+    ],
+    "GFL2Tololo": [
+      "pmx-f8f3c0c6d8ec5b54",
+      "pmx-63f08b2e95bed4e8",
+      "pmx-55d5dc125d20e178"
+    ],
+    "GFL2Eagletta": [
+      "pmx-aa836c0ecc52f695",
+      "pmx-8b7fdecae17936a0"
+    ],
+    "GFL2Nemesis": [
+      "pmx-34aab051b412eb6f",
+      "pmx-3516fb5567da29e8",
+      "pmx-91135a36d9441f55"
     ]
   },
   "pack_mod_ids": {
@@ -154,6 +168,9 @@
     "GFL2Qiuhua": "GFL2Qiuhua",
     "GFL2Soppo": "GFL2Soppo",
     "GFL2Loreley": "GFL2Loreley",
-    "GFL2Mechty": "GFL2Mechty"
+    "GFL2Mechty": "GFL2Mechty",
+    "GFL2Tololo": "GFL2Tololo",
+    "GFL2Eagletta": "GFL2Eagletta",
+    "GFL2Nemesis": "GFL2Nemesis"
   }
 }

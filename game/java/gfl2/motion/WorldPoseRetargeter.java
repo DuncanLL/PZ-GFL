@@ -24,7 +24,8 @@ public final class WorldPoseRetargeter {
     private final ByteBuffer palette;
     private final float unitScale;
     private final int sourceMotion, targetRoot;
-    private final Vector3f sourceMotionReference;
+    private final Vector3f sourceMotionReference, motionLever;
+    private final Vector3f rotatedLever = new Vector3f();
     private final Vector3f[] gripAxes = new Vector3f[2];
     private final Vector3f[] sourcePalmLocal = new Vector3f[2], targetPalmLocal = new Vector3f[2];
     private final int[] palmSourceHands = new int[2], palmTargetHands = new int[2], palmTargetKnuckles = new int[8];
@@ -81,6 +82,20 @@ public final class WorldPoseRetargeter {
         readPalette();
         targetReference = new Matrix4f[targetBones.length];
         for (int i = 0; i < targetBones.length; i++) targetReference[i] = joint(targetBones[i],new Matrix4f());
+        int rootSlot = targetIndex(targetRoot), motionSlot = -1;
+        for (int i = 0; i < sourceBones.length; i++) if (sourceBones[i] == sourceMotion) { motionSlot = i; break; }
+        if (rootSlot >= 0 && motionSlot >= 0 && sourceRoot >= 0 && sourceRoot < sourceReference.length) {
+            // Source Bip01 rotates around the pelvis while PMX targetRoot sits at the floor;
+            // cancel the unmapped root-to-pelvis lever swing so pitched/lying poses stay at pelvis height.
+            Vector3f sourceSpan = new Vector3f(sourceMotionReference)
+                .sub(sourceReference[sourceRoot].getTranslation(new Vector3f()));
+            sourceSpan.z = -sourceSpan.z;
+            motionLever = targetReference[motionSlot].getTranslation(new Vector3f())
+                .sub(targetReference[rootSlot].getTranslation(new Vector3f()))
+                .fma(-unitScale, sourceSpan);
+        } else {
+            motionLever = new Vector3f();
+        }
         levels = new int[targetBones.length];
         for (int i = 0; i < targetBones.length; i++) {
             int parent = parents[targetBones[i]], steps = 0;
@@ -188,6 +203,7 @@ public final class WorldPoseRetargeter {
                         .mul(sourceRestInverse[source]).mul(basis);
                 }
                 Quaternionf rotation = delta.getUnnormalizedRotation(localRotation).normalize();
+                if (target == targetRoot) rotation.transform(motionLever, rotatedLever);
                 Matrix4f desired = poseMatrix.rotation(rotation).mul(targetReference[index]);
                 Quaternionf parent = parents[target] < 0 ? parentRotation.identity() :
                     joint(parents[target],parentMatrix).getUnnormalizedRotation(parentRotation).normalize();
@@ -199,9 +215,9 @@ public final class WorldPoseRetargeter {
                 qps[offset + 6] = -local.w;
                 if (target == targetRoot) {
                     int at=sourceMotion*16+12;
-                    qps[offset]=(sourceWorld[at]-sourceMotionReference.x)*unitScale;
-                    qps[offset+1]=(sourceWorld[at+1]-sourceMotionReference.y)*unitScale;
-                    qps[offset+2]=(sourceWorld[at+2]-sourceMotionReference.z)*unitScale;
+                    qps[offset]=(motionLever.x-rotatedLever.x)+(sourceWorld[at]-sourceMotionReference.x)*unitScale;
+                    qps[offset+1]=(motionLever.y-rotatedLever.y)+(sourceWorld[at+1]-sourceMotionReference.y)*unitScale;
+                    qps[offset+2]=-(motionLever.z-rotatedLever.z)+(sourceWorld[at+2]-sourceMotionReference.z)*unitScale;
                 }
             }
             api.SetBoneAdditiveTransformBatch(handle, targetBones, qps);

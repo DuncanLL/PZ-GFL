@@ -98,5 +98,11 @@
     "ContextMenu_GFL2_ClothHairPhysicsOn": "의상 및 머리카락 물리가 켜져 있습니다",
     "ContextMenu_GFL2_ClothHairPhysicsOff": "의상 및 머리카락 물리가 꺼져 있습니다 (성능 미점유)",
     "ContextMenu_GFL2_ChestPhysicsTip": "0이면 완전히 꺼져 성능을 점유하지 않으며, 100은 기본 효과입니다",
-    "ContextMenu_GFL2_VoiceVolumeTip": "캐릭터 음성 볼륨을 조정합니다 (50 기본값, 0 음소거)"
+    "ContextMenu_GFL2_VoiceVolumeTip": "캐릭터 음성 볼륨을 조정합니다 (50 기본값, 0 음소거)",
+    "ContextMenu_GFL2_Planeta": "슈팅스타",
+    "ContextMenu_GFL2_PlanetaDescription": "토로로에게 지급된 고성능 돌격소총. AK-Alfa를 기반으로 무게를 줄이고 사격 정밀도를 높였다. 가볍고 독창적인 설계는 실용주의적 이성과 미지를 탐구하는 낭만을 겸비해 주인과 매우 닮아 있다.",
+    "ContextMenu_GFL2_SilverWingedPistis": "은빛 날개의 피스티",
+    "ContextMenu_GFL2_SilverWingedPistisDescription": "이글레타에게 지급된 고성능 권총. 데저트 이글을 기반으로 파괴력을 강화하면서도 반동을 줄여 위험에 맞설 용기를 부여한다. 매의 울음소리처럼 매서운 총화로 진실을 쫓는 먼 여정을 밝힌다.",
+    "ContextMenu_GFL2_Sibyl": "시빌",
+    "ContextMenu_GFL2_SibylDescription": "네메시스에게 지급된 커스텀 저격소총. OM 50 네메시스를 기반으로 극한 사거리에서의 절대 정밀도와 안정성을 크게 높였다 - 어쩌면 이번에는 이를 통해 진리에 닿을 수 있을지도 모른다."
 }

@@ -545,5 +545,19 @@
     "UI_GFL2_SettingsOff": "已关闭",
     "UI_GFL2_SettingsReset": "恢复默认设置",
     "UI_GFL2_RoomAmmoBuy": "购买弹药",
-    "UI_GFL2_RoomAmmoRate": "每盒消耗 %d 信用币"
+    "UI_GFL2_RoomAmmoRate": "每盒消耗 %d 信用币",
+    "UI_GFL2_Role_GFL2Tololo": "托洛洛",
+    "UI_GFL2_WeaponSkin_4334005": "涂装·亘古的恒星",
+    "UI_GFL2_Outfit_pmx-f8f3c0c6d8ec5b54": "灰域流星",
+    "UI_GFL2_Outfit_pmx-63f08b2e95bed4e8": "暮夜天河",
+    "UI_GFL2_Outfit_pmx-55d5dc125d20e178": "晴空巡航",
+    "UI_GFL2_Role_GFL2Eagletta": "伊格蕾塔",
+    "UI_GFL2_WeaponSkin_4331635": "涂装·万里相随",
+    "UI_GFL2_Outfit_pmx-aa836c0ecc52f695": "苍漠孤鹰",
+    "UI_GFL2_Outfit_pmx-8b7fdecae17936a0": "玫瑰莺语",
+    "UI_GFL2_Role_GFL2Nemesis": "纳美西丝",
+    "UI_GFL2_WeaponSkin_4333575": "涂装·棱镜真言",
+    "UI_GFL2_Outfit_pmx-34aab051b412eb6f": "星图演绎",
+    "UI_GFL2_Outfit_pmx-3516fb5567da29e8": "纳美西丝的训练服",
+    "UI_GFL2_Outfit_pmx-91135a36d9441f55": "静谧暗河"
 }

@@ -13,7 +13,7 @@ import org.lwjgl.system.MemoryUtil;
 
 /** Measure the posed hip surface in model space, independently of the furniture's world height. */
 final class FurnitureSeat {
-    private final int left, right, leftKnee, rightKnee, leftTarget, rightTarget;
+    private final int left, right, leftKnee, rightKnee, leftFoot, rightFoot, pelvis, spine, leftTarget, rightTarget;
     private int[] vertices;
     private float[] heights;
     private float seatedSurface = Float.NaN;
@@ -27,6 +27,10 @@ final class FurnitureSeat {
         right = names.indexOf("Bip01_R_Thigh");
         leftKnee = names.indexOf("Bip01_L_Calf");
         rightKnee = names.indexOf("Bip01_R_Calf");
+        leftFoot = names.indexOf("Bip01_L_Foot");
+        rightFoot = names.indexOf("Bip01_R_Foot");
+        pelvis = names.indexOf("Bip01_Pelvis");
+        spine = names.indexOf("Bip01_Spine1");
         var source = profile.getJSONArray("source_ids").toList();
         var target = profile.getJSONArray("target_ids");
         leftTarget = target.optInt(source.indexOf(left), -1);
@@ -89,8 +93,16 @@ final class FurnitureSeat {
         if (left < 0 || right < 0 || leftKnee < 0 || rightKnee < 0 || leftTarget < 0 || rightTarget < 0) return 0;
         float vertical = .5f*(verticalFraction(pose,left,leftKnee)+verticalFraction(pose,right,rightKnee));
         // Standing thighs are vertical. The game's seated idle has a vertical fraction of 0.17.
-        blend = Math.clamp((1-vertical)/.8f,0,1);
-        blend *= blend*(3-2*blend);
+        float raw = Math.clamp((1-vertical)/.8f,0,1);
+        // Bed/couch lying mods keep SitOnFurniture active with horizontal thighs; require an upright
+        // spine and downward lower legs so only genuine chair-seated poses drop to the seat surface.
+        if (pelvis >= 0 && spine >= 0)
+            raw *= Math.clamp((verticalFraction(pose,pelvis,spine)-.5f)/.35f,0,1);
+        if (leftFoot >= 0 && rightFoot >= 0) {
+            float calfVertical = .5f*(verticalFraction(pose,leftKnee,leftFoot)+verticalFraction(pose,rightKnee,rightFoot));
+            raw *= Math.clamp((calfVertical-.35f)/.45f,0,1);
+        }
+        blend = raw*raw*(3-2*raw);
         if (blend == 0) return 0;
         float surface = seatedSurface;
         if (Float.isNaN(surface)) {
