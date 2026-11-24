@@ -20,7 +20,7 @@ local automaticRPM = {
     ["GFL2.Skyhowl"] = 800,
     ["GFL2.Snotra"] = 750,
     ["GFL2.SparklingCenterstage"] = 700,
-    ["GFL2.ThresholdStorm"] = 700,
+    ["GFL2.ThresholdStorm"] = 650,
     ["GFL2.UnspokenCalling"] = 850,
 }
 

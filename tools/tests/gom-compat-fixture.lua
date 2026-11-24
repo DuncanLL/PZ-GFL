@@ -125,9 +125,11 @@ function verifyGoMAndJavaHelp(runGfl2Magazines, runGfl2Cadence, runRuntime, runR
     assert(families["GFL2.Scylla"] == "5.56x45mm" and families["GFL2.ScyllaMagazine"] == "5.56x45mm")
     assert(weapProfs["GFL2.Scylla"] == "GFL2.Scylla" and regProfs["GFL2.Scylla"][1] == "GFL2.ScyllaMagazine")
 
-    assert(scripts["GFL2.ThresholdStorm"].state.ammoType == "swmg:bullet_556x45")
-    assert(scripts["GFL2.ThresholdStormMagazine"].state.ammoType == "swmg:bullet_556x45")
-    assert(rpms["GFL2.ThresholdStorm"] and rpms["GFL2.ThresholdStorm"].rpm == 700)
+    assert(scripts["GFL2.ThresholdStorm"].state.ammoType == "swmg:bullet_308")
+    assert(scripts["GFL2.ThresholdStormMagazine"].state.ammoType == "swmg:bullet_308")
+    assert(scripts["GFL2.ThresholdStorm"].state.params.AmmoBox == "MarzGuns.308_Box")
+    assert(families["GFL2.ThresholdStorm"] == "7.62x51mm" and families["GFL2.ThresholdStormMagazine"] == "7.62x51mm")
+    assert(rpms["GFL2.ThresholdStorm"] and rpms["GFL2.ThresholdStorm"].rpm == 650)
     assert(layers.GFL2AutomaticCadence.pred({ getFullType = function() return "GFL2.ThresholdStorm" end }))
 
     assert(scripts["GFL2.Iaso"].state.ammoType == "swmg:bullet_9x19" and families["GFL2.IasoMagazine"] == "9x19mm")

@@ -391,7 +391,7 @@ local weapons = {{
     previewCenterZ = 0.024198,
     previewZoom = 15,
     startsWithMagazine = true,
-    ammoBox = "Base.556Box",
+    ammoBox = "Base.308Box",
 }}
 
 local catalog = {byId = {}, byCharacter = {}}
