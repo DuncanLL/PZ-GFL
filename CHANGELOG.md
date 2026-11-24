@@ -25,7 +25,7 @@
   - 新增 CN / EN / JP / KO 四语 Java 运行环境实时自检弹窗（[GFL2CharacterRuntime.lua](game/mod/42/media/lua/client/GFL2CharacterRuntime.lua)）：当 `GFL2Exilium.jar` 未加载时进档自动弹窗提醒一次，右键地面菜单与 `Q` 轮盘入口均可随时点开查看 ZombieBuddy 模组/运行时检测状态与授权重启步骤。
 - 专武数值、音效与快捷栏图标标准化：
   - 修正卡萝专武「阈限风暴」（黑 DT / MDR 7.62）为 `.308` 口径、25 发专属弹匣、高威力 `.308` 伤害与 650 RPM 射速，并同步 EFZ `MDR762` 与 Guns of Marz `.308` 兼容。
-  - 维克托专武「报丧轻语」（`GFL2Vector`）首批换装《逃离塔科夫》Vector .45 室内消音近景 8 变体单声道枪声（`maxInstancesPerEmitter = 24` 消除 1100 RPM 扫射尾音截断）与专属插/退弹匣、拍空仓挂机、空仓击锤机械音。
+  - 全部 28 把远程专武统一换装《逃离塔科夫》一枪一音差异化枪声与配套原厂换弹 / 退匣 / 拉栓 / 泵动 / 空仓击锤机械音（28 把 × 5 音效槽位共 280 条单声道 44.1kHz WAV，按室内/室外逐枪听感定版并分档标定响度，全自动枪 `maxInstancesPerEmitter = 24` 彻底消除连发尾音截断，与原版及 SWMG / EFZ / MFS / Guns of Marz 零冲突）。
   - 修复伊格蕾塔（沙鹰）、托洛洛、纳美西丝、卡萝、米什缇 5 个新包及本地 `mods/` 22 个旧包的专武快捷栏图标爆大问题（全部 30 个角色包统一为 `32×32` 物品图标 + `WeaponIcons/` 高清原图双轨标准），并新增 [check_weapon_icons.py](tools/check_weapon_icons.py) 自动校验门禁。
 
 ## 0.8.0 · 托洛洛／伊格蕾塔／纳美西丝接入、25 套衣装胸部物理恢复与联机／兼容大更（2026-11-23）
