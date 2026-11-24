@@ -32,6 +32,7 @@ public final class PmxModel implements AutoCloseable {
     private VmdCamera camera;
     private String cameraName="";
     private boolean cameraEnabled=true;
+    private float cameraFrame;
 
     private static final class Profile {
         int format, bones, source_root, target_root, source_motion;
@@ -195,6 +196,13 @@ public final class PmxModel implements AutoCloseable {
                 .97f,seconds,sourceAnchor,targetAnchor,adjustment);
         }
         else {core.apply(finalSourcePose,seconds);result=new WorldPoseRetargeter.GripResult[0];}
+        if(motion==0&&camera!=null&&cameraEnabled&&!motionPaused){
+            int camEnd=camera.endFrame();
+            if(camEnd>0){
+                cameraFrame+=seconds*motionSpeed*30f;
+                if(cameraFrame>camEnd)cameraFrame%=camEnd;
+            }
+        }
         long solved=System.nanoTime();lastRetargetNanos=solved-started;
         if(chest!=null){chest.setStrength(chestStrength);chest.enabled(chestPhysicsEnabled&&chestStrength>0f);chest.evaluate(seconds);}
         lastChestNanos=System.nanoTime()-solved;
@@ -228,7 +236,7 @@ public final class PmxModel implements AutoCloseable {
             api.ClearBoneAdditiveTransforms(handle);api.SetPZLegIKSuppressed(handle,false);
             appearance.setAnimatedMorphs(names);
             motionName=file.getFileName().toString();motionPaused=false;
-            motionFrame=0;motionEnd=api.GetAnimMaxFrame(next);
+            motionFrame=0;cameraFrame=0;motionEnd=api.GetAnimMaxFrame(next);
             api.ChangeModelAnim(handle,next,0);api.SetLayerLoop(handle,0,motionEnd>0);
             api.SetLayerSpeed(handle,0,motionSpeed);
             motionRevision++;resetPhysics();
@@ -238,9 +246,11 @@ public final class PmxModel implements AutoCloseable {
         }
     }
     public synchronized boolean motionActive() { return motion!=0; }
-    public synchronized boolean motionPaused() { return motion!=0&&motionPaused; }
+    public synchronized boolean cameraActive() { return camera!=null&&cameraEnabled; }
+    public synchronized boolean motionPaused() { return (motion!=0||cameraActive())&&motionPaused; }
     public synchronized String motionName() { return motionName; }
     public synchronized float motionFrame() { return motionFrame; }
+    public synchronized float cameraFrame() { return motion!=0?motionFrame:cameraFrame; }
     public synchronized long motionRevision() { return motionRevision; }
     public synchronized void loadCamera(Path file) throws IOException {
         if(closed)throw new IllegalStateException("角色已关闭");
@@ -248,44 +258,65 @@ public final class PmxModel implements AutoCloseable {
         camera=next;
         cameraName=file.getFileName().toString();
         cameraEnabled=true;
+        cameraFrame=0f;
+        if(motion==0){motionPaused=false;motionRevision++;}
     }
     public synchronized void clearCamera() {
         camera=null;
         cameraName="";
         cameraEnabled=true;
+        cameraFrame=0f;
+        if(motion==0){motionPaused=false;motionRevision++;}
     }
     public synchronized void toggleCamera() {
-        if(camera!=null)cameraEnabled=!cameraEnabled;
-    }
-    public synchronized VmdCamera.Sample sampleCamera() {
-        if(motion==0||camera==null||!cameraEnabled)return null;
-        return camera.sample(motionFrame);
-    }
-    public synchronized void toggleMotionPause() { if(motion!=0)motionPaused=!motionPaused; }
-    public synchronized void setMotionSpeed(float speed) {
-        if(!Float.isFinite(speed)||speed<0f||speed>1f)throw new IllegalArgumentException("倍速须在 0～1 之间");
-        if(motion!=0){
-            api.SetLayerSpeed(handle,0,speed);
-            motionSpeed=speed;
+        if(camera!=null){
+            cameraEnabled=!cameraEnabled;
+            if(motion==0)motionRevision++;
         }
     }
+    public synchronized VmdCamera.Sample sampleCamera() {
+        if(camera==null||!cameraEnabled)return null;
+        return camera.sample(motion!=0?motionFrame:cameraFrame);
+    }
+    public synchronized void toggleMotionPause() {
+        if(motion!=0||cameraActive())motionPaused=!motionPaused;
+    }
+    public synchronized void setMotionSpeed(float speed) {
+        if(!Float.isFinite(speed)||speed<0f||speed>1f)throw new IllegalArgumentException("倍速须在 0～1 之间");
+        motionSpeed=speed;
+        if(motion!=0)api.SetLayerSpeed(handle,0,speed);
+    }
     public synchronized JSONObject motionTimeline() {
+        float activeFrame=motion!=0?motionFrame:(cameraActive()?cameraFrame:0f);
+        float activeEnd=motion!=0?motionEnd:(cameraActive()?camera.endFrame():0f);
         return new JSONObject().put("name",motionName).put("paused",motionPaused())
-            .put("physics",physicsEnabled()).put("frame",motionFrame).put("endFrame",motionEnd).put("speed",motionSpeed)
+            .put("physics",physicsEnabled()).put("frame",activeFrame).put("endFrame",activeEnd).put("speed",motionSpeed)
             .put("revision",Long.toString(motionRevision))
             .put("camera",cameraName).put("cameraEnabled",camera!=null&&cameraEnabled);
     }
     public synchronized boolean seekMotion(long revision,float fraction) {
-        if(motion==0||motionEnd<=0||motionRevision!=revision||!Float.isFinite(fraction))return false;
-        seekMotionFrame(Math.clamp(fraction,0f,1f)*motionEnd);
-        return true;
+        if(motionRevision!=revision||!Float.isFinite(fraction))return false;
+        if(motion!=0){
+            if(motionEnd<=0)return false;
+            seekMotionFrame(Math.clamp(fraction,0f,1f)*motionEnd);
+            return true;
+        }
+        if(cameraActive()&&camera.endFrame()>0){
+            cameraFrame=Math.clamp(fraction,0f,1f)*camera.endFrame();
+            motionRevision++;
+            return true;
+        }
+        return false;
     }
     private void seekMotionFrame(float frame) {
         api.SeekLayer(handle,0,frame);motionFrame=frame;motionRevision++;resetPhysics();
     }
     public synchronized void restartMotion() {
-        if(motion==0)return;
-        motionPaused=false;seekMotionFrame(0);
+        if(motion!=0){
+            motionPaused=false;seekMotionFrame(0);
+        }else if(cameraActive()){
+            motionPaused=false;cameraFrame=0f;motionRevision++;
+        }
     }
     public synchronized void stopMotion() {
         if(motion==0)return;

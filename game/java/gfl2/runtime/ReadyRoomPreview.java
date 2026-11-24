@@ -484,7 +484,10 @@ public class ReadyRoomPreview {
                         s.model.clearCamera();
                         VmdCameraController.releaseIfHeld();
                     }
-                    case "cameraToggle" -> s.model.toggleCamera();
+                    case "cameraToggle" -> {
+                        s.model.toggleCamera();
+                        if(!s.model.cameraActive())VmdCameraController.releaseIfHeld();
+                    }
                     case "seek" -> {
                         if(!motionAllowed(player))return text("MotionStandStill");
                         String[] target=name==null?new String[0]:name.split(":",2);
@@ -495,7 +498,8 @@ public class ReadyRoomPreview {
                     case "speed" -> s.model.setMotionSpeed(Float.parseFloat(name));
                     case "restart" -> s.model.restartMotion();
                     case "stop" -> {
-                        s.model.stopMotion();
+                        if(s.model.motionActive())s.model.stopMotion();
+                        else s.model.clearCamera();
                         VmdCameraController.releaseIfHeld();
                     }
                     case "physics" -> {if(s.model.motionActive())s.model.setPhysicsEnabled(!s.model.physicsEnabled());}

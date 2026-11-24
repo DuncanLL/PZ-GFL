@@ -55,8 +55,13 @@ public final class SignatureWeaponModels {
     @Patch(className="zombie.inventory.types.HandWeapon", methodName="setContainsClip")
     public static final class MagazineChanged {
         @Patch.OnEnter
-        public static void enter(@Patch.This HandWeapon weapon, @Patch.Argument(0) boolean loaded) {
-            if (loaded == weapon.isContainsClip() || detachableModel(weapon)==null) return;
+        public static void enter(@Patch.This HandWeapon weapon, @Patch.Local("previous") boolean previous) {
+            previous = weapon.isContainsClip();
+        }
+
+        @Patch.OnExit
+        public static void exit(@Patch.This HandWeapon weapon, @Patch.Local("previous") boolean previous) {
+            if (weapon.isContainsClip() == previous || detachableModel(weapon) == null) return;
             var owner = weapon.getEquipParent();
             if (owner != null) owner.resetEquippedHandsModels();
         }

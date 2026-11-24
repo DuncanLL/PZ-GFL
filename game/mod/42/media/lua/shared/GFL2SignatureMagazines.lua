@@ -122,11 +122,70 @@ else
 end
 
 require "TimedActions/ISInsertMagazine"
+require "TimedActions/ISLoadBulletsInMagazine"
+require "TimedActions/ISUnloadBulletsFromMagazine"
+
 local isValid = ISInsertMagazine.isValid
 function ISInsertMagazine:isValid()
     local dedicated = M.forWeapon(self.gun)
     if dedicated and self.magazine and self.magazine:getFullType() ~= dedicated then return false end
     return isValid(self)
+end
+
+-- Vanilla ISLoadBulletsInMagazine / ISUnloadBulletsFromMagazine keep stopOnAim = false and
+-- maxTime = -1 while overriding primaryHandModel = nil and secondaryHandModel = "GunMagazine".
+-- Aiming a firearm preempts the InsertBullets animation so loadFinished never fires, leaving
+-- the firearm invisible and the magazine stuck in the left hand indefinitely.
+local loadMagNew = ISLoadBulletsInMagazine.new
+function ISLoadBulletsInMagazine:new(character, magazine, ammoCount, ...)
+    local o = loadMagNew(self, character, magazine, ammoCount, ...)
+    o.stopOnAim = true
+    return o
+end
+
+local loadMagUpdate = ISLoadBulletsInMagazine.update
+function ISLoadBulletsInMagazine:update()
+    if self.character and self.character:isAiming() then
+        self:setOverrideHandModels(nil, nil)
+        self:forceStop()
+        return
+    end
+    if not self.loadFinished and self:isLoadFinished() then
+        local dt = GameTime and GameTime.getInstance() and GameTime.getInstance():getRealworldSecondsSinceLastUpdate() or 0.016
+        self._gfl2FinishWait = (self._gfl2FinishWait or 0) + dt
+        if self._gfl2FinishWait >= 0.65 then
+            self.loadFinished = true
+        end
+    else
+        self._gfl2FinishWait = nil
+    end
+    return loadMagUpdate(self)
+end
+
+local unloadMagNew = ISUnloadBulletsFromMagazine.new
+function ISUnloadBulletsFromMagazine:new(character, magazine, ...)
+    local o = unloadMagNew(self, character, magazine, ...)
+    o.stopOnAim = true
+    return o
+end
+
+local unloadMagUpdate = ISUnloadBulletsFromMagazine.update
+function ISUnloadBulletsFromMagazine:update()
+    if self.character and self.character:isAiming() then
+        self:setOverrideHandModels(nil, nil)
+        self:forceStop()
+        return
+    end
+    if not self.unloadFinished and self.magazine and self.magazine:getCurrentAmmoCount() <= 0 then
+        local dt = GameTime and GameTime.getInstance() and GameTime.getInstance():getRealworldSecondsSinceLastUpdate() or 0.016
+        self._gfl2FinishWait = (self._gfl2FinishWait or 0) + dt
+        if self._gfl2FinishWait >= 0.65 then
+            self.unloadFinished = true
+        end
+    else
+        self._gfl2FinishWait = nil
+    end
+    return unloadMagUpdate(self)
 end
 
 return M

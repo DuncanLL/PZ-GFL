@@ -556,17 +556,22 @@ function M.install(W,ctx)
     function W:refreshMotionControls()
         local state=GFL2ReadyRoom.motionState(self.player)
         self.motionPlayback=state
-        local active=state.name~="";local b=self.motionButtons
+        local camName=state.camera or ""
+        local hasCam=camName~=""
+        local camOn=hasCam and state.cameraEnabled==true
+        local active=state.name~=""
+        local trackActive=active or camOn
+        local b=self.motionButtons
         local slider=self.motionSeek
         local duration=state.endFrame or 0
-        slider.disabled=not active or duration<=0 or self.waiting
+        slider.disabled=not trackActive or duration<=0 or self.waiting
         if slider.dragInside and (slider.disabled or slider.seekRevision~=state.revision) then slider:cancel() end
         if not slider.dragInside then slider.currentValue=not slider.disabled and clamp((state.frame or 0)/duration,0,1) or 0 end
         local speed=self.motionSpeed
-        speed.disabled=slider.disabled
+        speed.disabled=not trackActive or self.waiting
         if speed.disabled then speed.dragInside=false end
         speed.currentValue=state.speed or 1
-        self.motionStatus=tr(active and ((state.paused or state.speed==0) and "MotionPaused" or "MotionPlaying") or "MotionStopped")
+        self.motionStatus=tr(trackActive and ((state.paused or state.speed==0) and "MotionPaused" or "MotionPlaying") or "MotionStopped")
         if self.motionPlayingFile~=state.name then
             self.motionPlayingFile=state.name
             self.motionPlayingLabel=active and motionDisplayName(state.name) or nil
@@ -577,15 +582,13 @@ function M.install(W,ctx)
         end
         local enabledChar=not self.waiting and GFL2CharacterRuntime.isEnabled(self.player)
         b.play:setEnable(self.motionSelected~=nil and enabledChar)
-        for _,key in ipairs({"pause","restart","stop","physics","reset"})do b[key]:setEnable(active and not self.waiting)end
+        for _,key in ipairs({"pause","restart","stop"})do b[key]:setEnable(trackActive and not self.waiting)end
+        b.physics:setEnable(active and not self.waiting)
         b.reset:setEnable(active and state.physics and not self.waiting)
         b.pause.roomTitle=tr(state.paused and "MotionResume" or "MotionPause")
-        b.pause.roomActive=active and state.paused
+        b.pause.roomActive=trackActive and state.paused
         b.pause.roomIcon=state.paused and "play" or "pause"
         b.physics.roomTitle=tr(state.physics and "MotionPhysicsOn" or "MotionPhysicsOff")
-        local camName=state.camera or ""
-        local hasCam=camName~=""
-        local camOn=hasCam and state.cameraEnabled==true
         self.cameraLoadedActive=hasCam
         if hasCam then
             self.cameraStatusLabel=motionDisplayName(camName)
