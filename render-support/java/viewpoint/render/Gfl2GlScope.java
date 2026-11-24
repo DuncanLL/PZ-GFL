@@ -4,7 +4,7 @@ import org.lwjgl.opengl.*;
 
 /** Boundaries between host draws and the original-material passes. */
 public final class Gfl2GlScope implements AutoCloseable {
-    enum Phase { SHADOW, PREPASS, COLOUR, PROBE_GEOMETRY, PROBE_LIGHT, SETUP, ECLIPSE, GLASS }
+    enum Phase { SHADOW, PREPASS, COLOUR, STUDIO, PROBE_GEOMETRY, PROBE_LIGHT, SETUP, ECLIPSE, GLASS }
     private static final int D2=1, CUBE=2, BUFFER=4, ARRAY=8, D3=16, D1=32, SAMPLER=64;
     private static final int[] TARGETS={GL11.GL_TEXTURE_2D,GL13.GL_TEXTURE_CUBE_MAP,GL31.GL_TEXTURE_BUFFER,GL30.GL_TEXTURE_2D_ARRAY,GL12.GL_TEXTURE_3D,GL11.GL_TEXTURE_1D};
     private static final int[] BINDINGS={GL11.GL_TEXTURE_BINDING_2D,GL13.GL_TEXTURE_BINDING_CUBE_MAP,GL31.GL_TEXTURE_BINDING_BUFFER,GL30.GL_TEXTURE_BINDING_2D_ARRAY,GL12.GL_TEXTURE_BINDING_3D,GL11.GL_TEXTURE_BINDING_1D};
@@ -77,7 +77,8 @@ public final class Gfl2GlScope implements AutoCloseable {
                 save(5,D2);save(41,ARRAY|SAMPLER);save(48,BUFFER);
                 save(88,BUFFER);save(89,BUFFER);save(90,BUFFER);save(136,ARRAY);
             }
-            case PROBE_LIGHT, COLOUR, SETUP -> {
+            case PROBE_LIGHT, COLOUR, STUDIO, SETUP -> {
+                if(phase==Phase.STUDIO)save(1,D2|SAMPLER);
                 save(0,CUBE);save(3,CUBE);save(4,D2|SAMPLER);save(5,D2|SAMPLER);
                 save(6,ARRAY);save(14,D2);save(18,D3);save(21,ARRAY);save(22,D2);save(24,D2);
                 save(30,ARRAY);save(49,ARRAY);for(int u=81;u<=83;u++)save(u,D2|SAMPLER);save(105,D2|SAMPLER);
@@ -99,13 +100,13 @@ public final class Gfl2GlScope implements AutoCloseable {
                 for(int u=81;u<=83;u++)save(u,D2|SAMPLER);
             }
         }
-        uboSlots=probe?PROBE_UBOS:phase==Phase.COLOUR||phase==Phase.SETUP?NATIVE_UBOS:SHADER_UBOS;
-        ssboSlots=probe?PROBE_SSBOS:phase==Phase.GLASS?GLASS_SSBOS:MODEL_SSBOS;
+        uboSlots=probe?PROBE_UBOS:phase==Phase.COLOUR||phase==Phase.STUDIO||phase==Phase.SETUP?NATIVE_UBOS:SHADER_UBOS;
+        ssboSlots=probe?PROBE_SSBOS:phase==Phase.GLASS||phase==Phase.STUDIO?GLASS_SSBOS:MODEL_SSBOS;
         ubos=new int[uboSlots.length];uboRanges=new long[ubos.length*2];
         ssbos=new int[ssboSlots.length];ssboRanges=new long[ssbos.length*2];
         captureBuffers(uboSlots,ubos,uboRanges,GL31.GL_UNIFORM_BUFFER_BINDING,GL31.GL_UNIFORM_BUFFER_START,GL31.GL_UNIFORM_BUFFER_SIZE);
         captureBuffers(ssboSlots,ssbos,ssboRanges,GL43.GL_SHADER_STORAGE_BUFFER_BINDING,GL43.GL_SHADER_STORAGE_BUFFER_START,GL43.GL_SHADER_STORAGE_BUFFER_SIZE);
-        int imageCount=switch(phase){case COLOUR,SETUP->4;case GLASS->3;case ECLIPSE->1;default->0;};
+        int imageCount=switch(phase){case COLOUR,STUDIO,SETUP->4;case GLASS->3;case ECLIPSE->1;default->0;};
         images=new int[imageCount*6];
         for(int u=0;u<imageCount;u++)for(int k=0;k<6;k++)images[u*6+k]=GL30.glGetIntegeri(IMAGE_KEYS[k],u);
         CURRENT.set(this);

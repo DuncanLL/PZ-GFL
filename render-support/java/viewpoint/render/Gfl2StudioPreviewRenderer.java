@@ -730,7 +730,7 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         int[] hostScissor = new int[4];
         GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, hostScissor);
         boolean hostScissorOn = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-        try (Gfl2GlScope scope = new Gfl2GlScope(Gfl2GlScope.Phase.COLOUR)) {
+        try (Gfl2GlScope scope = new Gfl2GlScope(Gfl2GlScope.Phase.STUDIO)) {
             ensureSharedGl();
             ensureFbo(width, height);
             ModelCache model = getOrLoadModel(pmxSha256, modelJson);
