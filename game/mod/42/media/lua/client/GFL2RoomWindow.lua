@@ -23,6 +23,10 @@ local function portraitImage(path)
     if not path then return nil end
     return image(path:gsub("/round%-","/portrait-"))
 end
+local function gridImage(path)
+    if not path then return nil end
+    return image(path:gsub("/round%-","/grid-")) or portraitImage(path)
+end
 local art="media/ui/GFL2ReadyRoom/room-"
 local function roomSound(action)
     getSoundManager():playUISound("GFL2Room"..action)
@@ -335,6 +339,21 @@ local function describe(source,width)
     if results.plain then
         lines={}
         for row in (source.."\n"):gmatch("(.-)\n") do lines[#lines+1]=row end
+    else
+        local anyBaked=false
+        for _,row in ipairs(lines) do
+            if (data.roomLabels and data.roomLabels[row]) or data.labels[row] then
+                anyBaked=true;break
+            end
+        end
+        if not anyBaked and #lines>1 then
+            lines={table.concat(lines,"")}
+        end
+    end
+    local wrapWidth=width
+    if not results.plain then
+        local zoom=slotFontSize(getTextManager(),UIFont.Small,15)
+        if zoom>0 and zoom<1 then wrapWidth=width/zoom end
     end
     for _,row in ipairs(lines) do
         local baked=not results.plain and ((data.roomLabels and data.roomLabels[row]) or data.labels[row])
@@ -342,7 +361,7 @@ local function describe(source,width)
         else
             local rest=row
             repeat
-                local line=fitText(rest,width,UIFont.Small,"")
+                local line=fitText(rest,wrapWidth,UIFont.Small,"")
                 if line~="" and #line<#rest then
                     local boundary=line:match(".*()%s+%S*$")
                     if boundary and boundary>#line/2 then line=line:sub(1,boundary-1) end
@@ -1632,7 +1651,7 @@ function W:drawCharacter(y,item,alt)
             local x,top,size,height=rosterCard(window,i,y)
             local hover=hoverAmount(entry,self.roomHoverCharacter==entry)
             local selected=window.character==entry.name
-            local texture=portraitImage(entry.portrait)
+            local texture=gridImage(entry.portrait)
             self:drawRect(x,top,size,size,.94,.16,.19,.22)
             if texture then self:drawTextureScaledAspect(texture,x,top,size,size,1,1,1,1) end
             drawBottomScrim(self,x,top+size-20,size,20,.72)

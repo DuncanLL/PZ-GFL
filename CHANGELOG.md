@@ -4,6 +4,26 @@
 
 游戏动作、人物状态和光影接线详见 [维护手册](docs/maintenance/README.md)。
 
+## 2026-11-24 · 卡萝与米什缇新装接入、设置页／沙盒／Q 轮盘／VMD 镜头／原材质预览与兼容升级
+
+- 新增 1 名角色、3 套外观与 1 把专武（全模组总计 30 人 / 83 外观 / 30 专武）：
+  - 新角色 **卡萝**（`GFL2Kuro`）：原皮「奔涌霓虹」、衣装「酒会观测者」、专武「阈限风暴」（`GFL2.ThresholdStorm`）及契约涂装「涂装·奔涌霓虹」、官方抽卡横幅与四国语言本地化。
+  - **米什缇**（`GFL2Mechty`）新增衣装「迷盹睡鼠」。
+- 顶栏 2 号齿轮 `[⚙]` 与分栏人物设置页：
+  - 替换 `room-settings.png` 为 128×128 8× 超采样八齿镂空齿轮并移至整备室顶栏右上角（信用币 `+` 与 `^` 之间），未启用角色也可随时点开或收起。
+  - [Tabs.lua](game/mod/42/media/lua/client/GFL2Room/Tabs.lua) 设置页分为三组（单机显示前两组，联机 `isClient()` 自动显示第三组）：**语音设置**（语音音量 0–100、头顶字幕开关）、**物理模拟**（自身胸部物理 0–100%、衣发物理开关）、**联机显示（其他玩家）**（远端角色显示开关、远端胸部物理 0–100% 默认关、远端衣发物理默认关、远端日语语音与字幕开关、沙盒提示与一键恢复默认）；全部修改实时生效并持久化到本地 `GFL2Exilium/client-settings.json` 跨档保留。
+- 5 项 PZ 原生沙盒设置（[sandbox-options.txt](game/mod/42/media/sandbox-options.txt) 及 CN / EN / JP / KO 四语 `Sandbox.json`）：新增 `AllowHoldGrant`（允许长按加号补充资源，默认开）、`FreeUnlockAll`（全角色与衣装免费解锁，默认关）、`CreditsPerCash`（钞票兑换信用币汇率 10–5000，默认 300）、`AllowSignatureWeapons`（允许整备室获取专武，默认开）、`AllowAmmoAndMagazines`（允许买弹药与领弹匣，默认开），已打通服务端与客户端双端校验。
+- 按住 `Q` 轮盘菜单与 VMD 面板升级：
+  - 新增 [GFL2RadialMenu.lua](game/mod/42/media/lua/client/GFL2RadialMenu.lua)，在原版 `Q` 表情轮盘末尾零冲突追加「僵毁少女前线」入口及 6 项二级轮盘（打开整备室、重置物理、衣发物理开关、VMD 面板、握持校准、人物设置），配 6 张 64×64 8× 超采样金属战术图标与四语文案。
+  - VMD 面板取消长按隐藏后门改为常规常驻入口，新增 VMD 镜头轨道读取功能（`VmdCamera` / `VmdCameraController` / `VmdCameraPatch`），并修复 Viewpoint 0.1.7 跨加载器调用 `VmdCameraController` 的权限报错；握持校准新增大拇指三节指骨弯曲校准（`親指0/1/2`）。
+- 原材质全身预览、光影描边与整备室 UI 标准化：
+  - 整备室及物品栏 3D 预览接入少前2原材质渲染管线（`Gfl2StudioPreviewRenderer`，严格 LRU-2 缓存、闲置自动回收显存、设置页可控开关）。
+  - `Native-GFL2` / `Somber-GFL2` 远景描边按画面垂直占比自动收敛（`outlineDistanceScale = clamp(ndcPerMeter / 0.72, 0.16, 1.0)`）抵消 1.2px 硬底限，描边为 0 时彻底跳过描边 Pass，并调整自定义光影参数范围与中文选项说明。
+  - 统一全部 30 名角色展开三列方底头像（`grid-*.png`）、左侧纵列圆形头像与模组列表透明头像，修复整备室角色长简介文本自动换行与排版对齐。
+- 武器与运行环境兼容增强：
+  - [GFL2SignatureMagazines.lua](game/mod/42/media/lua/shared/GFL2SignatureMagazines.lua) 补齐 Guns of Marz（新版 `GunsOfMarz` 与旧版 `MarzGuns`）全 6 口径及 28 把远程专武/25 个专属弹匣兼容（无需开新档），[GFL2AutomaticCadence.lua](game/mod/42/media/lua/shared/GFL2AutomaticCadence.lua) 补录卡萝专武「阈限风暴」全自动射速，并补充 [gom-compat-fixture.lua](tools/tests/gom-compat-fixture.lua) 回归断言。
+  - 新增 CN / EN / JP / KO 四语 Java 运行环境实时自检弹窗（[GFL2CharacterRuntime.lua](game/mod/42/media/lua/client/GFL2CharacterRuntime.lua)）：当 `GFL2Exilium.jar` 未加载时进档自动弹窗提醒一次，右键地面菜单与 `Q` 轮盘入口均可随时点开查看 ZombieBuddy 模组/运行时检测状态与授权重启步骤。
+
 ## 0.8.0 · 托洛洛／伊格蕾塔／纳美西丝接入、25 套衣装胸部物理恢复与联机／兼容大更（2026-11-23）
 
 - 新增 3 名角色、8 套外观与 3 把专武（全模组总计 29 人 / 80 外观 / 29 专武 / 5,017 条日语语音与四国字幕）：托洛洛（`3844749849`，原皮「灰域流星」、衣装「暮夜天河」「晴空巡航」、专武「游星」及契约涂装「亘古的恒星」）、伊格蕾塔（`3844750567`，原皮「苍漠孤鹰」、衣装「玫瑰莺语」含部件开关、专武「银翼匹丝缇」及契约涂装「万里相随」）、纳美西丝（`3844750305`，原皮「星图演绎」、衣装「纳美西丝的训练服」「静谧暗河」、专武「西比尔」及契约涂装「棱镜真言」）。

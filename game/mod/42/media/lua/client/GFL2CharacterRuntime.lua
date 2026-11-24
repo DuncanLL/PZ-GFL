@@ -369,10 +369,78 @@ local function open(player,target)
         expressionEdited=function(p)expressionEdits[p]=getTimestampMs()+250 end},target)
 end
 
+local javaHelpModal = nil
+local javaHelpAutoShown = false
+
+local function closeJavaHelp()
+    if javaHelpModal then
+        pcall(function() javaHelpModal:destroy() end)
+        javaHelpModal = nil
+    end
+end
+
+local function detectJavaStatus()
+    local mods = getActivatedMods and getActivatedMods()
+    local zbMod = mods ~= nil and mods:contains("ZombieBuddy") == true
+    local zbVersion = nil
+    if ZombieBuddy and type(ZombieBuddy.getVersion) == "function" then
+        local ok, ver = pcall(ZombieBuddy.getVersion)
+        if ok and ver ~= nil and tostring(ver) ~= "" then
+            zbVersion = tostring(ver)
+        end
+    end
+    return zbMod, zbVersion
+end
+
+local function showJavaHelp(player)
+    if not (ISModalRichText and getCore) then return end
+    closeJavaHelp()
+    local zbMod, zbVersion = detectJavaStatus()
+    local okColor = "<RGB:0.45,0.92,0.55> "
+    local badColor = "<RGB:1,0.45,0.45> "
+    local headColor = "<RGB:1,0.78,0.28> "
+    local bodyColor = "<RGB:1,1,1> "
+    local modLine = (zbMod and okColor or badColor)
+        .. getText(zbMod and "ContextMenu_GFL2_JavaHelp_ZbModOn" or "ContextMenu_GFL2_JavaHelp_ZbModOff")
+    local runtimeLine = zbVersion
+        and (okColor .. getText("ContextMenu_GFL2_JavaHelp_ZbRuntimeOn", zbVersion))
+        or (badColor .. getText("ContextMenu_GFL2_JavaHelp_ZbRuntimeOff"))
+    local jarLine = badColor .. getText("ContextMenu_GFL2_JavaHelp_JarOff")
+    local text = table.concat({
+        " <CENTRE> <SIZE:medium> " .. headColor .. getText("ContextMenu_GFL2_JavaHelp_Title"),
+        "",
+        " <LEFT> <SIZE:small> " .. bodyColor .. getText("ContextMenu_GFL2_JavaHelp_Intro"),
+        "",
+        headColor .. getText("ContextMenu_GFL2_JavaHelp_StatusHeader"),
+        modLine,
+        runtimeLine,
+        jarLine,
+        "",
+        headColor .. getText("ContextMenu_GFL2_JavaHelp_StepsHeader"),
+        bodyColor .. getText("ContextMenu_GFL2_JavaHelp_Step1"),
+        bodyColor .. getText("ContextMenu_GFL2_JavaHelp_Step2"),
+        bodyColor .. getText("ContextMenu_GFL2_JavaHelp_Step3"),
+        bodyColor .. getText("ContextMenu_GFL2_JavaHelp_Step4"),
+    }, " <LINE> ")
+    local core = getCore()
+    local sw, sh = core:getScreenWidth(), core:getScreenHeight()
+    local width = math.min(620, math.max(420, math.floor(sw * 0.45)))
+    local height = 340
+    local x = math.floor((sw - width) / 2)
+    local y = math.floor((sh - height) / 2)
+    local playerIndex = (player and player.getPlayerNum) and player:getPlayerNum() or 0
+    local modal = ISModalRichText:new(x, y, width, height, text, false, nil, function() javaHelpModal = nil end, playerIndex)
+    modal:initialise()
+    modal:addToUIManager()
+    modal:setAlwaysOnTop(true)
+    javaHelpModal = modal
+end
+
 GFL2CharacterActions = {
     open = open,
     resetPhysics = resetPhysics,
     setBodyPhysics = setBodyPhysics,
+    showJavaHelp = showJavaHelp,
 }
 
 local function menu(playerIndex, context, worldObjects, test)
@@ -380,8 +448,7 @@ local function menu(playerIndex, context, worldObjects, test)
     local player = getSpecificPlayer(playerIndex)
     if not player then return end
     if not GFL2CharacterRuntime then
-        local unavailable = context:addOption(getText("ContextMenu_GFL2Character_JavaUnavailable"))
-        unavailable.notAvailable = true
+        context:addOption(getText("ContextMenu_GFL2Character_JavaUnavailable"), player, showJavaHelp)
         return
     end
     context:addOption(getText("ContextMenu_GFL2Character_Menu"),player,open)
@@ -393,8 +460,15 @@ Events.OnGameStart.Add(function()
     expressionEdits={}
     voiceSaveEdits={}
     window.closeAll()
+    closeJavaHelp()
     started = true
-    if not GFL2CharacterRuntime then return end
+    if not GFL2CharacterRuntime then
+        if not javaHelpAutoShown then
+            javaHelpAutoShown = true
+            showJavaHelp(getSpecificPlayer and getSpecificPlayer(0) or nil)
+        end
+        return
+    end
     GFL2CharacterRuntime.clear()
     for i = 0, 3 do restore(getSpecificPlayer(i)) end
 end)
@@ -428,10 +502,12 @@ end)
 if Events.OnMainMenuEnter then
     Events.OnMainMenuEnter.Add(function()
         started = false
+        javaHelpAutoShown = false
         awaiting={}
         expressionEdits={}
         voiceSaveEdits={}
         window.closeAll()
+        closeJavaHelp()
         if GFL2CharacterRuntime then GFL2CharacterRuntime.clear() end
     end)
 end
@@ -440,6 +516,8 @@ Events.OnDisconnect.Add(function()
     expressionEdits={}
     voiceSaveEdits={}
     window.closeAll()
+    closeJavaHelp()
     started = false
+    javaHelpAutoShown = false
     if GFL2CharacterRuntime then GFL2CharacterRuntime.clear() end
 end)

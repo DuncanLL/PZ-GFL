@@ -125,7 +125,8 @@
       "pmx-f2a800c48ca2b031"
     ],
     "GFL2Mechty": [
-      "pmx-4cc23c77ded8ee9b"
+      "pmx-4cc23c77ded8ee9b",
+      "pmx-2a37b36707a4f3f2"
     ],
     "GFL2Tololo": [
       "pmx-f8f3c0c6d8ec5b54",
@@ -140,6 +141,10 @@
       "pmx-34aab051b412eb6f",
       "pmx-3516fb5567da29e8",
       "pmx-91135a36d9441f55"
+    ],
+    "GFL2Kuro": [
+      "pmx-89dc57d4d8ae6b78",
+      "pmx-a8fa8833483e0e68"
     ]
   },
   "pack_mod_ids": {
@@ -171,6 +176,7 @@
     "GFL2Mechty": "GFL2Mechty",
     "GFL2Tololo": "GFL2Tololo",
     "GFL2Eagletta": "GFL2Eagletta",
-    "GFL2Nemesis": "GFL2Nemesis"
+    "GFL2Nemesis": "GFL2Nemesis",
+    "GFL2Kuro": "GFL2Kuro"
   }
 }

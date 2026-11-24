@@ -92,7 +92,16 @@ function GFL2RadialMenu.install()
         baseFillMenu(self, submenu)
         if submenu then return end
         if not self or not self.character or self.character:isDead() then return end
-        if not GFL2CharacterRuntime then return end
+        if not GFL2CharacterRuntime then
+            local showHelp = GFL2CharacterActions and GFL2CharacterActions.showJavaHelp
+            if showHelp then
+                local menu = getPlayerRadialMenu(self.playerNum)
+                if menu then
+                    menu:addSlice(label("UI_GFL2_Radial_Root", "GFL2 Exilium"), icon("radial-root.png"), showHelp, self.character)
+                end
+            end
+            return
+        end
         local menu = getPlayerRadialMenu(self.playerNum)
         if not menu then return end
         menu:addSlice(label("UI_GFL2_Radial_Root", "GFL2 Exilium"), icon("radial-root.png"), GFL2RadialMenu.fillSubmenu, self)

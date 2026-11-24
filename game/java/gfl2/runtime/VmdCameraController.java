@@ -11,7 +11,7 @@ import zombie.characters.IsoGameCharacter;
 import zombie.characters.IsoPlayer;
 
 /** Drives Viewpoint's official ClaimedCamera from an active local VMD camera track. */
-final class VmdCameraController {
+public final class VmdCameraController {
     private static final double SQRT6 = 2.449489742783178;
 
     private static volatile IsoPlayer trackedOwner;
@@ -23,14 +23,14 @@ final class VmdCameraController {
 
     private VmdCameraController() {}
 
-    static void recordPlacement(IsoPlayer player, Matrix4f sourcePlacement, float scale) {
+    public static void recordPlacement(IsoPlayer player, Matrix4f sourcePlacement, float scale) {
         if (player == null || sourcePlacement == null || !Float.isFinite(scale) || scale <= 1e-4f) return;
         trackedOwner = player;
         trackedPlacement = new Matrix4f(sourcePlacement);
         trackedScale = scale;
     }
 
-    static void releaseIfHeld() {
+    public static void releaseIfHeld() {
         if (!holding) return;
         holding = false;
         cutNext = true;
@@ -40,7 +40,7 @@ final class VmdCameraController {
         } catch (Throwable ignored) {}
     }
 
-    static void beforeCapture(Frame frame, IsoGameCharacter character) {
+    public static void beforeCapture(Frame frame, IsoGameCharacter character) {
         if (!(character instanceof IsoPlayer player) || !player.isLocalPlayer()) {
             releaseIfHeld();
             return;
@@ -117,7 +117,7 @@ final class VmdCameraController {
         ClaimedCamera.hold(claimX, claimY, claimZ, yaw, pitch, roll, sample.fovDeg(), false);
     }
 
-    static void afterCapture(Frame frame) {
+    public static void afterCapture(Frame frame) {
         if (cutNext && frame != null && frame.cameraShot != null) {
             frame.cameraShot.cut = true;
             cutNext = false;

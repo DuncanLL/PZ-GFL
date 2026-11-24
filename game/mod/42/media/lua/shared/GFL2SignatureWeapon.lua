@@ -378,6 +378,20 @@ local weapons = {{
     previewZoom = 13,
     startsWithMagazine = true,
     ammoBox = "Base.308Box",
+}, {
+    id = "GFL2.ThresholdStorm",
+    mod = "GFL2Kuro",
+    character = "GFL2Kuro",
+    name = "ContextMenu_GFL2_ThresholdStorm",
+    description = "ContextMenu_GFL2_ThresholdStormDescription",
+    icon = "media/textures/Item_GFL2ThresholdStorm.png",
+    card = "media/ui/GFL2/ThresholdStormCard.png",
+    cardBounds = {73,128,817,312},
+    previewCenterY = 0.089585,
+    previewCenterZ = 0.024198,
+    previewZoom = 15,
+    startsWithMagazine = true,
+    ammoBox = "Base.556Box",
 }}
 
 local catalog = {byId = {}, byCharacter = {}}

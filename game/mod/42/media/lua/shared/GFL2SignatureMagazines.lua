@@ -15,11 +15,15 @@ function M.ownerOf(magazineType)
     return type(magazineType) == "string" and owners[magazineType] or nil
 end
 
-local activeMods = getActivatedMods()
-if activeMods:contains("SWMG") then
+local activeMods = getActivatedMods and getActivatedMods()
+if activeMods and activeMods:contains("SWMG") then
     local Magazine = require "WeaponSystems/Utils/Magazine"
     local usesEFZ = activeMods:contains("EscapeFromZomboidFirearms")
-    local Ammo = usesEFZ and require "WeaponSystems/Utils/Ammo"
+    local usesMFS = activeMods:contains("ModernFirearmsSystem")
+    local usesNewGOM = not usesEFZ and not usesMFS and activeMods:contains("GunsOfMarz")
+    local usesOldGOM = not usesEFZ and not usesMFS and not usesNewGOM and activeMods:contains("MarzGuns")
+    local usesGOM = usesNewGOM or usesOldGOM
+    local Ammo = (usesEFZ or usesGOM) and require "WeaponSystems/Utils/Ammo"
 
     function M.register(weaponId, donorId, ammoFamily, ammoBox)
         local magazineId = weaponId .. "Magazine"
@@ -43,6 +47,55 @@ if activeMods:contains("SWMG") then
         end
         Events.OnGameBoot.Add(configure)
         Events.OnInitGlobalModData.Add(configure)
+    end
+
+    if usesGOM then
+        local gomAmmoMap = {
+            ["Base.556Box"] = { key = "BULLET_556x45", family = "5.56x45mm", box = "MarzGuns.556x45_Box" },
+            ["Base.308Box"] = { key = "BULLET_308", family = "7.62x51mm", box = "MarzGuns.308_Box" },
+            ["Base.Bullets9mmBox"] = { key = "BULLET_9x19", family = "9x19mm", box = "MarzGuns.9x19_Box" },
+            ["Base.Bullets45Box"] = { key = "BULLET_45", family = ".45 ACP", box = "MarzGuns.45_Box" },
+            ["Base.Bullets44Box"] = { key = "BULLET_44", family = ".44 Magnum", box = "MarzGuns.44_Box" },
+            ["Base.ShotgunShellsBox"] = { key = "SHELL_12G_BUCKSHOT", family = "12Gauge", box = "MarzGuns.12Gauge_Box_Buckshot" },
+        }
+
+        local function configureGunsOfMarz()
+            local scripts = getScriptManager and getScriptManager()
+            if not scripts then return end
+            local ammoTable = (usesNewGOM and SWMG_AmmoTypes) or (usesOldGOM and MarzGuns_AmmoTypes)
+            for weaponId, entry in pairs(catalog.byId) do
+                local spec = entry.ammoBox and gomAmmoMap[entry.ammoBox]
+                local weapon = spec and scripts:FindItem(weaponId)
+                if weapon then
+                    local ammoEnum = ammoTable and ammoTable[spec.key]
+                    if ammoEnum then
+                        weapon:setAmmoType(ammoEnum)
+                    end
+                    if scripts:FindItem(spec.box) then
+                        weapon:DoParam("AmmoBox", spec.box)
+                    end
+                    if entry.startsWithMagazine then
+                        local magazineId = weaponId .. "Magazine"
+                        local magazine = scripts:FindItem(magazineId)
+                        if magazine then
+                            Magazine.RegisterMagazineProfile(weaponId, { magazineId })
+                            Magazine.RegisterWeaponWithProfile(weaponId, weaponId)
+                            if ammoEnum then
+                                magazine:setAmmoType(ammoEnum)
+                            end
+                            Ammo.RegisterItemWithFamily(spec.family, { weaponId, magazineId })
+                        else
+                            Ammo.RegisterItemWithFamily(spec.family, weaponId)
+                        end
+                    else
+                        Ammo.RegisterItemWithFamily(spec.family, weaponId)
+                    end
+                end
+            end
+        end
+
+        Events.OnGameBoot.Add(configureGunsOfMarz)
+        Events.OnInitGlobalModData.Add(configureGunsOfMarz)
     end
 
     local restoreMagazine = Magazine.RestoreMagazineType
