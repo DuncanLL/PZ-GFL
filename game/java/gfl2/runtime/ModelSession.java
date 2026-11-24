@@ -131,14 +131,14 @@ final class ModelSession {
         if(lastFrame==frame) {
             if(viewpoint&&fullFrame.gpuPose()!=null){
                 if(!model.skinCompletedPose())throw new IllegalStateException("Completed CPU fallback pose unavailable");
-                fullFrame=cpuFrame(model.appearance().readMaterials(false),false);
+                fullFrame=cpuFrame(model.appearance().readMaterials(false),false,false);
                 frozen=fullFrame;frozenViewpoint=false;previousFrozen=olderFrozen=null;
             }
             if(viewpoint&&(!frozenViewpoint||hiddenHead!=hideHead)){
                 if(hiddenHead!=hideHead){api.SetFirstPersonMode(model.handle(),hideHead);hiddenHead=hideHead;}
                 float[] visible=model.appearance().readMaterials();
                 frozen=new PmxDrawMesh.FrameData(fullFrame.positions(),fullFrame.normals(),visible,
-                        shading==null?null:shading.freeze(api,model.handle(),visible,fullFrame.positions(),materials.paths()));
+                        shading==null?null:shading.freeze(api,model.handle(),visible,fullFrame.positions(),materials.paths()),hideHead);
                 frozenViewpoint=true;
             }
             prepareMesh(viewpoint ? frozen : fullFrame,viewpoint);
@@ -176,10 +176,10 @@ final class ModelSession {
             disableGpu(failure);
             if(!model.skinCompletedPose())throw new IllegalStateException("GPU pose fallback failed",failure);
         }
-        if(next==null)next=cpuFrame(finalMaterials,viewpoint);
+        if(next==null)next=cpuFrame(finalMaterials,viewpoint,hideHead);
         furnitureDrop=onFurniture ? furnitureSeat.offset(api,model,profile,scale,sourcePose,next,
             owner.getVariableBoolean("SitOnFurnitureStarted"),owner.isFemale()) : 0;
-        fullFrame=hideHead?new PmxDrawMesh.FrameData(next.positions(),next.normals(),model.appearance().readMaterials(false),next.shadingHead()):next;
+        fullFrame=hideHead?new PmxDrawMesh.FrameData(next.positions(),next.normals(),model.appearance().readMaterials(false),next.shadingHead(),false):next;
         long cpuNanos=System.nanoTime()-wallNanos,wallGap=lastWallNanos==0?0:wallNanos-lastWallNanos;
         if((cpuNanos>50_000_000L||wallGap>100_000_000L)&&(lastSlowFrame==Long.MIN_VALUE||frame-lastSlowFrame>=300)){
             lastSlowFrame=frame;
@@ -191,14 +191,14 @@ final class ModelSession {
         prepareMesh(viewpoint?frozen:fullFrame,viewpoint);
         return viewpoint?frozen:fullFrame;
     }
-    private PmxDrawMesh.FrameData cpuFrame(float[] finalMaterials,boolean viewpoint) {
+    private PmxDrawMesh.FrameData cpuFrame(float[] finalMaterials,boolean viewpoint,boolean hideHead) {
         api.CopyDataToByteBuffer(positions,api.GetPoss(model.handle()),positions.capacity());
         api.CopyDataToByteBuffer(normals,api.GetNormals(model.handle()),normals.capacity());
         float[] p=new float[positions.capacity()/4],n=new float[p.length];
         positions.asFloatBuffer().get(p);normals.asFloatBuffer().get(n);model.deformChest(p,n);
         boolean needShading=shading!=null&&(viewpoint||ReadyRoomPreview.studioPreviewAvailable());
         return new PmxDrawMesh.FrameData(p,n,finalMaterials,
-            !needShading?null:shading.freeze(api,model.handle(),finalMaterials,p,materials.paths()));
+            !needShading?null:shading.freeze(api,model.handle(),finalMaterials,p,materials.paths()),hideHead);
     }
     String pmxSha256(){return profile.getString("pmx_sha256");}
 

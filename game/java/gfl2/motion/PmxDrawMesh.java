@@ -87,14 +87,16 @@ public final class PmxDrawMesh implements AutoCloseable {
     public static final class FrameData {
         private final float[] positions,normals,materials,shadingHead;
         private final GpuDeformation.Pose gpuPose;
+        private final boolean hideHead;
         private final float minX,minY,minZ,maxX,maxY,maxZ;
-        public FrameData(float[] positions,float[] normals,float[] materials){this(positions,normals,materials,null);}
-        public FrameData(float[] positions,float[] normals,float[] materials,float[] shadingHead) {this(positions,normals,materials,shadingHead,null,null);}
-        private FrameData(float[] positions,float[] normals,float[] materials,float[] shadingHead,FrameData a,FrameData b) {
+        public FrameData(float[] positions,float[] normals,float[] materials){this(positions,normals,materials,null,false);}
+        public FrameData(float[] positions,float[] normals,float[] materials,float[] shadingHead) {this(positions,normals,materials,shadingHead,false);}
+        public FrameData(float[] positions,float[] normals,float[] materials,float[] shadingHead,boolean hideHead) {this(positions,normals,materials,shadingHead,hideHead,null,null);}
+        private FrameData(float[] positions,float[] normals,float[] materials,float[] shadingHead,boolean hideHead,FrameData a,FrameData b) {
             if (positions.length!=normals.length || positions.length%3!=0 || materials.length%12!=0)
                 throw new IllegalArgumentException("Invalid frozen PMX frame");
             if(shadingHead!=null&&(shadingHead.length<12||shadingHead.length%12!=0))throw new IllegalArgumentException("Invalid shading frame");
-            this.positions=positions;this.normals=normals;this.materials=materials;this.shadingHead=shadingHead;gpuPose=null;
+            this.positions=positions;this.normals=normals;this.materials=materials;this.shadingHead=shadingHead;this.hideHead=hideHead;gpuPose=null;
             if (a != null && b != null) {
                 if (a.positions.length != positions.length || b.positions.length != positions.length)
                     throw new IllegalArgumentException("Interpolation endpoint shape differs");
@@ -115,12 +117,14 @@ public final class PmxDrawMesh implements AutoCloseable {
         }
         /** Plain renderers bind the completed GPU mesh directly; no CPU geometry exists in this frame. */
         public FrameData(float[] materials,GpuDeformation.Pose pose) {
-            positions=normals=shadingHead=null;this.materials=materials;gpuPose=pose;
+            positions=normals=shadingHead=null;this.materials=materials;this.hideHead=false;gpuPose=pose;
             minX=minY=minZ=maxX=maxY=maxZ=0;
         }
         public GpuDeformation.Pose gpuPose(){return gpuPose;}
+        public boolean hideHead(){return hideHead;}
         /** Convex display interpolation stays inside the union of its two validated snapshots. */
-        public static FrameData interpolated(float[] p,float[] n,float[] m,float[] h,FrameData a,FrameData b){return new FrameData(p,n,m,h,a,b);}
+        public static FrameData interpolated(float[] p,float[] n,float[] m,float[] h,FrameData a,FrameData b){return new FrameData(p,n,m,h,b.hideHead,a,b);}
+        public static FrameData interpolated(float[] p,float[] n,float[] m,float[] h,boolean hideHead,FrameData a,FrameData b){return new FrameData(p,n,m,h,hideHead,a,b);}
         public float[] positions(){return positions;}
         public float[] normals(){return normals;}
         public float[] materials(){return materials;}
@@ -144,7 +148,7 @@ public final class PmxDrawMesh implements AutoCloseable {
         VertexBufferObject.Vbo handle;
         final int cull;
         final int stride;
-        final boolean hull,fringe,keepInFirstPerson;
+        final boolean hull,fringe,keepInFirstPerson,hideInFirstPerson;
         final int[] weld;
         final float[] edgeWeights,smooth;
         float inkU,inkV;
@@ -161,12 +165,13 @@ public final class PmxDrawMesh implements AutoCloseable {
             this(material,source,indices,bothFaces,ordinal,shading,weld,edgeWeights,groups,fringe,null);
         }
         Part(int material,int[] source,int[] indices,boolean bothFaces,int ordinal,boolean shading,int[] weld,float[] edgeWeights,int groups,boolean fringe,PmxOriginalInputs.Draw original) {
-            this(material,source,indices,bothFaces,ordinal,shading,weld,edgeWeights,groups,fringe,original,false);
+            this(material,source,indices,bothFaces,ordinal,shading,weld,edgeWeights,groups,fringe,original,false,false);
         }
-        Part(int material,int[] source,int[] indices,boolean bothFaces,int ordinal,boolean shading,int[] weld,float[] edgeWeights,int groups,boolean fringe,PmxOriginalInputs.Draw original,boolean keepInFirstPerson) {
+        Part(int material,int[] source,int[] indices,boolean bothFaces,int ordinal,boolean shading,int[] weld,float[] edgeWeights,int groups,boolean fringe,PmxOriginalInputs.Draw original,boolean keepInFirstPerson,boolean hideInFirstPerson) {
             this.original=original;
             this.fringe=fringe;
             this.keepInFirstPerson=keepInFirstPerson;
+            this.hideInFirstPerson=hideInFirstPerson;
             this.material = material; this.source = source; this.indices = indices;
             this.hull=weld!=null;this.weld=weld;this.edgeWeights=edgeWeights;this.smooth=hull?new float[groups*3]:null;
             cull = fringe ? 1029 : hull ? 1028 : bothFaces ? 0 : 1029;
@@ -208,9 +213,9 @@ public final class PmxDrawMesh implements AutoCloseable {
         api.CopyDataToByteBuffer(indices, api.GetIndices(model), indices.capacity());
         PmxOriginalInputs original=PmxOriginalInputs.load(shading,count,textures.length);
         sourceProfile=original==null?null:original.key;
-        boolean anyFpHidden=false;
-        for(int i=0;i<textures.length;i++)if(appearance.firstPersonHidden(i)){anyFpHidden=true;break;}
-        boolean[] armVertices=anyFpHidden?detectArmVertices(api,model,count):null;
+        FirstPersonMasks fpMasks=detectFirstPersonMasks(api,model,count);
+        boolean[] armVertices=fpMasks==null?null:fpMasks.arm();
+        boolean[] headVertices=fpMasks==null?null:fpMasks.head();
         if(original!=null){
             int ordinal=0;
             for(PmxOriginalInputs.Draw draw:original.draws){
@@ -223,19 +228,36 @@ public final class PmxDrawMesh implements AutoCloseable {
                     int armTris=classifyTriangles(armVertices,draw.source(),draw.indices(),triIsArm);
                     int otherTris=triCount-armTris;
                     if(armTris==0){
-                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false));
+                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false,true));
                     }else if(otherTris==0){
-                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,true));
+                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,true,false));
                     }else{
                         CompactMesh other=compactMesh(draw.source(),draw.indices(),draw.attributes(),triIsArm,false,otherTris);
                         CompactMesh arm=compactMesh(draw.source(),draw.indices(),draw.attributes(),triIsArm,true,armTris);
                         var otherDraw=new PmxOriginalInputs.Draw(material,draw.sourceMaterial(),other.source(),other.attributes(),other.indices(),draw.sourceAlphaIndependent());
                         var armDraw=new PmxOriginalInputs.Draw(material,draw.sourceMaterial(),arm.source(),arm.attributes(),arm.indices(),draw.sourceAlphaIndependent());
-                        parts.add(new Part(material,otherDraw.source(),otherDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,otherDraw,false));
-                        parts.add(new Part(material,armDraw.source(),armDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,armDraw,true));
+                        parts.add(new Part(material,otherDraw.source(),otherDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,otherDraw,false,true));
+                        parts.add(new Part(material,armDraw.source(),armDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,armDraw,true,false));
+                    }
+                }else if(headVertices!=null){
+                    int triCount=draw.indices().length/3;
+                    boolean[] triIsHead=new boolean[triCount];
+                    int headTris=classifyTriangles(headVertices,draw.source(),draw.indices(),triIsHead);
+                    int bodyTris=triCount-headTris;
+                    if(headTris==0){
+                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false,false));
+                    }else if(bodyTris==0){
+                        parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false,true));
+                    }else{
+                        CompactMesh body=compactMesh(draw.source(),draw.indices(),draw.attributes(),triIsHead,false,bodyTris);
+                        CompactMesh head=compactMesh(draw.source(),draw.indices(),draw.attributes(),triIsHead,true,headTris);
+                        var bodyDraw=new PmxOriginalInputs.Draw(material,draw.sourceMaterial(),body.source(),body.attributes(),body.indices(),draw.sourceAlphaIndependent());
+                        var headDraw=new PmxOriginalInputs.Draw(material,draw.sourceMaterial(),head.source(),head.attributes(),head.indices(),draw.sourceAlphaIndependent());
+                        parts.add(new Part(material,bodyDraw.source(),bodyDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,bodyDraw,false,false));
+                        parts.add(new Part(material,headDraw.source(),headDraw.indices(),bothFaces,partOrdinal,true,null,null,0,false,headDraw,false,true));
                     }
                 }else{
-                    parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false));
+                    parts.add(new Part(material,draw.source(),draw.indices(),bothFaces,partOrdinal,true,null,null,0,false,draw,false,false));
                 }
             }
         }
@@ -262,28 +284,44 @@ public final class PmxDrawMesh implements AutoCloseable {
                 int armTris=classifyTriangles(armVertices,source,local,triIsArm);
                 int otherTris=triCount-armTris;
                 if(armTris==0){
-                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,count);
+                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,true,count);
                 }else if(otherTris==0){
-                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,true,count);
+                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,true,false,count);
                 }else{
                     CompactMesh other=compactMesh(source,local,null,triIsArm,false,otherTris);
                     CompactMesh arm=compactMesh(source,local,null,triIsArm,true,armTris);
-                    addSubmeshParts(material,other.source(),other.indices(),bothFaces,n,n+10000,false,count);
-                    addSubmeshParts(material,arm.source(),arm.indices(),bothFaces,n+30000,n+40000,true,count);
+                    addSubmeshParts(material,other.source(),other.indices(),bothFaces,n,n+10000,false,true,count);
+                    addSubmeshParts(material,arm.source(),arm.indices(),bothFaces,n+30000,n+40000,true,false,count);
+                }
+            }else if(headVertices!=null){
+                int triCount=local.length/3;
+                boolean[] triIsHead=new boolean[triCount];
+                int headTris=classifyTriangles(headVertices,source,local,triIsHead);
+                int bodyTris=triCount-headTris;
+                if(headTris==0){
+                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,false,count);
+                }else if(bodyTris==0){
+                    addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,true,count);
+                }else{
+                    CompactMesh body=compactMesh(source,local,null,triIsHead,false,bodyTris);
+                    CompactMesh head=compactMesh(source,local,null,triIsHead,true,headTris);
+                    addSubmeshParts(material,body.source(),body.indices(),bothFaces,n,n+10000,false,false,count);
+                    addSubmeshParts(material,head.source(),head.indices(),bothFaces,n+30000,n+40000,false,true,count);
                 }
             }else{
-                addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,count);
+                addSubmeshParts(material,source,local,bothFaces,n,n+10000,false,false,count);
             }
         }
         if(original==null&&shading!=null&&shading.danrp&&shading.fringeMeshSource.length>0)
-            parts.add(new Part(shading.fringeMeshMaterial,shading.fringeMeshSource,shading.fringeMeshIndices,false,20000,true,null,null,0,true));
+            parts.add(new Part(shading.fringeMeshMaterial,shading.fringeMeshSource,shading.fringeMeshIndices,false,20000,true,null,null,0,true,null,false,true));
         updateOutlineTextures(textures);
     }
 
     private record CompactMesh(int[] source,int[] indices,int[] attributes){}
+    private record FirstPersonMasks(boolean[] arm,boolean[] head){}
 
-    private void addSubmeshParts(int material,int[] source,int[] local,boolean bothFaces,int ordinal,int hullOrdinal,boolean keepInFirstPerson,int vertexCount){
-        parts.add(new Part(material,source,local,bothFaces,ordinal,shading!=null,null,null,0,false,null,keepInFirstPerson));
+    private void addSubmeshParts(int material,int[] source,int[] local,boolean bothFaces,int ordinal,int hullOrdinal,boolean keepInFirstPerson,boolean hideInFirstPerson,int vertexCount){
+        parts.add(new Part(material,source,local,bothFaces,ordinal,shading!=null,null,null,0,false,null,keepInFirstPerson,hideInFirstPerson));
         if(shading!=null&&shading.outlineSources[material]!=null){
             int[] lookup=new int[vertexCount];Arrays.fill(lookup,-1);int[] authored=shading.outlineSources[material];
             for(int i=0;i<authored.length;i++)lookup[authored[i]]=i;
@@ -294,7 +332,7 @@ public final class PmxDrawMesh implements AutoCloseable {
             }
             // The source winding is retained: the actual host culls its front
             // faces, leaving the thin back-facing shell around the actor.
-            parts.add(new Part(material,source,local,true,hullOrdinal,true,weld,weights,shading.outlineGroupCount[material],false,null,keepInFirstPerson));
+            parts.add(new Part(material,source,local,true,hullOrdinal,true,weld,weights,shading.outlineGroupCount[material],false,null,keepInFirstPerson,hideInFirstPerson));
         }
     }
 
@@ -345,7 +383,14 @@ public final class PmxDrawMesh implements AutoCloseable {
             ||"upperarm_l".equalsIgnoreCase(name)||"upperarm_r".equalsIgnoreCase(name);
     }
 
-    private static boolean[] detectArmVertices(NativeFunc api,long model,int vertexCount){
+    private static boolean isHeadOrHairRoot(String name){
+        if("頭".equals(name)||"あたま".equals(name)||"head".equalsIgnoreCase(name)
+            ||"bip01_head".equalsIgnoreCase(name)||"bip001 head".equalsIgnoreCase(name))return true;
+        String lower=name.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("hair")||name.contains("髪");
+    }
+
+    private static FirstPersonMasks detectFirstPersonMasks(NativeFunc api,long model,int vertexCount){
         String metadata=api.GetBoneMetadata(model);
         if(metadata==null||metadata.isBlank())return null;
         JSONArray bones=new JSONArray(metadata);
@@ -354,27 +399,26 @@ public final class PmxDrawMesh implements AutoCloseable {
         int[] parents=new int[boneCount];
         Arrays.fill(parents,-1);
         boolean[] armBone=new boolean[boneCount];
-        boolean hasArm=false;
+        boolean[] headBone=new boolean[boneCount];
+        boolean hasArm=false,hasHead=false;
         for(int i=0;i<boneCount;i++){
             JSONObject bone=bones.getJSONObject(i);
             int idx=bone.optInt("index",-1);
             if(idx<0||idx>=boneCount)continue;
             parents[idx]=bone.optInt("parent",-1);
-            if(isArmRoot(bone.optString("name",""))){
-                armBone[idx]=true;
-                hasArm=true;
-            }
+            String name=bone.optString("name","");
+            if(isArmRoot(name)){armBone[idx]=true;hasArm=true;}
+            if(isHeadOrHairRoot(name)){headBone[idx]=true;hasHead=true;}
         }
-        if(!hasArm)return null;
+        if(!hasArm&&!hasHead)return null;
         boolean changed=true;
         while(changed){
             changed=false;
             for(int i=0;i<boneCount;i++){
                 int p=parents[i];
-                if(!armBone[i]&&p>=0&&p<boneCount&&armBone[p]){
-                    armBone[i]=true;
-                    changed=true;
-                }
+                if(p<0||p>=boneCount)continue;
+                if(!armBone[i]&&armBone[p]){armBone[i]=true;changed=true;}
+                if(!headBone[i]&&headBone[p]){headBone[i]=true;changed=true;}
             }
         }
         ByteBuffer boneIds=buffer(Math.multiplyExact(vertexCount,16));
@@ -385,17 +429,23 @@ public final class PmxDrawMesh implements AutoCloseable {
         if(copied!=vertexCount||copiedW!=vertexCount)return null;
         IntBuffer ids=boneIds.asIntBuffer();
         FloatBuffer weights=boneWeights.asFloatBuffer();
-        boolean[] isArm=new boolean[vertexCount];
+        boolean[] isArm=hasArm?new boolean[vertexCount]:null;
+        boolean[] isHead=hasHead?new boolean[vertexCount]:null;
         for(int v=0;v<vertexCount;v++){
-            float armWeight=0f;
+            float armWeight=0f,headWeight=0f;
             int base=v*4;
             for(int k=0;k<4;k++){
                 int b=ids.get(base+k);
-                if(b>=0&&b<boneCount&&armBone[b])armWeight+=weights.get(base+k);
+                if(b<0||b>=boneCount)continue;
+                float w=weights.get(base+k);
+                if(hasArm&&armBone[b])armWeight+=w;
+                if(hasHead&&headBone[b])headWeight+=w;
             }
-            isArm[v]=armWeight>=0.5f;
+            boolean arm=hasArm&&armWeight>=0.5f;
+            if(hasArm)isArm[v]=arm;
+            if(hasHead)isHead[v]=!arm&&headWeight>=0.25f;
         }
-        return isArm;
+        return new FirstPersonMasks(isArm,isHead);
     }
 
     private PmxDrawMesh renderMesh(){
@@ -488,9 +538,9 @@ public final class PmxDrawMesh implements AutoCloseable {
             if(part.hull&&(!useOutline||!part.hullReady)){part.continuous=false;continue;}
             int offset=part.material*12;
             float[] colourMaterials=part.keepInFirstPerson?shadowMaterials:materialState;
-            boolean colour=colourVisible(part,colourMaterials),shadow=shadowVisible(part,shadowMaterials);
+            boolean colour=!(frame.hideHead&&part.hideInFirstPerson)&&colourVisible(part,colourMaterials),shadow=shadowVisible(part,shadowMaterials);
             // Pack-owned eye layers can ignore base alpha; keep them ready across queued appearance changes.
-            if(part.original!=null&&part.original.sourceAlphaIndependent()&&colourMaterials[offset+7]+colourMaterials[offset+11]>0)colour=true;
+            if(!(frame.hideHead&&part.hideInFirstPerson)&&part.original!=null&&part.original.sourceAlphaIndependent()&&colourMaterials[offset+7]+colourMaterials[offset+11]>0)colour=true;
             if(!colour&&((part.hull||part.fringe)||!shadow)){part.continuous=false;continue;}
             part.mesh.minXyz.set(Float.POSITIVE_INFINITY);
             part.mesh.maxXyz.set(Float.NEGATIVE_INFINITY);
@@ -584,7 +634,7 @@ public final class PmxDrawMesh implements AutoCloseable {
         for (Part part:parts) {
             if(part.fringe&&!useFringe)continue;
             if(part.hull&&(!useOutline||!part.hullReady))continue;
-            boolean colour=colourVisible(part,part.keepInFirstPerson?shadowMaterials:frame.materials),shadow=shadowVisible(part,shadowMaterials);
+            boolean colour=!(frame.hideHead&&part.hideInFirstPerson)&&colourVisible(part,part.keepInFirstPerson?shadowMaterials:frame.materials),shadow=shadowVisible(part,shadowMaterials);
             if((part.hull||part.fringe)&&!colour)continue;
             if(!colour&&!shadow)continue;
             int cull=part.fringe?1029:part.hull?1028:doubleSided==null?part.cull:doubleSided[part.material]?0:1029;

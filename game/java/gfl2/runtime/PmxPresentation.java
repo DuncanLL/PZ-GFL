@@ -75,7 +75,7 @@ final class PmxPresentation {
         }
         side^=1;
         // This upload view is render-thread scratch; immutable game snapshots remain untouched.
-        return PmxDrawMesh.FrameData.interpolated(output,normals,current.materials(),header,a,b);
+        return PmxDrawMesh.FrameData.interpolated(output,normals,current.materials(),header,current.hideHead(),a,b);
     }
     private static float lerp(float from,float to,float weight){
         // Double subtraction also handles finite endpoints at opposite float extremes.
