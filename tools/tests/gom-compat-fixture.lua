@@ -31,6 +31,18 @@ local function runGoMScenario(activeModList, ammoTableName, runGfl2Magazines, ru
         OnInitGlobalModData = makeEvent(),
     }
     ISInsertMagazine = { isValid = function() return true end }
+    ISLoadBulletsInMagazine = {
+        new = function(self, character, magazine, ammoCount)
+            return { character = character, magazine = magazine, ammoCount = ammoCount, stopOnAim = false }
+        end,
+        update = function(self) end,
+    }
+    ISUnloadBulletsFromMagazine = {
+        new = function(self, character, magazine)
+            return { character = character, magazine = magazine, stopOnAim = false }
+        end,
+        update = function(self) end,
+    }
 
     local registeredProfiles = {}
     local weaponProfiles = {}

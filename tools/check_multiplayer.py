@@ -50,6 +50,8 @@ try:
  print(run('return verifyVoiceLifecycle()','voice-assertions'))
  run((test/'mfs-compat-fixture.lua').read_text('utf8'),'mfs-fixture')
  env.rawset('TimedActions/ISInsertMagazine', True)
+ env.rawset('TimedActions/ISLoadBulletsInMagazine', True)
+ env.rawset('TimedActions/ISUnloadBulletsFromMagazine', True)
  env.rawset('GFL2SignatureMagazines',run((media/'shared/GFL2SignatureMagazines.lua').read_text('utf8'),'sig-magazines'))
  run((media/'client/ZZ_GFL2ModernFirearmsCompat.lua').read_text('utf8'),'mfs-compat')
  print(run('return verifyMfsCompat()','mfs-assertions'))
