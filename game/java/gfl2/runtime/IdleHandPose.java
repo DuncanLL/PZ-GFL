@@ -47,21 +47,33 @@ final class IdleHandPose {
         HashMap<String,Integer> lookup=new HashMap<>();
         for(int i=0;i<metadata.length();i++)lookup.put(normalize(metadata.getJSONObject(i).getString("name")),i);
         ArrayList<Integer> roots=new ArrayList<>(),children=new ArrayList<>();ArrayList<Float> shares=new ArrayList<>();
+        ArrayList<Integer> thumbRoots=new ArrayList<>(),thumbMids=new ArrayList<>(),thumbTips=new ArrayList<>(),thumbSides=new ArrayList<>();
         HashSet<Integer> seen=new HashSet<>();JSONArray mapping=profile.getJSONArray("mapping");
         for(int i=0;i<mapping.length();i++) {
             JSONObject entry=mapping.getJSONObject(i);
-            if(!entry.getString("source").endsWith("_Finger1"))continue;
+            String source=entry.getString("source");
             int root=entry.getInt("target_index");if(root<0||root>=metadata.length())continue;
-            String name=normalize(metadata.getJSONObject(root).getString("name"));if(!name.endsWith("1"))continue;
-            Integer child=lookup.get(name.substring(0,name.length()-1)+"2"),end=lookup.get(name.substring(0,name.length()-1)+"3");
-            if(child==null||end==null||parents.getInt(child)!=root||parents.getInt(end)!=child||!seen.add(child))continue;
-            float a=distance(pos,root,child),b=distance(pos,child,end);
-            if(!Float.isFinite(a+b)||a<=1e-5f||b<=1e-5f)continue;
-            roots.add(root);children.add(child);shares.add(a/(a+b));
+            String name=normalize(metadata.getJSONObject(root).getString("name"));
+            if(source.endsWith("_Finger1")){
+                if(!name.endsWith("1"))continue;
+                Integer child=lookup.get(name.substring(0,name.length()-1)+"2"),end=lookup.get(name.substring(0,name.length()-1)+"3");
+                if(child==null||end==null||parents.getInt(child)!=root||parents.getInt(end)!=child||!seen.add(child))continue;
+                float a=distance(pos,root,child),b=distance(pos,child,end);
+                if(!Float.isFinite(a+b)||a<=1e-5f||b<=1e-5f)continue;
+                roots.add(root);children.add(child);shares.add(a/(a+b));
+            }else if(source.endsWith("_Finger0")){
+                if(!name.endsWith("0"))continue;
+                int side=source.contains("_L_")?0:source.contains("_R_")?1:-1;
+                Integer mid=lookup.get(name.substring(0,name.length()-1)+"1"),tip=lookup.get(name.substring(0,name.length()-1)+"2");
+                if(side<0||mid==null||tip==null||parents.getInt(mid)!=root||parents.getInt(tip)!=mid||!seen.add(mid)||!seen.add(tip))continue;
+                thumbRoots.add(root);thumbMids.add(mid);thumbTips.add(tip);thumbSides.add(side);
+            }
         }
         int[] r=new int[roots.size()],c=new int[roots.size()];float[] f=new float[roots.size()];
         for(int i=0;i<r.length;i++){r[i]=roots.get(i);c[i]=children.get(i);f[i]=shares.get(i);}
-        core.configureFingerPreview(r,c,f);
+        int[] tr=new int[thumbRoots.size()],tm=new int[thumbRoots.size()],tt=new int[thumbRoots.size()],ts=new int[thumbRoots.size()];
+        for(int i=0;i<tr.length;i++){tr[i]=thumbRoots.get(i);tm[i]=thumbMids.get(i);tt[i]=thumbTips.get(i);ts[i]=thumbSides.get(i);}
+        core.configureFingerPreview(r,c,f,tr,tm,tt,ts);
         available=r.length>0&&hands[0]>=0&&hands[1]>=0&&fingers[0]>=0&&fingers[1]>=0;
         output=new float[names.length()*16];setStrength(profile.optDouble("hand_relax_strength",.7));
     }

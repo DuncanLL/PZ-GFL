@@ -52,6 +52,19 @@ def trim_render_catalogs(project):
     return changed
 
 
+def strip_release_vmds(project):
+    removed = set()
+    for vmd in sorted(project.rglob('*')):
+        if vmd.is_file() and vmd.suffix.lower() == '.vmd':
+            removed.add(vmd.relative_to(project).as_posix())
+            vmd.unlink()
+    for motions_dir in sorted((project / 'Contents/mods').glob('*/42/media/gfl2_pmx/motions')):
+        if motions_dir.is_dir() and not any(motions_dir.iterdir()):
+            motions_dir.rmdir()
+    assert not any(p.is_file() and p.suffix.lower() == '.vmd' for p in project.rglob('*')), 'Release package must not contain VMD files'
+    return removed
+
+
 def assemble(args):
     config = settings()
     game = Path(config['game_root'])
@@ -102,6 +115,7 @@ def assemble(args):
         assert not stage.exists()
         original = inventory(character)
         shutil.copytree(character, stage)
+        removed_vmds = strip_release_vmds(stage)
         trimmed = trim_render_catalogs(stage)
         target = stage / CHARACTER_MOD / CHARACTER_JAR
         temporary = target.with_suffix('.jar.writing')
@@ -126,7 +140,8 @@ def assemble(args):
             info.write_text('\n'.join(updated_version if row == version else row for row in mod_info) + '\n', 'utf8')
             expected_changes.add(CHARACTER_MOD+'/42/mod.info')
         result = inventory(stage)
-        assert original.keys() == result.keys() and {name for name in original if original[name]!=result[name]} == expected_changes | trimmed
+        expected_remaining = {k: v for k, v in original.items() if k not in removed_vmds}
+        assert expected_remaining.keys() == result.keys() and {name for name in expected_remaining if expected_remaining[name]!=result[name]} == expected_changes | trimmed
         assert pins == {path: sha(path) for path in pins}
         stage.rename(output)
 

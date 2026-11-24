@@ -25,6 +25,7 @@ public final class Gfl2PackData {
     private final Map<String,JSONObject> resources=new LinkedHashMap<>();
     private record Model(JSONObject description,int lastRootBone){}
     private final Map<Long,Model> models=new LinkedHashMap<>();
+    private final Map<String,JSONObject> modelsBySha=new LinkedHashMap<>();
 
     record CatalogInputs(String location,List<String> modIds,Map<String,String> modDirs) {
         static CatalogInputs capture() {
@@ -83,6 +84,7 @@ public final class Gfl2PackData {
                 lastRootBone=Math.max(lastRootBone,bone);
             }
             if(models.put(key,new Model(model,lastRootBone))!=null)throw new IllegalArgumentException("Ambiguous frozen model token");
+            modelsBySha.put(sha,model);
             for(Object partValue:model.getJSONArray("parts")){
                 JSONObject part=(JSONObject)partValue;int material=part.getInt("source_material");
                 if(!part.getBoolean("source_identity_resolved")||material<0||material>=materials.length())
@@ -273,6 +275,9 @@ public final class Gfl2PackData {
     public JSONObject model(int first,int second){
         Model model=models.get(token(first,second));
         return model==null?null:model.description;
+    }
+    public JSONObject modelBySha(String sha256){
+        return sha256==null?null:modelsBySha.get(sha256);
     }
 
     /** Both renderers see the same draw list, which can still carry the previous pack's palette. */

@@ -60,23 +60,32 @@ function M.install(W,ctx)
     end
 
     function W:createMotionPage()
-        self.motionPanelWidth=math.min(550,self.fullWidth)
-        self.motionPanelHeight=math.min(450,self.fullHeight)
+        self.motionPanelWidth=math.min(586,self.fullWidth)
+        self.motionPanelHeight=math.min(530,self.fullHeight)
+        self.motionLibTab="motion"
         local height=self.motionPanelHeight-64
-        local listWidth=math.floor((self.motionPanelWidth-32)*.45)
+        local listWidth=math.floor((self.motionPanelWidth-32)*.44)
         local library=ISPanel:new(12,54,listWidth,height)
         library:initialise();library.background=false;self:addChild(library);self.motionLibraryBox=library
         library.prerender=function(p)
+            local w=p.parent
+            local isCam=w.motionLibTab=="camera"
             drawShadow(p,0,0,p.width,p.height,.92)
             surface(p,0,0,p.width,p.height,.94)
             drawCornerTicks(p,0,0,p.width,p.height,.90,6)
             p:drawRect(0,0,p.width,2,.92,.95,.54,.16)
-            label(p,tr("MotionLibrary"),12,12,22,p.width-24,.96,.97,.97)
-            if #p.parent.motionList.items==0 then
-                label(p,tr("MotionNoFiles"),12,54,18,p.width-24,.68,.76,.78)
+            label(p,tr(isCam and "MotionCameraLibrary" or "MotionLibrary"),12,10,20,p.width-24,.96,.97,.97)
+            if #w.motionList.items==0 then
+                label(p,tr(isCam and "MotionNoCameras" or "MotionNoFiles"),12,80,17,p.width-24,.68,.76,.78)
             end
         end
-        local list=ISScrollingListBox:new(8,43,library.width-16,height-123)
+        local tabW=math.floor((library.width-22)/2)
+        self.motionTabBtn=button(library,8,36,tabW,tr("MotionTabAction"),self,function(w)w:setMotionLibTab("motion")end)
+        self.motionTabBtn:setHeight(26);self.motionTabBtn.roomActive=true
+        self.cameraTabBtn=button(library,14+tabW,36,library.width-22-tabW,tr("MotionTabCamera"),self,function(w)w:setMotionLibTab("camera")end)
+        self.cameraTabBtn:setHeight(26);self.cameraTabBtn.roomActive=false
+
+        local list=ISScrollingListBox:new(8,68,library.width-16,height-148)
         list:initialise();list.itemheight=42
         list.backgroundColor={r=.035,g=.055,b=.065,a=0}
         list.doDrawItem=function(s,y,row,alt)
@@ -110,7 +119,11 @@ function M.install(W,ctx)
             end
             return motionListDown(s,x,y)
         end
-        list:setOnMouseDownFunction(self,function(w,filename)w.motionSelected=filename;w.motionMessage=nil;w:refreshMotionControls()end)
+        list:setOnMouseDownFunction(self,function(w,filename)
+            if w.motionLibTab=="camera" then w.cameraSelected=filename
+            else w.motionSelected=filename end
+            w.motionMessage=nil;w:refreshMotionControls()
+        end)
         library:addChild(list);self.motionList=list
         local width=library.width-16
         local half=math.floor((width-6)/2)
@@ -143,10 +156,14 @@ function M.install(W,ctx)
             p:drawRect(12,162,textWidth,1,.16,.80,.88,.90)
             label(p,tr("MotionSelected"),12,171,14,textWidth,.70,.78,.80)
             label(p,w.motionSelectedLabel or tr("MotionNoSelection"),12,189,16,textWidth,.94,.96,.96)
-            p:drawRect(12,284,textWidth,1,.16,.80,.88,.90)
-            label(p,tr("MotionPhysics"),12,293,16,textWidth,.70,.78,.80)
+            p:drawRect(12,282,textWidth,1,.16,.80,.88,.90)
+            label(p,tr("MotionPhysics"),12,290,15,textWidth,.70,.78,.80)
+            p:drawRect(12,350,textWidth,1,.16,.80,.88,.90)
+            label(p,tr("MotionCamera"),12,358,15,textWidth,.70,.78,.80)
+            label(p,w.cameraStatusLabel or tr("MotionCameraNone"),12,376,15,textWidth,
+                w.cameraLoadedActive and .95 or .72,w.cameraLoadedActive and .96 or .80,w.cameraLoadedActive and .96 or .82)
             if w.motionMessage then
-                label(p,w.motionMessage,12,348,17,textWidth,1,.74,.42)
+                label(p,w.motionMessage,12,436,16,textWidth,1,.74,.42)
             end
         end
         width=box.width-24
@@ -161,8 +178,11 @@ function M.install(W,ctx)
             pause=control(12,245,third,"MotionPause","pause"),
             restart=control(18+third,245,third,"MotionRestart","restart"),
             stop=control(24+2*third,245,width-2*third-12,"MotionStop","stop"),
-            physics=control(12,316,half,"MotionPhysicsOn","physics"),
-            reset=control(18+half,316,width-half-6,"MotionPhysicsReset","reset"),
+            physics=control(12,312,half,"MotionPhysicsOn","physics"),
+            reset=control(18+half,312,width-half-6,"MotionPhysicsReset","reset"),
+            cameraLoad=button(box,12,398,third,tr("MotionCameraLoad"),self,function(w)w:onMotionCommand("camera",w.cameraSelected or "")end),
+            cameraToggle=control(18+third,398,third,"MotionCameraOn","cameraToggle"),
+            cameraClear=control(24+2*third,398,width-2*third-12,"MotionCameraClear","cameraClear"),
         }
         self.motionButtons.play.roomLook="primary"
         for _,key in ipairs({"play","pause","restart","stop"})do self.motionButtons[key].roomIcon=key end
@@ -261,13 +281,26 @@ function M.install(W,ctx)
         self:refreshMotionLibrary()
     end
 
+    function W:setMotionLibTab(tab)
+        if self.motionLibTab==tab then return end
+        self.motionLibTab=tab
+        if self.motionTabBtn then self.motionTabBtn.roomActive=(tab=="motion") end
+        if self.cameraTabBtn then self.cameraTabBtn.roomActive=(tab=="camera") end
+        roomSound("Select")
+        self:refreshMotionLibrary()
+    end
+
     function W:refreshMotionLibrary()
-        local files=GFL2ReadyRoom.motionLibrary()
+        local isCam=self.motionLibTab=="camera"
+        if self.motionTabBtn then self.motionTabBtn.roomActive=not isCam end
+        if self.cameraTabBtn then self.cameraTabBtn.roomActive=isCam end
+        local files=(isCam and GFL2ReadyRoom.cameraLibrary) and GFL2ReadyRoom.cameraLibrary() or GFL2ReadyRoom.motionLibrary()
         local favs=self:loadMotionFavorites()
         local ordered={}
         for i=1,#files do if favs[files[i]] then ordered[#ordered+1]=files[i] end end
         for i=1,#files do if not favs[files[i]] then ordered[#ordered+1]=files[i] end end
         self.motionList:clear()
+        local wanted=isCam and self.cameraSelected or self.motionSelected
         local selected=nil
         for i=1,#ordered do
             local file=ordered[i]
@@ -276,10 +309,11 @@ function M.install(W,ctx)
             local kind=file:sub(1,7)=="sample:" and "MotionExample" or (isLocalMotion(file) and "MotionLocal" or "MotionFolder")
             row.source=tr(kind)
             row.favorite=favs[file]==true
-            if file==self.motionSelected then selected=i end
+            if file==wanted then selected=i end
         end
         self.motionList.selected=selected or (#ordered>0 and 1 or 0)
-        self.motionSelected=ordered[self.motionList.selected]
+        local picked=ordered[self.motionList.selected]
+        if isCam then self.cameraSelected=picked else self.motionSelected=picked end
         self.motionMessage=nil;self:refreshMotionControls()
     end
 
@@ -541,13 +575,30 @@ function M.install(W,ctx)
             self.motionSelectionFile=self.motionSelected
             self.motionSelectedLabel=self.motionSelected and motionDisplayName(self.motionSelected) or nil
         end
-        b.play:setEnable(self.motionSelected~=nil and not self.waiting and GFL2CharacterRuntime.isEnabled(self.player))
+        local enabledChar=not self.waiting and GFL2CharacterRuntime.isEnabled(self.player)
+        b.play:setEnable(self.motionSelected~=nil and enabledChar)
         for _,key in ipairs({"pause","restart","stop","physics","reset"})do b[key]:setEnable(active and not self.waiting)end
         b.reset:setEnable(active and state.physics and not self.waiting)
         b.pause.roomTitle=tr(state.paused and "MotionResume" or "MotionPause")
         b.pause.roomActive=active and state.paused
         b.pause.roomIcon=state.paused and "play" or "pause"
         b.physics.roomTitle=tr(state.physics and "MotionPhysicsOn" or "MotionPhysicsOff")
+        local camName=state.camera or ""
+        local hasCam=camName~=""
+        local camOn=hasCam and state.cameraEnabled==true
+        self.cameraLoadedActive=hasCam
+        if hasCam then
+            self.cameraStatusLabel=motionDisplayName(camName)
+        elseif self.cameraSelected then
+            self.cameraStatusLabel=motionDisplayName(self.cameraSelected).." ("..tr("MotionCameraReady")..")"
+        else
+            self.cameraStatusLabel=tr("MotionCameraNone")
+        end
+        b.cameraLoad:setEnable(self.cameraSelected~=nil and enabledChar)
+        b.cameraToggle:setEnable(hasCam and not self.waiting)
+        b.cameraToggle.roomActive=camOn
+        b.cameraToggle.roomTitle=tr(camOn and "MotionCameraOn" or "MotionCameraOff")
+        b.cameraClear:setEnable(hasCam and not self.waiting)
     end
 
     function W:onMotionCommand(command,value)

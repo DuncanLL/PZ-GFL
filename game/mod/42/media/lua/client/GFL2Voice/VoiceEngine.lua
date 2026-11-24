@@ -5,7 +5,7 @@ require "ISUI/ISEmoteRadialMenu"
 require "ISUI/ISDPadWheels"
 local wrapCaption=require "GFL2Voice/CaptionLayout"
 if GFL2VoiceEngine then return GFL2VoiceEngine end
-GFL2VoiceEngine={version="2.3.0-voice-catalogs",instances={},order={},volumeLevel=50,clipsBySound={}}
+GFL2VoiceEngine={version="2.3.0-voice-catalogs",instances={},order={},volumeLevel=50,clipsBySound={},showSubtitles=true,remoteVoiceEnabled=true,remoteSubtitlesEnabled=true}
 local M=GFL2VoiceEngine
 local DEFAULT_VOICE_VOLUME=50
 local remoteSilentStates=setmetatable({}, {__mode="k"})
@@ -74,6 +74,24 @@ function M.setVolume(player,value)
     end
     return level
 end
+function M.getShowSubtitles() return M.showSubtitles~=false end
+function M.setShowSubtitles(enabled)
+    M.showSubtitles=enabled~=false
+    return M.showSubtitles
+end
+function M.getRemoteVoiceEnabled() return M.remoteVoiceEnabled~=false end
+function M.setRemoteVoiceEnabled(enabled)
+    M.remoteVoiceEnabled=enabled~=false
+    if not M.remoteVoiceEnabled then
+        for remotePlayer in pairs(remoteHandles) do stopRemoteAudio(remotePlayer) end
+    end
+    return M.remoteVoiceEnabled
+end
+function M.getRemoteSubtitlesEnabled() return M.remoteSubtitlesEnabled~=false end
+function M.setRemoteSubtitlesEnabled(enabled)
+    M.remoteSubtitlesEnabled=enabled~=false
+    return M.remoteSubtitlesEnabled
+end
 function M.syncRemote(player,enabled)
     if not player or not player.getDescriptor or GFL2VoiceRouting.isLocalListener(player) then return end
     if enabled then
@@ -93,6 +111,7 @@ function M.syncRemote(player,enabled)
     end
 end
 function M.playRemote(player,sound,kind)
+    if M.remoteVoiceEnabled==false then return false end
     if not player or GFL2VoiceRouting.isLocalListener(player) or (player.isDead and player:isDead()) then return false end
     if type(sound)~="string" or not sound:match("^GFL2Pmx[%w_]+$") then return false end
     local listener=getSpecificPlayer and getSpecificPlayer(0)
@@ -112,7 +131,7 @@ function M.playRemote(player,sound,kind)
     local emitter=player.getEmitter and player:getEmitter()
     if emitter and emitter.setVolume then emitter:setVolume(handle,volume/50.0) end
     remoteHandles[player]=handle
-    if kind=="shout" or kind=="sneakShout" or kind=="manual" then
+    if M.remoteSubtitlesEnabled~=false and (kind=="shout" or kind=="sneakShout" or kind=="manual") then
         local meta=M.clipsBySound[sound]
         local text=meta and subtitle(meta.clip)
         if text and text~="" and player.addLineChatElement then
@@ -231,7 +250,7 @@ local function play(player,state,candidate,now,allowAsleep,alreadyEligible)
     state.startedAt=now
     state.currentKind=candidate.kind
     Core.commit(state,candidate,now,clip.duration,cfg)
-    local text=subtitle(clip)
+    local text=M.showSubtitles~=false and subtitle(clip) or nil
     if text and text~="" then caption(player,state,text,now) end
     if isClient and isClient() then
         local client=getMultiplayerClient()

@@ -4,11 +4,11 @@ import java.util.*;
 
 /** Owned preview selection through the actual Native inheritance/configuration path. */
 public final class Gfl2NativePackSelection {
-    public record DisplaySettings(float contrast,float saturation,float vibrance,float exposure,float strength,boolean filmic,float surfaceDetail,float skinGloss,float outlineWidth){}
+    public record DisplaySettings(float contrast,float saturation,float vibrance,float exposure,float strength,boolean filmic,float surfaceDetail,float skinGloss,float outlineWidth,float shadowContrast){}
     private static ShaderPacks.Active displayPack;
     private static float[] displayLive;
     private static DisplaySettings displaySettings;
-    private static int contrastIndex,saturationIndex,vibranceIndex,exposureIndex,strengthIndex,detailIndex,glossIndex,outlineIndex;
+    private static int contrastIndex,saturationIndex,vibranceIndex,exposureIndex,strengthIndex,detailIndex,glossIndex,outlineIndex,shadowContrastIndex;
     private static boolean filmic, somberPost;
     public static boolean somberActorPost(){return somberPost && displayPack == ShaderPacks.drawn();}
     public static boolean reflectionProbeEnabled(){
@@ -20,8 +20,8 @@ public final class Gfl2NativePackSelection {
     public static DisplaySettings displaySettings(){
         ShaderPacks.Active pack=ShaderPacks.drawn();float[] live=ShaderPacks.live();if(pack==null||live==null||ShaderPacks.active()!=pack)return null;
         if(displayPack!=pack){
-            contrastIndex=saturationIndex=vibranceIndex=exposureIndex=strengthIndex=detailIndex=glossIndex=outlineIndex=-1;int at=0;
-            for(PackOption option:pack.pack.options)if(option.kind==PackOption.Kind.NUMBER){switch(option.id){case "contrast"->contrastIndex=at;case "saturation"->saturationIndex=at;case "vibrance"->vibranceIndex=at;case "exposure"->exposureIndex=at;case "characterDisplayStrength"->strengthIndex=at;case "characterSurfaceDetail"->detailIndex=at;case "characterSkinGloss"->glossIndex=at;case "characterOutlineWidth"->outlineIndex=at;}at++;}
+            contrastIndex=saturationIndex=vibranceIndex=exposureIndex=strengthIndex=detailIndex=glossIndex=outlineIndex=shadowContrastIndex=-1;int at=0;
+            for(PackOption option:pack.pack.options)if(option.kind==PackOption.Kind.NUMBER){switch(option.id){case "contrast"->contrastIndex=at;case "saturation"->saturationIndex=at;case "vibrance"->vibranceIndex=at;case "exposure"->exposureIndex=at;case "characterDisplayStrength"->strengthIndex=at;case "characterSurfaceDetail"->detailIndex=at;case "characterSkinGloss"->glossIndex=at;case "characterOutlineWidth"->outlineIndex=at;case "characterShadowContrast"->shadowContrastIndex=at;}at++;}
             ShaderPack base = pack.pack;
             while (base != null && !base.builtIn) base = base.base;
             somberPost = base != null && base.id.equals("somber") && strengthIndex >= 0
@@ -29,7 +29,7 @@ public final class Gfl2NativePackSelection {
             filmic = somberPost || (base != null && base.id.equals("default") && FILMIC.matcher(pack.defines).find());
             displayPack=pack;displayLive=null;
         }
-        if(displayLive!=live){displayLive=live;displaySettings=contrastIndex<0||saturationIndex<0||vibranceIndex<0||exposureIndex<0?null:new DisplaySettings(live[contrastIndex],live[saturationIndex],live[vibranceIndex],live[exposureIndex],strengthIndex<0?1:live[strengthIndex],filmic,detailIndex<0?0:live[detailIndex],glossIndex<0?0:live[glossIndex],outlineIndex<0?1:live[outlineIndex]);}
+        if(displayLive!=live){displayLive=live;displaySettings=contrastIndex<0||saturationIndex<0||vibranceIndex<0||exposureIndex<0?null:new DisplaySettings(live[contrastIndex],live[saturationIndex],live[vibranceIndex],live[exposureIndex],strengthIndex<0?1:live[strengthIndex],filmic,detailIndex<0?0:live[detailIndex],glossIndex<0?0:live[glossIndex],outlineIndex<0?1:live[outlineIndex],shadowContrastIndex<0?1:live[shadowContrastIndex]);}
         return displaySettings;
     }
     public static void clearDisplaySettings(){displayPack=null;displayLive=null;displaySettings=null;}

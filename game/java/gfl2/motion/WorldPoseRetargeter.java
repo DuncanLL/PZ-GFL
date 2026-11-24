@@ -41,6 +41,7 @@ public final class WorldPoseRetargeter {
     private final ModelPhysics physics;
     private ForwardFingerPose fingerPreview;
     private float fingerPreviewWeight;
+    private boolean fingerPoseDirty;
 
     public WorldPoseRetargeter(NativeFunc api, long handle, int[] sourceBones,
             int[] targetBones, int[] parents, float[] initialPositions,
@@ -241,8 +242,15 @@ public final class WorldPoseRetargeter {
     }
 
     public synchronized void configureFingerPreview(int[] roots,int[] children,float[] fractions) {
-        fingerPreview=roots.length==0?null:new ForwardFingerPose(targetBones,parents,roots,children,fractions,positions,palmTargetKnuckles);
+        configureFingerPreview(roots,children,fractions,new int[0],new int[0],new int[0],new int[0]);
+    }
+    public synchronized void configureFingerPreview(int[] roots,int[] children,float[] fractions,
+            int[] thumbRoots,int[] thumbMids,int[] thumbTips,int[] thumbSides) {
+        fingerPreview=roots.length==0&&thumbRoots.length==0?null:new ForwardFingerPose(
+            targetBones,parents,roots,children,fractions,positions,palmTargetKnuckles,
+            thumbRoots,thumbMids,thumbTips,thumbSides);
         fingerPreviewWeight=0;
+        fingerPoseDirty=false;
     }
     public synchronized void setFingerPreviewWeight(float weight) {
         if(!Float.isFinite(weight)||weight<0||weight>1)throw new IllegalArgumentException("Invalid finger preview weight");
@@ -254,8 +262,11 @@ public final class WorldPoseRetargeter {
     }
 
     private void finishPose(float seconds,float leftCurl,float rightCurl) {
-        if(fingerPreview!=null&&(fingerPreviewWeight>0||leftCurl!=0||rightCurl!=0))
+        boolean active=fingerPreviewWeight>0||leftCurl!=0||rightCurl!=0;
+        if(fingerPreview!=null&&(active||fingerPoseDirty)){
             fingerPreview.publish(api,handle,qps,neutralQps,fingerPreviewWeight,leftCurl,rightCurl);
+            fingerPoseDirty=active;
+        }
         physics.finish(seconds);
     }
 

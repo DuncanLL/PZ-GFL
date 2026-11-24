@@ -94,7 +94,7 @@
     "ContextMenu_GFL2_TidalNocturneDescription": "ローレライ専用にカスタマイズされた対物ライフル。先進技術で再鍛造された銃身と次世代の静音マズルブレーキを備え、極めて高い遠距離精度を保ちながら銃声とマズルフラッシュを最小限に抑え、闇夜から静かに標的を撃ち抜く。",
     "ContextMenu_GFL2_Daydream": "白昼夢",
     "ContextMenu_GFL2_DaydreamDescription": "ミシュティに支給された高性能アサルトライフル。G11をベースに威力を高め、彼女の瞬間火力で敵の白昼夢を打ち砕く。",
-    "ContextMenu_GFL2_CharacterSettingsTip": "ボイス音量・胸部物理・衣装/髪物理を調整",
+    "ContextMenu_GFL2_CharacterSettingsTip": "ボイス・字幕・物理演算・マルチプレイ表示を設定します",
     "ContextMenu_GFL2_ClothHairPhysicsOn": "衣装・髪物理がオンになっています",
     "ContextMenu_GFL2_ClothHairPhysicsOff": "衣装・髪物理がオフになっています（負荷なし）",
     "ContextMenu_GFL2_ChestPhysicsTip": "0で完全オフ（負荷なし）、100で標準効果",
@@ -104,5 +104,18 @@
     "ContextMenu_GFL2_SilverWingedPistis": "シルバー・ピスティス",
     "ContextMenu_GFL2_SilverWingedPistisDescription": "イーグレッタに支給された高性能ハンドガン。デザートイーグルをベースに破壊力を高めつつ反動を抑え、危険に立ち向かう勇気を与えてくれる。鷹の鳴き声のように鋭い銃火が、真実を追う長い旅路を照らす。",
     "ContextMenu_GFL2_Sibyl": "シビュラ",
-    "ContextMenu_GFL2_SibylDescription": "ネメシスに支給されたカスタム狙撃銃。OM 50 ネメシスをベースに、超長距離での絶対的な精度と安定性を大幅に高めている――今度こそ、真理へと手が届くのかもしれない。"
+    "ContextMenu_GFL2_SibylDescription": "ネメシスに支給されたカスタム狙撃銃。OM 50 ネメシスをベースに、超長距離での絶対的な精度と安定性を大幅に高めている――今度こそ、真理へと手が届くのかもしれない。",
+    "ContextMenu_GFL2_SubtitlesOn": "キャラクター発言時に頭上字幕を表示します",
+    "ContextMenu_GFL2_SubtitlesOff": "頭上字幕を非表示にします（音声は維持）",
+    "ContextMenu_GFL2_RemoteModelsOn": "マルチプレイで他プレイヤーのドルフロ2モデルを表示します",
+    "ContextMenu_GFL2_RemoteModelsOff": "他プレイヤーをバニラ表示に戻し、大規模鯖のFPSを改善します",
+    "ContextMenu_GFL2_RemoteChestPhysicsTip": "他プレイヤーの胸物理の強度（0でオフ・軽量化）",
+    "ContextMenu_GFL2_RemoteClothHairOn": "他プレイヤーの衣装・髪物理がオンです",
+    "ContextMenu_GFL2_RemoteClothHairOff": "他プレイヤーの衣装・髪物理がオフです（軽量化のため既定オフ）",
+    "ContextMenu_GFL2_RemoteVoiceOn": "周囲の味方の3D日本語ボイスを再生します",
+    "ContextMenu_GFL2_RemoteVoiceOff": "他プレイヤーのボイスと字幕をミュートします",
+    "ContextMenu_GFL2_RemoteSubtitlesOn": "味方の掛け声時に頭上字幕を表示します",
+    "ContextMenu_GFL2_RemoteSubtitlesOff": "味方の頭上字幕を非表示にします（音声は維持）",
+    "ContextMenu_GFL2_StudioPreviewOn": "Native / Somber シェーダー有効時、整備室とインベントリのキャラプレビューにも原材質描画を適用します（未使用時はVRAMを自動解放）",
+    "ContextMenu_GFL2_StudioPreviewOff": "UIプレビューを軽量描画に戻し、プレビュー用VRAMを即時解放します"
 }

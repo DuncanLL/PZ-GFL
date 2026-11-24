@@ -1,0 +1,13 @@
+{
+    "Sandbox_GFL2Exilium": "僵毁少女前线",
+    "Sandbox_GFL2Exilium_AllowHoldGrant": "允许长按加号免费补充资源",
+    "Sandbox_GFL2Exilium_AllowHoldGrant_tooltip": "开启时，单人模式下长按整备室顶栏信用币或新装许可的「+」号可免费获取测试资源或临时解锁衣装；关闭可防止自由刷资源。",
+    "Sandbox_GFL2Exilium_FreeUnlockAll": "全角色与衣装免费解锁",
+    "Sandbox_GFL2Exilium_FreeUnlockAll_tooltip": "开启后无需抽卡或购买，整备室内所有已启用的角色、衣装与专武（若允许专武）均直接解锁可用；适合休闲联机服或拍照体验。",
+    "Sandbox_GFL2Exilium_CreditsPerCash": "钞票兑换信用币汇率",
+    "Sandbox_GFL2Exilium_CreditsPerCash_tooltip": "整备室中每 1 张游戏钞票可兑换的信用币数量（默认 300，范围 10–5000）。",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons": "允许从整备室获取专武",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons_tooltip": "关闭后整备室将禁用专武抽取、领取与补领，仅保留角色外观与日语语音，适合冷兵器或自定义枪械平衡服务器。",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines": "允许从整备室购买弹药与领取弹匣",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines_tooltip": "关闭后将禁止通过整备室购买弹药箱与领取专武弹匣，玩家需在地图中自行搜刮弹药。"
+}

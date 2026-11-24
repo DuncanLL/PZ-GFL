@@ -16,6 +16,7 @@ public final class Gfl2NativeRuntime {
     private static ShaderPacks.Active selected,rendererPack;
     private static Gfl2PackData prepared,drawnData;
     private static Gfl2NativeSourceRenderer renderer,frameRenderer;
+    private static Gfl2StudioPreviewRenderer studioPreview;
     private static boolean diagnostics;
     private static boolean irisSelected;
     private record CatalogRequest(String bootstrap,Gfl2PackData.CatalogInputs inputs){}
@@ -90,10 +91,14 @@ public final class Gfl2NativeRuntime {
             }
         }
         try(Gfl2NativeSourceScope scope=new Gfl2NativeSourceScope(Gfl2GlScope.Phase.SETUP)){
-            if(renderer!=null&&(drawnData!=prepared||rendererPack!=selected||!Gfl2NativeRegistry.active())){renderer.close();renderer=null;rendererPack=null;drawnData=null;released++;}
+            if(renderer!=null&&(drawnData!=prepared||rendererPack!=selected||!Gfl2NativeRegistry.active())){
+                closeStudioPreview();
+                renderer.close();renderer=null;rendererPack=null;drawnData=null;released++;
+            }
             if(prepared!=null&&renderer==null){
                 try{
                     renderer=new Gfl2NativeSourceRenderer(prepared);drawnData=prepared;rendererPack=selected;created++;if(diagnostics)renderer.diagnostics();
+                    attachStudioPreview(prepared);
                 }catch(IOException|IllegalArgumentException|JSONException e){
                     System.err.println("[GFL2 Native] Character resources unavailable: "+e);
                     Gfl2NativeRegistry.detach(prepared);prepared=null;catalog=null;
@@ -101,9 +106,24 @@ public final class Gfl2NativeRuntime {
             }
         }catch(Exception e){throw new IllegalStateException("Native GF2 renderer preparation",e);}
     }
+    private static void attachStudioPreview(Gfl2PackData data){
+        closeStudioPreview();
+        try{
+            studioPreview=new Gfl2StudioPreviewRenderer(data);
+            gfl2.runtime.ReadyRoomPreview.registerStudioRenderer(studioPreview.callback(),studioPreview.releaseCallback());
+        }catch(Throwable failure){
+            System.err.println("[GFL2 Native] Studio preview hook unavailable: "+failure);
+            closeStudioPreview();
+        }
+    }
+    private static void closeStudioPreview(){
+        try{gfl2.runtime.ReadyRoomPreview.registerStudioRenderer(null,null);}catch(Throwable ignored){}
+        if(studioPreview!=null){try{studioPreview.close();}finally{studioPreview=null;}}
+    }
     public static void beginNativeFrame(){
         frameRenderer=renderer;
         Gfl2NativeRegistry.frame(frameRenderer==null?null:drawnData);
+        if(studioPreview!=null)studioPreview.tickMaintenance();
     }
     public static void beforeLighting(FrameContext frame){
         beforeLighting(WorldRenderer.models,frame);
@@ -130,6 +150,7 @@ public final class Gfl2NativeRuntime {
     public static synchronized String lifecycle(){return new JSONObject().put("created",created).put("released",released).put("renderer_active",renderer!=null).put("data_active",Gfl2NativeRegistry.active()).put("catalog_loading",prepared==null&&catalog!=null).put("drawn_generation",selected==null?-1:selected.generation).toString();}
     public static synchronized void close(){
         frameRenderer=null;Gfl2NativeRegistry.frame(null);
+        closeStudioPreview();
         try{if(renderer!=null){renderer.close();released++;}}catch(Exception e){throw new IllegalStateException("Native GF2 release",e);}finally{renderer=null;rendererPack=null;drawnData=null;if(prepared!=null)Gfl2NativeRegistry.detach(prepared);prepared=null;selected=null;cancelCatalog();}
     }
     private Gfl2NativeRuntime(){}

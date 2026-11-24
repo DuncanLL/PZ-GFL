@@ -37,6 +37,8 @@ public class Main {
     private static NativeFunc api;
     private static OzzGrip grip;
     private static Path directory;
+    private static volatile boolean remoteBodyPhysicsEnabled=false;
+    private static volatile int remoteChestStrength=0;
 
     public static void main(String[] args) {
         // ZombieBuddy retransforms loaded game classes when the package is dispatched.
@@ -154,7 +156,12 @@ public class Main {
                 }
                 nativeRuntime();next=new ModelSession(api,grip,request.entry());
                 next.applySettings(settingsFor(next,request.settings()),false);
-                if(request.remote()){next.model.setPhysicsEnabled(false);next.model.setChestPhysicsEnabled(false);}
+                if(request.remote()){
+                    next.model.setPhysicsEnabled(remoteBodyPhysicsEnabled);
+                    int rChest=remoteChestStrength;
+                    next.model.setChestPhysicsEnabled(rChest>0);
+                    next.model.setChestStrength(rChest);
+                }
                 stage(actor,next);
             } catch(Throwable e){if(next!=null)next.retire();switchFailures.add(actor);error(e);}
             refreshPoseOwners();
@@ -222,6 +229,8 @@ public class Main {
     public static synchronized boolean hasChestPhysics(IsoGameCharacter actor) {
         ModelSession s=active.get(actor);return s!=null&&s.model.hasChestPhysics();
     }
+    public static boolean studioPreviewEnabled() { return ReadyRoomPreview.studioPreviewEnabled(); }
+    public static void setStudioPreviewEnabled(boolean enabled) { ReadyRoomPreview.setStudioPreviewEnabled(enabled); }
     public static synchronized boolean chestPhysicsEnabled(IsoGameCharacter actor) {
         ModelSession s=active.get(actor);return s!=null&&s.model.chestPhysicsEnabled();
     }
@@ -241,6 +250,50 @@ public class Main {
             if(!s.model.hasChestPhysics())return UiNotices.text("ChestUnavailable");
             s.model.setChestPhysicsEnabled(enabled);return "";
         }catch(Throwable e){error(e);return lastError;}
+    }
+    private static boolean isRemoteActor(IsoGameCharacter actor) {
+        return actor instanceof IsoPlayer p && !p.isLocalPlayer();
+    }
+    public static boolean remoteBodyPhysicsEnabled() { return remoteBodyPhysicsEnabled; }
+    public static synchronized void setRemoteBodyPhysics(boolean enabled) {
+        remoteBodyPhysicsEnabled=enabled;
+        for(var entry:active.entrySet()) if(isRemoteActor(entry.getKey())) entry.getValue().model.setPhysicsEnabled(enabled);
+        for(var entry:preparing.entrySet()) if(isRemoteActor(entry.getKey())) entry.getValue().model.setPhysicsEnabled(enabled);
+    }
+    public static int remoteChestStrength() { return remoteChestStrength; }
+    public static synchronized void setRemoteChestStrength(int strength) {
+        int clamped=Math.max(0,Math.min(100,strength));
+        remoteChestStrength=clamped;
+        boolean on=clamped>0;
+        for(var entry:active.entrySet()) if(isRemoteActor(entry.getKey())){
+            entry.getValue().model.setChestPhysicsEnabled(on);
+            entry.getValue().model.setChestStrength(clamped);
+        }
+        for(var entry:preparing.entrySet()) if(isRemoteActor(entry.getKey())){
+            entry.getValue().model.setChestPhysicsEnabled(on);
+            entry.getValue().model.setChestStrength(clamped);
+        }
+    }
+    private static Path clientSettingsFile() {
+        var fs=ZomboidFileSystem.instance;
+        String cache=fs==null?null:fs.getCacheDir();
+        if(cache==null||cache.isBlank())return null;
+        return Path.of(cache,MOD_ID,"client-settings.json").toAbsolutePath().normalize();
+    }
+    public static synchronized String readClientSettings() {
+        try {
+            Path file=clientSettingsFile();
+            return file!=null&&Files.isRegularFile(file)?Files.readString(file):"";
+        } catch(Throwable e){return "";}
+    }
+    public static synchronized boolean writeClientSettings(String content) {
+        try {
+            Path file=clientSettingsFile();
+            if(file==null||content==null)return false;
+            Files.createDirectories(file.getParent());
+            Files.writeString(file,content);
+            return true;
+        } catch(Throwable e){error(e);return false;}
     }
     public static synchronized String status() { return lastError; }
     public static synchronized String modelId(IsoGameCharacter actor){ModelSession s=active.get(actor);return s==null?"":s.entry.id();}
@@ -454,9 +507,11 @@ public class Main {
         } catch (Throwable e) { if(next!=null)next.retire();error(e);return lastError; }
     }
     public static synchronized void disable(IsoGameCharacter actor) {
+        if(actor instanceof IsoPlayer p&&p.isLocalPlayer())VmdCameraController.releaseIfHeld();
         pending.remove(actor);cancelPreparation(actor);switchFailures.remove(actor);ModelSession old=active.remove(actor);if(old!=null) old.retire();refreshPoseOwners();
     }
     public static synchronized void clear() {
+        VmdCameraController.releaseIfHeld();
         GripCalibration.flush();
         for(ModelSession session:preparing.values())session.retire();preparing.clear();
         for(ModelSession session:active.values()) session.retire();active.clear();pending.clear();switchFailures.clear();refreshPoseOwners();

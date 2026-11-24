@@ -1,5 +1,36 @@
 local weaponSkins=require "GFL2WeaponSkins"
 local E={cost={targeted=150,outfit=120},creditsPerCash=300}
+
+local function sandbox()
+    return SandboxVars and SandboxVars.GFL2Exilium or nil
+end
+
+function E.allowHoldGrant()
+    local sv=sandbox()
+    return not (sv and sv.AllowHoldGrant==false)
+end
+
+function E.freeUnlockAll()
+    local sv=sandbox()
+    return sv~=nil and sv.FreeUnlockAll==true
+end
+
+function E.creditsRate()
+    local sv=sandbox()
+    local n=sv and tonumber(sv.CreditsPerCash)
+    if n and n>=10 and n<=5000 then return math.floor(n) end
+    return E.creditsPerCash
+end
+
+function E.allowSignatureWeapons()
+    local sv=sandbox()
+    return not (sv and sv.AllowSignatureWeapons==false)
+end
+
+function E.allowAmmoAndMagazines()
+    local sv=sandbox()
+    return not (sv and sv.AllowAmmoAndMagazines==false)
+end
 local gomAmmoBoxes={
     ["Base.556Box"]="MarzGuns.556x45_Box",
     ["Base.308Box"]="MarzGuns.308_Box",
@@ -158,7 +189,7 @@ function E.buy(player,key,count)
         local items=cash(player)
         if count>items:size() then return false end
         local notes={}
-        local total=E.balance(player,"credits")+count*E.creditsPerCash
+        local total=E.balance(player,"credits")+count*E.creditsRate()
         if total>=9007199254740992 then return false end
         for i=0,count-1 do
             local note=items:get(i)
@@ -213,7 +244,7 @@ function E.characterChance(nextPull)
 end
 
 function E.characterUnlocked(player,key)
-    return recordingUnlocks[player]~=nil or recruitment(player).owned[key]==true
+    return E.freeUnlockAll() or recordingUnlocks[player]~=nil or recruitment(player).owned[key]==true
 end
 
 function E.characterMisses(player)
@@ -257,7 +288,7 @@ local function outfits(player)
 end
 
 function E.outfitOwned(player,id)
-    return recordingUnlocks[player]~=nil or outfits(player)[id]==true
+    return E.freeUnlockAll() or recordingUnlocks[player]~=nil or outfits(player)[id]==true
 end
 
 function E.outfitMisses(player,id)
@@ -297,12 +328,14 @@ function E.drawOutfit(player,id,count,roll)
 end
 
 function E.grantTestCredits(player)
+    if not E.allowHoldGrant() then return nil end
     if (isClient and isClient()) or (isServer and isServer()) then return end
     wallet(player).credits=math.min(9007199254740991,E.balance(player,"credits")+50000)
     return true
 end
 
 function E.toggleRecordingUnlocks(player)
+    if not E.allowHoldGrant() then return nil end
     if hasServerWallet() or (isClient and isClient()) or (isServer and isServer()) then return nil end
     local enabled=recordingUnlocks[player]==nil
     recordingUnlocks[player]=enabled and {} or nil
@@ -332,12 +365,28 @@ function E.weaponProgress(player,id)
     local room=weaponWallet(player)
     local owned=(room.signatureWeapons and room.signatureWeapons[id])
         or (id==legacyWeapon and room.signatureWeapon)
+    if E.freeUnlockAll() and E.allowSignatureWeapons() and not (owned and owned.acquired) then
+        return {acquired=true,skin=owned and owned.skin or nil,claimed=owned and owned.claimed or nil}
+    end
     local temporary=recordingUnlocks[player]
     if temporary and not (owned and owned.acquired) then
         if not temporary[id] then temporary[id]={acquired=true} end
         return temporary[id]
     end
     return owned or {}
+end
+
+local function writableWeaponProgress(player,id)
+    local room=weaponWallet(player)
+    local owned=(room.signatureWeapons and room.signatureWeapons[id])
+        or (id==legacyWeapon and room.signatureWeapon)
+    if owned and owned.acquired then return owned end
+    if E.freeUnlockAll() and E.allowSignatureWeapons() then
+        room.signatureWeapons=room.signatureWeapons or {}
+        if not room.signatureWeapons[id] then room.signatureWeapons[id]={acquired=false} end
+        return room.signatureWeapons[id]
+    end
+    return E.weaponProgress(player,id)
 end
 
 function E.weaponMisses(player)
@@ -353,6 +402,7 @@ function E.weaponChance(pull)
 end
 
 function E.drawWeapon(player,weapon,count,roll)
+    if not E.allowSignatureWeapons() then return "unavailable" end
     if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     if E.weaponProgress(player,weapon.id).acquired or not E.characterUnlocked(player,weapon.character) then return "unavailable" end
     local tickets=E.balance(player,"targeted")
@@ -374,6 +424,7 @@ function E.hasWeaponInInventory(player,id)
 end
 
 function E.claimWeapon(player,weapon)
+    if not E.allowSignatureWeapons() then return "unavailable" end
     if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     local progress=E.weaponProgress(player,weapon.id)
     if not progress.acquired then return "unavailable" end
@@ -383,17 +434,18 @@ function E.claimWeapon(player,weapon)
     if not item then return "unavailable" end
     if weapon.startsWithMagazine then item:setContainsClip(true) end
     item:getModData().GFL2WeaponSkin=weaponSkins.model(weapon.id,progress.skin)
-    progress.claimed=true
+    writableWeaponProgress(player,weapon.id).claimed=true
     if isServer and isServer() then sendAddItemToContainer(inventory,item) end
     return "ok"
 end
 
 function E.setWeaponSkin(player,weapon,skin)
+    if not E.allowSignatureWeapons() then return "unavailable" end
     if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     local progress=E.weaponProgress(player,weapon.id)
     local model=weaponSkins.model(weapon.id,skin)
     if not progress.acquired or (skin~="" and not model) then return "unavailable" end
-    progress.skin=skin~="" and skin or nil
+    writableWeaponProgress(player,weapon.id).skin=skin~="" and skin or nil
     local items=player:getInventory():getAllTypeRecurse(weapon.id)
     local server=isServer and isServer()
     local primary,secondary,heldChanged
@@ -422,6 +474,7 @@ function E.weaponMagazine(weapon)
 end
 
 function E.claimMagazine(player,weapon)
+    if not E.allowAmmoAndMagazines() then return "unavailable" end
     if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     local magazine=E.weaponMagazine(weapon)
     if not magazine or not E.weaponProgress(player,weapon.id).acquired then return "unavailable" end
@@ -475,6 +528,7 @@ function E.weaponAmmo(weapon)
 end
 
 function E.buyAmmo(player,weapon,count)
+    if not E.allowAmmoAndMagazines() then return "unavailable" end
     if isClient and isClient() and not hasServerWallet() then return "unavailable" end
     if type(count)~="number" or count<1 or count%1~=0 or count>1000 then return "unavailable" end
     if not weapon or not E.weaponProgress(player,weapon.id).acquired then return "unavailable" end

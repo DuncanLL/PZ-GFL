@@ -114,6 +114,23 @@ function M.install(W,ctx)
     end
 
     function W:buildSettingsTab(y,width,editable)
+        local function addToggle(titleText,active,tipOn,tipOff,onToggle)
+            local btn=button(self.content,0,y,width,titleText,self,function(w,b)
+                local nextOn=not b.roomActive
+                if onToggle(w,nextOn)~=false then
+                    b.roomActive=nextOn
+                    b:setTooltip(tipOn and getText(nextOn and tipOn or tipOff) or nil)
+                end
+            end)
+            btn:setHeight(36)
+            btn.roomLook="settingsToggle"
+            btn.roomActive=not not active
+            if tipOn then btn:setTooltip(getText(active and tipOn or tipOff)) end
+            table.insert(self.widgets,btn)
+            y=y+44
+            return btn
+        end
+
         y=self:addSettingsSection(tr("SettingsAudio"),y,width)
         local voiceVal=self.actions.getVoiceVolume and self.actions.getVoiceVolume(self.player) or 50
         self:addLabel(tr("VoiceVolume"),y,18,width-82)
@@ -133,11 +150,21 @@ function M.install(W,ctx)
             textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
         end
         voiceSlider.roomSlider=true;self.content:addChild(voiceSlider);table.insert(self.widgets,voiceSlider)
-        y=y+60
+        y=y+58
+
+        local subOn=not self.actions.getShowSubtitles or self.actions.getShowSubtitles()
+        addToggle(tr("VoiceSubtitles"),subOn,"ContextMenu_GFL2_SubtitlesOn","ContextMenu_GFL2_SubtitlesOff",function(w,nextOn)
+            if w.actions.setShowSubtitles then w.actions.setShowSubtitles(nextOn) end
+        end)
+        local studioOn=not self.actions.getStudioPreview or self.actions.getStudioPreview()
+        addToggle(tr("StudioPreview"),studioOn,"ContextMenu_GFL2_StudioPreviewOn","ContextMenu_GFL2_StudioPreviewOff",function(w,nextOn)
+            if w.actions.setStudioPreview then w.actions.setStudioPreview(nextOn) end
+        end)
+        y=y+6
 
         y=self:addSettingsSection(tr("SettingsPhysics"),y,width)
         if not editable then
-            self:addLabel(self:toolMessage(),y,17,width);y=y+36
+            self:addLabel(self:toolMessage(),y,16,width);y=y+34
         else
             local hasChest=GFL2CharacterRuntime.hasChestPhysics and GFL2CharacterRuntime.hasChestPhysics(self.player)
             if hasChest then
@@ -159,30 +186,74 @@ function M.install(W,ctx)
                     textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
                 end
                 chestSlider.roomSlider=true;self.content:addChild(chestSlider);table.insert(self.widgets,chestSlider)
-                y=y+58
+                y=y+56
             else
-                self:addLabel(tr("ChestPhysics"),y,18,width);y=y+26
-                self:addLabel(tr("RoomChestUnavailable"),y,15,width);y=y+28
+                self:addLabel(tr("ChestPhysics"),y,18,width);y=y+24
+                self:addLabel(tr("RoomChestUnavailable"),y,15,width);y=y+26
             end
 
-            local physicsOn=GFL2CharacterRuntime.modelPhysicsEnabled(self.player)
-            local clothBtn=button(self.content,0,y,width,tr("ClothHairPhysics"),self,function(w,btn)
-                local nextOn=not GFL2CharacterRuntime.modelPhysicsEnabled(w.player)
-                if w.actions.bodyPhysics(w.player,nextOn) then
-                    btn.roomActive=nextOn
-                    btn:setTooltip(getText(nextOn and "ContextMenu_GFL2_ClothHairPhysicsOn" or "ContextMenu_GFL2_ClothHairPhysicsOff"))
-                end
+            local physicsOn=GFL2CharacterRuntime.modelPhysicsEnabled and GFL2CharacterRuntime.modelPhysicsEnabled(self.player) or false
+            addToggle(tr("ClothHairPhysics"),physicsOn,"ContextMenu_GFL2_ClothHairPhysicsOn","ContextMenu_GFL2_ClothHairPhysicsOff",function(w,nextOn)
+                return w.actions.bodyPhysics(w.player,nextOn)
             end)
-            clothBtn:setHeight(38)
-            clothBtn.roomLook="settingsToggle"
-            clothBtn.roomActive=not not physicsOn
-            clothBtn:setTooltip(getText(physicsOn and "ContextMenu_GFL2_ClothHairPhysicsOn" or "ContextMenu_GFL2_ClothHairPhysicsOff"))
-            table.insert(self.widgets,clothBtn)
-            y=y+54
         end
 
+        if self.multiplayerSession then
+            y=y+6
+            y=self:addSettingsSection(tr("SettingsMultiplayer"),y,width)
+            local remoteModelsOn=not self.actions.getShowRemoteModels or self.actions.getShowRemoteModels()
+            addToggle(tr("RemoteModels"),remoteModelsOn,"ContextMenu_GFL2_RemoteModelsOn","ContextMenu_GFL2_RemoteModelsOff",function(w,nextOn)
+                if w.actions.setShowRemoteModels then w.actions.setShowRemoteModels(nextOn) end
+                w:refreshControls(true)
+            end)
+            if remoteModelsOn then
+                local rChestVal=self.actions.getRemoteChestStrength and self.actions.getRemoteChestStrength() or 0
+                self:addLabel(tr("RemoteChestPhysics"),y,18,width-82)
+                local rChestSlider=ISSliderPanel:new(5,y+25,width-10,20,self,function(w,value)
+                    if w.actions.setRemoteChestStrength then w.actions.setRemoteChestStrength(w.player,value,false) end
+                end)
+                rChestSlider:initialise();rChestSlider:instantiate();rChestSlider:setDoButtons(false)
+                rChestSlider:setValues(0,100,1,10,true);rChestSlider:setCurrentValue(rChestVal,true)
+                if styleSlider then styleSlider(rChestSlider,"amber") end
+                attachSliderTooltip(rChestSlider,getText("ContextMenu_GFL2_RemoteChestPhysicsTip"))
+                local renderRChest=rChestSlider.render
+                rChestSlider.render=function(s)
+                    renderRChest(s)
+                    local v=math.floor(s.currentValue+.5)
+                    local txt=v<=0 and tr("ChestOff") or string.format("%d%%",v)
+                    local r,g,b=v<=0 and .78 or 1,v<=0 and .82 or .78,v<=0 and .84 or .34
+                    textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
+                end
+                rChestSlider.roomSlider=true;self.content:addChild(rChestSlider);table.insert(self.widgets,rChestSlider)
+                y=y+56
+
+                local rPhysOn=self.actions.getRemoteBodyPhysics and self.actions.getRemoteBodyPhysics()
+                addToggle(tr("RemoteClothHairPhysics"),rPhysOn,"ContextMenu_GFL2_RemoteClothHairOn","ContextMenu_GFL2_RemoteClothHairOff",function(w,nextOn)
+                    if w.actions.setRemoteBodyPhysics then w.actions.setRemoteBodyPhysics(nextOn) end
+                end)
+            end
+            local rVoiceOn=not self.actions.getRemoteVoiceEnabled or self.actions.getRemoteVoiceEnabled()
+            addToggle(tr("RemoteVoice"),rVoiceOn,"ContextMenu_GFL2_RemoteVoiceOn","ContextMenu_GFL2_RemoteVoiceOff",function(w,nextOn)
+                if w.actions.setRemoteVoiceEnabled then w.actions.setRemoteVoiceEnabled(nextOn) end
+                w:refreshControls(true)
+            end)
+            if rVoiceOn then
+                local rSubOn=not self.actions.getRemoteSubtitlesEnabled or self.actions.getRemoteSubtitlesEnabled()
+                addToggle(tr("RemoteSubtitles"),rSubOn,"ContextMenu_GFL2_RemoteSubtitlesOn","ContextMenu_GFL2_RemoteSubtitlesOff",function(w,nextOn)
+                    if w.actions.setRemoteSubtitlesEnabled then w.actions.setRemoteSubtitlesEnabled(nextOn) end
+                end)
+            end
+            local hint=ISPanel:new(0,y,width,34);hint:initialise();hint.background=false
+            hint.prerender=function(s)label(s,tr("SettingsSandboxHint"),4,2,14,s.width-8,.58,.68,.72)end
+            self.content:addChild(hint);table.insert(self.widgets,hint)
+            y=y+36
+        end
+
+        y=y+4
         local resetBtn=button(self.content,0,y,width,tr("SettingsReset"),self,function(w)
             if w.actions.setVoiceVolume then w.actions.setVoiceVolume(w.player,50,true) end
+            if w.actions.setShowSubtitles then w.actions.setShowSubtitles(true) end
+            if w.actions.setStudioPreview then w.actions.setStudioPreview(true) end
             if w:canEditCurrent() then
                 if GFL2CharacterRuntime.hasChestPhysics and GFL2CharacterRuntime.hasChestPhysics(w.player) and w.actions.chestStrength then
                     w.actions.chestStrength(w.player,100,true)
@@ -190,6 +261,13 @@ function M.install(W,ctx)
                 if not GFL2CharacterRuntime.modelPhysicsEnabled(w.player) then
                     w.actions.bodyPhysics(w.player,true)
                 end
+            end
+            if w.multiplayerSession then
+                if w.actions.setShowRemoteModels then w.actions.setShowRemoteModels(true) end
+                if w.actions.setRemoteBodyPhysics then w.actions.setRemoteBodyPhysics(false) end
+                if w.actions.setRemoteChestStrength then w.actions.setRemoteChestStrength(w.player,0,true) end
+                if w.actions.setRemoteVoiceEnabled then w.actions.setRemoteVoiceEnabled(true) end
+                if w.actions.setRemoteSubtitlesEnabled then w.actions.setRemoteSubtitlesEnabled(true) end
             end
             w:refreshControls(true)
         end)
@@ -394,7 +472,7 @@ function M.install(W,ctx)
         self.content:setX(self.tab=="skins" and self.overviewX-57 or self.rightX)
         self.content:setWidth(self.tab=="skins" and self.overviewWidth+64 or self.rightWidth)
         self.content:setY(self.tab=="skins" and math.floor(self.height*.19) or 91)
-        self.content:setHeight(self.tab=="skins" and math.floor(self.height*.57) or self.height-self.content.y-112)
+        self.content:setHeight(self.tab=="skins" and math.floor(self.height*.57) or self.height-self.content.y-(self.tab=="settings" and 24 or 112))
         local y=8;local width=self.rightWidth-32;local showExpressionSlots=false
         if self.tab=="overview" or self.tab=="outfitDraw" or self.tab=="weaponDraw" then
             y=0

@@ -1,0 +1,43 @@
+VERSION = 1,
+
+option GFL2Exilium.AllowHoldGrant
+{
+	type = boolean,
+	default = true,
+	page = GFL2Exilium,
+	translation = GFL2Exilium_AllowHoldGrant,
+}
+
+option GFL2Exilium.FreeUnlockAll
+{
+	type = boolean,
+	default = false,
+	page = GFL2Exilium,
+	translation = GFL2Exilium_FreeUnlockAll,
+}
+
+option GFL2Exilium.CreditsPerCash
+{
+	type = integer,
+	min = 10,
+	max = 5000,
+	default = 300,
+	page = GFL2Exilium,
+	translation = GFL2Exilium_CreditsPerCash,
+}
+
+option GFL2Exilium.AllowSignatureWeapons
+{
+	type = boolean,
+	default = true,
+	page = GFL2Exilium,
+	translation = GFL2Exilium_AllowSignatureWeapons,
+}
+
+option GFL2Exilium.AllowAmmoAndMagazines
+{
+	type = boolean,
+	default = true,
+	page = GFL2Exilium,
+	translation = GFL2Exilium_AllowAmmoAndMagazines,
+}

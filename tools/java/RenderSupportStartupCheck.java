@@ -182,12 +182,25 @@ public final class RenderSupportStartupCheck {
         require(selected.option("characterSurfaceDetail").label.equals("皮肤凹凸细节")
             &&selected.option("characterSkinGloss").label.equals("皮肤高光集中度"),"Native skin labels missing");
         var declare=viewpoint.platform.PackOption.class.getDeclaredMethod("declare",String.class,String.class);declare.setAccessible(true);
+        var optMin=viewpoint.platform.PackOption.class.getDeclaredField("min");optMin.setAccessible(true);
+        var optMax=viewpoint.platform.PackOption.class.getDeclaredField("max");optMax.setAccessible(true);
         var section=viewpoint.platform.LiveSettings.Setting.class.getDeclaredField("section");section.setAccessible(true);
         for(String id:List.of("characterSoftFill","characterDisplayStrength","characterSurfaceDetail","characterSkinGloss","characterOutlineWidth")){
             var option=selected.option(id);require(option!=null&&option.kept,"Character option missing: "+id);
+            float expectedMax=id.equals("characterDisplayStrength")?1f:2f;
+            float minVal=optMin.getFloat(option),maxVal=optMax.getFloat(option);
+            require(Math.abs(minVal)<1e-6f&&Math.abs(maxVal-expectedMax)<1e-6f,"Unexpected option bounds for "+id+": "+minVal+".."+maxVal);
             Object row=declare.invoke(option,"test."+id,"Graphics/Shader Options");require(section.get(row).equals("Graphics/少前2人物效果"),"Character option was not grouped: "+id);
             if(id.equals("characterSurfaceDetail")||id.equals("characterSkinGloss"))for(String preset:viewpoint.platform.PackOption.PRESETS)require(Float.parseFloat(selected.preset(preset).valueFor(option))==0,"Enhancement changed default");
             if(id.equals("characterOutlineWidth"))for(String preset:viewpoint.platform.PackOption.PRESETS)require(Float.parseFloat(selected.preset(preset).valueFor(option))==1f,"Outline width changed default");
+        }
+        if(combined){
+            var somber=(viewpoint.platform.ShaderPack)find.invoke(null,"Somber-GFL2");
+            for(String id:List.of("characterSoftFill","characterSurfaceDetail","characterSkinGloss","characterOutlineWidth")){
+                var option=somber.option(id);require(option!=null&&Math.abs(optMin.getFloat(option))<1e-6f&&Math.abs(optMax.getFloat(option)-2f)<1e-6f,"Somber bounds mismatch for "+id);
+            }
+            var somberStrength=somber.option("characterDisplayStrength");
+            require(somberStrength!=null&&Math.abs(optMin.getFloat(somberStrength))<1e-6f&&Math.abs(optMax.getFloat(somberStrength)-1f)<1e-6f,"Somber strength bounds mismatch");
         }
         require(section.get(declare.invoke(selected.option("contrast"),"test.contrast","Graphics/Shader Options")).equals("Graphics/Shader Options"),"Scene option moved");
         for(String preset:viewpoint.platform.PackOption.PRESETS)require(Float.parseFloat(selected.preset(preset).valueFor(strength))==.5f,"Preset changed shared display default: "+preset);

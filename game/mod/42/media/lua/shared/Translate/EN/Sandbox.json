@@ -1,0 +1,13 @@
+{
+    "Sandbox_GFL2Exilium": "GFL2: Exilium",
+    "Sandbox_GFL2Exilium_AllowHoldGrant": "Allow Long-Press '+' Free Resource Grant",
+    "Sandbox_GFL2Exilium_AllowHoldGrant_tooltip": "When enabled, holding the '+' button on Credits or Outfit Permits in single-player grants test credits or temporary outfit unlocks. Disable for strict survival progression.",
+    "Sandbox_GFL2Exilium_FreeUnlockAll": "Free Unlock All Characters & Outfits",
+    "Sandbox_GFL2Exilium_FreeUnlockAll_tooltip": "When enabled, all active characters, outfits, and signature weapons (if enabled) are immediately unlocked in the Ready Room without gacha pulls or purchases.",
+    "Sandbox_GFL2Exilium_CreditsPerCash": "Credits per Cash Bill",
+    "Sandbox_GFL2Exilium_CreditsPerCash_tooltip": "How many Ready Room Credits each in-game Money bill exchanges for (default 300, range 10-5000).",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons": "Allow Ready Room Signature Weapons",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons_tooltip": "When disabled, Ready Room signature weapon pulls and claiming are disabled while keeping all character models and voices. Ideal for melee or custom gun balance servers.",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines": "Allow Ready Room Ammo & Magazines",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines_tooltip": "When disabled, players cannot buy ammo boxes or claim spare magazines from the Ready Room and must loot them in the world."
+}

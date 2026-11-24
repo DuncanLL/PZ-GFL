@@ -1,0 +1,13 @@
+{
+    "Sandbox_GFL2Exilium": "소녀전선2: 망명",
+    "Sandbox_GFL2Exilium_AllowHoldGrant": "'+' 길게 누르기 무료 자원 지급 허용",
+    "Sandbox_GFL2Exilium_AllowHoldGrant_tooltip": "활성화 시 싱글플레이에서 정비실 상단의 크레디트 또는 의상 허가증 '+' 버튼을 길게 눌러 테스트 자원이나 임시 해금을 사용할 수 있습니다.",
+    "Sandbox_GFL2Exilium_FreeUnlockAll": "모든 캐릭터 및 의상 무료 해금",
+    "Sandbox_GFL2Exilium_FreeUnlockAll_tooltip": "활성화 시 뽑기나 구매 없이 활성화된 모든 캐릭터, 의상 및 전용 무기(허용 시)를 정비실에서 바로 사용할 수 있습니다.",
+    "Sandbox_GFL2Exilium_CreditsPerCash": "지폐 1장당 크레디트 교환 비율",
+    "Sandbox_GFL2Exilium_CreditsPerCash_tooltip": "정비실에서 게임 내 지폐 1장을 교환할 때 획득하는 크레디트 수량입니다(기본 300, 범위 10~5000).",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons": "정비실 전용 무기 획득 허용",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons_tooltip": "비활성화 시 정비실의 전용 무기 뽑기 및 수령이 잠기며 캐릭터 외형과 음성만 유지됩니다.",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines": "정비실 탄약 구매 및 탄창 수령 허용",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines_tooltip": "비활성화 시 정비실에서 탄약 상자 구매와 전용 탄창 수령을 할 수 없습니다."
+}

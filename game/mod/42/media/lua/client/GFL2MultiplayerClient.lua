@@ -8,6 +8,7 @@ local remote = {}
 local nextUpdate = 0
 local lastSnapshotRevision = 0
 local nextHandshake = 0
+local showRemoteModels = true
 
 local function disableRemoteActor(actor)
     if GFL2VoiceEngine and GFL2VoiceEngine.syncRemote then GFL2VoiceEngine.syncRemote(actor, false) end
@@ -84,6 +85,38 @@ function M.publishVoice(player, sound, kind)
     send(state, "Voice", args)
 end
 
+function M.getShowRemoteModels()
+    return showRemoteModels
+end
+
+function M.setShowRemoteModels(enabled)
+    local nextOn = enabled ~= false
+    if showRemoteModels == nextOn then return showRemoteModels end
+    showRemoteModels = nextOn
+    if not nextOn then
+        if GFL2CharacterRuntime then
+            for _, state in pairs(remote) do
+                if state.actor then
+                    disableRemoteActor(state.actor)
+                    state.actor = nil
+                end
+                state.applied = false
+                state.usingDefault = false
+            end
+        end
+    else
+        for _, state in pairs(remote) do
+            if not state.retired then
+                state.failed = false
+                state.applied = false
+                state.usingDefault = false
+            end
+        end
+        nextUpdate = 0
+    end
+    return showRemoteModels
+end
+
 function M.resync()
     if not (isClient and isClient()) then return end
     for _, state in pairs(slots) do state.nextSync = 0 end
@@ -120,6 +153,17 @@ local function acceptAppearance(data, fromSnapshot)
 end
 
 local function updateRemote()
+    if not showRemoteModels then
+        for _, state in pairs(remote) do
+            if state.actor then
+                disableRemoteActor(state.actor)
+                state.actor = nil
+                state.applied = false
+                state.usingDefault = false
+            end
+        end
+        return
+    end
     for id, state in pairs(remote) do
         local raw = getPlayerByOnlineID(id)
         local actor = raw

@@ -33,6 +33,40 @@ import static gfl2.runtime.UiNotices.text;
 
 /** Displays world snapshots and isolated, single-pose outfit previews. */
 public class ReadyRoomPreview {
+    @FunctionalInterface
+    public interface StudioRenderer {
+        boolean render(
+            String pmxSha256,
+            float[] positions,
+            float[] normals,
+            float[] uv,
+            float[] materials,
+            float[] shadingHead,
+            float unitScale,
+            float cameraX, float cameraY, float cameraZ,
+            float dist, float yaw, float pitch, float fovRad, float nearPlane, float farPlane,
+            int x, int y, int width, int height, int screenHeight
+        );
+    }
+    private static volatile StudioRenderer studioRenderer;
+    private static volatile Runnable studioReleaseHook;
+    private static volatile boolean studioEnabled = true;
+
+    public static void registerStudioRenderer(StudioRenderer renderer, Runnable releaseHook) {
+        studioRenderer = renderer;
+        studioReleaseHook = releaseHook;
+    }
+    public static boolean studioPreviewEnabled() { return studioEnabled; }
+    public static void setStudioPreviewEnabled(boolean enabled) {
+        boolean changed = studioEnabled != enabled;
+        studioEnabled = enabled;
+        if (changed && !enabled) {
+            Runnable hook = studioReleaseHook;
+            if (hook != null) hook.run();
+        }
+    }
+    public static boolean studioPreviewAvailable() { return studioEnabled && studioRenderer != null; }
+
     private static final Object motionPathsLock=new Object();
     private static final class BrowsePreview {
         final String id;
@@ -113,12 +147,15 @@ public class ReadyRoomPreview {
         Path relative=Path.of("media/gfl2_pmx/motions");
         return Files.isDirectory(mod.resolve(relative))?mod.resolve(relative):mod.resolve("42").resolve(relative);
     }
-    private static List<String> motionNames(Path directory) throws IOException {
+    private static List<String> motionNames(Path directory, java.util.function.Predicate<Path> accept) throws IOException {
         if(!Files.isDirectory(directory))return List.of();
         try(var paths=Files.list(directory)){
-            return paths.filter(ReadyRoomPreview::motionFile).map(p->p.getFileName().toString())
+            return paths.filter(ReadyRoomPreview::motionFile).filter(accept).map(p->p.getFileName().toString())
                 .sorted(String.CASE_INSENSITIVE_ORDER.thenComparing(Comparator.naturalOrder())).toList();
         }
+    }
+    private static List<String> motionNames(Path directory) throws IOException {
+        return motionNames(directory, p -> true);
     }
     private static Path namedMotion(Path directory,String name) {
         if(name.isBlank()||name.indexOf('/')>=0||name.indexOf('\\')>=0||name.indexOf(':')>=0)
@@ -178,25 +215,31 @@ public class ReadyRoomPreview {
             return "";
         }catch(Exception e){return motionError(e,"MotionRemovePath");}
     }
-    public static KahluaTable motionLibrary() {
+    private static KahluaTable listVmds(java.util.function.Predicate<Path> accept) {
         var entries=new LinkedHashSet<String>();
         try {
-            List<String> local=motionNames(Files.createDirectories(library()));
-            for(String sample:motionNames(sampleLibrary()))
+            List<String> local=motionNames(Files.createDirectories(library()),accept);
+            for(String sample:motionNames(sampleLibrary(),accept))
                 if(local.stream().noneMatch(sample::equalsIgnoreCase))entries.add(SAMPLE_PREFIX+sample);
             entries.addAll(local);
         }catch(Exception e){Main.error(e);}
         try {
             for(Path source:savedMotionPaths()) {
-                if(motionFile(source))entries.add(source.toString()); // Paths saved by older releases.
+                if(motionFile(source)&&accept.test(source))entries.add(source.toString()); // Paths saved by older releases.
                 else {
                     try {
-                        for(String name:motionNames(source))entries.add(source.resolve(name).toString());
+                        for(String name:motionNames(source,accept))entries.add(source.resolve(name).toString());
                     }catch(IOException e){Main.error(e);}
                 }
             }
         }catch(Exception e){Main.error(e);}
         return (KahluaTable)lua(new JSONArray(entries));
+    }
+    public static KahluaTable motionLibrary() {
+        return listVmds(gfl2.motion.VmdCamera::hasMotionTrack);
+    }
+    public static KahluaTable cameraLibrary() {
+        return listVmds(gfl2.motion.VmdCamera::hasCameraTrack);
     }
     public static KahluaTable motionPaths() {
         var out=new JSONArray();
@@ -405,8 +448,24 @@ public class ReadyRoomPreview {
     public static KahluaTable motionState(IsoGameCharacter actor) {
         ModelSession s=Main.session(actor);
         return (KahluaTable)lua(s==null
-            ?new JSONObject().put("name","").put("paused",false).put("physics",false).put("frame",0).put("endFrame",0).put("speed",1).put("revision","")
+            ?new JSONObject().put("name","").put("paused",false).put("physics",false).put("frame",0).put("endFrame",0).put("speed",1).put("revision","").put("camera","").put("cameraEnabled",false)
             :s.model.motionTimeline());
+    }
+    private static Path resolveMotionInput(String name) throws IOException {
+        if(name==null||name.isBlank())throw new MotionInput("MotionSelect");
+        Path file;
+        if(name.startsWith(SAMPLE_PREFIX)){
+            file=namedMotion(sampleLibrary(),name.substring(SAMPLE_PREFIX.length()));
+        }else if(Path.of(name).isAbsolute()){
+            file=localMotionPath(name);
+            var sources=savedMotionPaths();
+            if(!sources.contains(file)&&!sources.contains(file.getParent()))
+                throw new MotionInput("MotionRegister");
+        }else{
+            file=namedMotion(library(),name);
+        }
+        if(!motionFile(file))throw new MotionInput("MotionFileMissing");
+        return file;
     }
     public static String motionCommand(IsoGameCharacter actor,String command,String name) {
         if(!(actor instanceof IsoPlayer player)||!player.isLocalPlayer())return text("LocalMotionOnly");
@@ -418,21 +477,14 @@ public class ReadyRoomPreview {
                 switch(command) {
                     case "play" -> {
                         if(!motionAllowed(player))return text("MotionStandStill");
-                        if(name==null||name.isBlank())return text("MotionSelect");
-                        Path file;
-                        if(name.startsWith(SAMPLE_PREFIX)){
-                            file=namedMotion(sampleLibrary(),name.substring(SAMPLE_PREFIX.length()));
-                        }else if(Path.of(name).isAbsolute()){
-                            file=localMotionPath(name);
-                            var sources=savedMotionPaths();
-                            if(!sources.contains(file)&&!sources.contains(file.getParent()))
-                                return text("MotionRegister");
-                        }else{
-                            file=namedMotion(library(),name);
-                        }
-                        if(!motionFile(file))return text("MotionFileMissing");
-                        s.model.playMotion(file);
+                        s.model.playMotion(resolveMotionInput(name));
                     }
+                    case "camera" -> s.model.loadCamera(resolveMotionInput(name));
+                    case "cameraClear" -> {
+                        s.model.clearCamera();
+                        VmdCameraController.releaseIfHeld();
+                    }
+                    case "cameraToggle" -> s.model.toggleCamera();
                     case "seek" -> {
                         if(!motionAllowed(player))return text("MotionStandStill");
                         String[] target=name==null?new String[0]:name.split(":",2);
@@ -442,7 +494,10 @@ public class ReadyRoomPreview {
                     case "pause" -> s.model.toggleMotionPause();
                     case "speed" -> s.model.setMotionSpeed(Float.parseFloat(name));
                     case "restart" -> s.model.restartMotion();
-                    case "stop" -> s.model.stopMotion();
+                    case "stop" -> {
+                        s.model.stopMotion();
+                        VmdCameraController.releaseIfHeld();
+                    }
                     case "physics" -> {if(s.model.motionActive())s.model.setPhysicsEnabled(!s.model.physicsEnabled());}
                     case "reset" -> {if(s.model.motionActive())s.model.resetPhysics();}
                     default -> {return text("MotionUnknownCommand");}
@@ -548,6 +603,8 @@ public class ReadyRoomPreview {
         GripRoomPreview.release(actor);
         BrowseState state=browsePreviews.remove(actor);
         if(state!=null){state.discardRequest();state.present(null,false);}
+        Runnable hook=studioReleaseHook;
+        if(hook!=null)hook.run();
     }
     private record PreviewProgram(int id,int vp,int turn,int image,int locked,int studio,int mode,int eye,int floorY,int heightSpan,int effectAlpha) {
         // LWJGL keeps these capabilities with their GL context. The context owns the program.
@@ -714,7 +771,7 @@ public class ReadyRoomPreview {
             uploaded=frame;
         }
         void paint(PmxDrawMesh.FrameData frame,ModelSession.Materials state,int width,int height,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView)throws Exception {
-            paint(frame,state,width,height,yaw,zoom,pan,focus,locked,gripView,0);
+            paint(frame,state,0,0,width,height,height,yaw,zoom,pan,focus,locked,gripView,0);
         }
         private void paintShadowQuad(PreviewProgram program,Matrix4f turn,float alpha) {
             if(shadowVao==0){
@@ -748,13 +805,43 @@ public class ReadyRoomPreview {
                 GL11.glDrawElements(GL11.GL_TRIANGLES,counts[i],GL11.GL_UNSIGNED_INT,(long)firsts[i]*4);
             }
         }
-        void paint(PmxDrawMesh.FrameData frame,ModelSession.Materials state,int width,int height,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView,float pitch)throws Exception {
-            bindGeometry(frame);
+        void paint(PmxDrawMesh.FrameData frame,ModelSession.Materials state,int x,int y,int width,int height,int screenHeight,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView,float pitch)throws Exception {
             float clampedZoom=Math.clamp(zoom,.62f,4.2f);
             float extent=span/clampedZoom,aspect=(float)width/height;
             float cameraY=centerY+(faceY-centerY)*Math.clamp(focus,0,1)+span*Math.clamp(pan,-.8f,.8f);
             float cameraX=centerX,cameraZ=centerZ;
             boolean studio=gripView==null;
+            if(studio&&!locked&&studioEnabled&&studioRenderer!=null
+                    &&frame.positions()!=null&&frame.normals()!=null&&frame.shadingHead()!=null) {
+                float fov=(float)Math.toRadians(28.0);
+                float dist=(extent*.5f)/(float)Math.tan(fov*.5f);
+                float near=Math.max(.05f,dist*.1f),far=dist+span*4.5f;
+                float eyeZ=cameraZ+dist;
+                float floorAlpha=Math.clamp((2.2f-clampedZoom)/.8f,0f,1f);
+                if(floorAlpha>.01f){
+                    Matrix4f vp=new Matrix4f().perspective(fov,aspect,near,far)
+                        .lookAt(cameraX,cameraY,eyeZ,cameraX,cameraY,cameraZ,0,1,0);
+                    Matrix4f turn=new Matrix4f().translate(cameraX,cameraY,cameraZ).rotateX(pitch).rotateY(yaw).translate(-cameraX,-cameraY,-cameraZ);
+                    PreviewProgram program=PreviewProgram.current();
+                    GL20.glUseProgram(program.id());
+                    GL20.glUniformMatrix4fv(program.vp(),false,vp.get(new float[16]));
+                    GL20.glUniform1i(program.studio(),1);
+                    GL20.glUniform1f(program.floorY(),minY);
+                    GL20.glUniform1f(program.heightSpan(),heightSpan);
+                    GL11.glDisable(GL11.GL_CULL_FACE);
+                    GL11.glEnable(GL11.GL_DEPTH_TEST);GL11.glDepthFunc(GL11.GL_LEQUAL);
+                    GL11.glEnable(GL11.GL_BLEND);GL14.glBlendEquation(GL14.GL_FUNC_ADD);
+                    GL14.glBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA);
+                    paintShadowQuad(program,turn,floorAlpha);
+                }
+                StudioRenderer renderer=studioRenderer;
+                if(renderer!=null&&renderer.render(session.pmxSha256(),frame.positions(),frame.normals(),uv,
+                        frame.materials(),frame.shadingHead(),session.scale,
+                        cameraX,cameraY,cameraZ,dist,yaw,pitch,fov,near,far,x,y,width,height,screenHeight)) {
+                    return;
+                }
+            }
+            bindGeometry(frame);
             Matrix4f vp;
             float eyeZ;
             if(!studio){
@@ -834,7 +921,7 @@ public class ReadyRoomPreview {
             try {
                 GL11.glEnable(GL11.GL_SCISSOR_TEST);GL11.glScissor(x,screenHeight-y-height,width,height);GL11.glViewport(x,screenHeight-y-height,width,height);
                 GL11.glDepthMask(true);GL11.glClearDepth(1);GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
-                mesh.paint(frame,materials,width,height,yaw,zoom,pan,focus,locked,gripView,pitch);
+                mesh.paint(frame,materials,x,y,width,height,screenHeight,yaw,zoom,pan,focus,locked,gripView,pitch);
                 return true;
             }catch(Exception|LinkageError e){
                 if(frame.gpuPose()!=null)mesh.session.disableGpu(e);

@@ -94,7 +94,7 @@
     "ContextMenu_GFL2_TidalNocturneDescription": "로렐라이를 위해 맞춤 제작된 특수 대물 저격소총. 첨단 공정으로 재주조된 총열과 차세대 저소음 제퇴기를 통합해 극한의 장거리 정밀도를 유지하면서도 총성과 총구 화염을 최소화하여 어둠 속에서 소리 없이 목표를 명중시킨다.",
     "ContextMenu_GFL2_Daydream": "백일몽",
     "ContextMenu_GFL2_DaydreamDescription": "미슈티에게 지급된 고성능 돌격소총. G11을 바탕으로 위력을 높였으며, 미슈티의 순간 화력으로 적의 백일몽을 깨뜨린다.",
-    "ContextMenu_GFL2_CharacterSettingsTip": "캐릭터 음성 볼륨, 흉부 물리, 의상/머리카락 물리를 조정합니다",
+    "ContextMenu_GFL2_CharacterSettingsTip": "음성, 자막, 물리 효과 및 멀티플레이 표시를 설정합니다",
     "ContextMenu_GFL2_ClothHairPhysicsOn": "의상 및 머리카락 물리가 켜져 있습니다",
     "ContextMenu_GFL2_ClothHairPhysicsOff": "의상 및 머리카락 물리가 꺼져 있습니다 (성능 미점유)",
     "ContextMenu_GFL2_ChestPhysicsTip": "0이면 완전히 꺼져 성능을 점유하지 않으며, 100은 기본 효과입니다",
@@ -104,5 +104,18 @@
     "ContextMenu_GFL2_SilverWingedPistis": "은빛 날개의 피스티",
     "ContextMenu_GFL2_SilverWingedPistisDescription": "이글레타에게 지급된 고성능 권총. 데저트 이글을 기반으로 파괴력을 강화하면서도 반동을 줄여 위험에 맞설 용기를 부여한다. 매의 울음소리처럼 매서운 총화로 진실을 쫓는 먼 여정을 밝힌다.",
     "ContextMenu_GFL2_Sibyl": "시빌",
-    "ContextMenu_GFL2_SibylDescription": "네메시스에게 지급된 커스텀 저격소총. OM 50 네메시스를 기반으로 극한 사거리에서의 절대 정밀도와 안정성을 크게 높였다 - 어쩌면 이번에는 이를 통해 진리에 닿을 수 있을지도 모른다."
+    "ContextMenu_GFL2_SibylDescription": "네메시스에게 지급된 커스텀 저격소총. OM 50 네메시스를 기반으로 극한 사거리에서의 절대 정밀도와 안정성을 크게 높였다 - 어쩌면 이번에는 이를 통해 진리에 닿을 수 있을지도 모른다.",
+    "ContextMenu_GFL2_SubtitlesOn": "캐릭터 대사 시 머리 위 자막을 표시합니다",
+    "ContextMenu_GFL2_SubtitlesOff": "머리 위 자막을 숨깁니다 (음성 유지)",
+    "ContextMenu_GFL2_RemoteModelsOn": "멀티플레이에서 다른 플레이어의 소녀전선2 모델을 표시합니다",
+    "ContextMenu_GFL2_RemoteModelsOff": "다른 플레이어를 바닐라 모델로 표시해 프레임을 확보합니다",
+    "ContextMenu_GFL2_RemoteChestPhysicsTip": "다른 플레이어의 가슴 물리 강도 조절 (0 = 끄기)",
+    "ContextMenu_GFL2_RemoteClothHairOn": "다른 플레이어의 의상 및 머리카락 물리가 켜져 있습니다",
+    "ContextMenu_GFL2_RemoteClothHairOff": "다른 플레이어의 의상 및 머리카락 물리가 꺼져 있습니다 (기본 끄기)",
+    "ContextMenu_GFL2_RemoteVoiceOn": "주변 팀원의 3D 일본어 음성을 재생합니다",
+    "ContextMenu_GFL2_RemoteVoiceOff": "다른 플레이어의 음성과 자막을 끕니다",
+    "ContextMenu_GFL2_RemoteSubtitlesOn": "팀원이 외칠 때 머리 위 자막을 표시합니다",
+    "ContextMenu_GFL2_RemoteSubtitlesOff": "팀원의 머리 위 자막을 숨깁니다 (음성 유지)",
+    "ContextMenu_GFL2_StudioPreviewOn": "Native / Somber 셰이더 사용 시 정비실 및 인벤토리 미리보기에도 소녀전선2 원재질 렌더링을 적용합니다 (유휴 시 VRAM 자동 회수)",
+    "ContextMenu_GFL2_StudioPreviewOff": "UI 미리보기를 경량 렌더링으로 되돌리고 미리보기 VRAM을 즉시 해제합니다"
 }

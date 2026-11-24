@@ -6,6 +6,69 @@ local started = false
 local awaiting = {}
 local expressionEdits = {}
 local voiceSaveEdits = {}
+local clientPrefsLoaded = false
+local clientPrefs = {
+    voiceVolume = 50,
+    showSubtitles = true,
+    studioPreview = true,
+    showRemoteModels = true,
+    remoteBodyPhysics = false,
+    remoteChestStrength = 0,
+    remoteVoice = true,
+    remoteSubtitles = true,
+}
+
+local function saveClientPrefs()
+    if not (GFL2CharacterRuntime and GFL2CharacterRuntime.writeClientSettings) then return end
+    local body = string.format(
+        '{"voiceVolume":%d,"showSubtitles":%s,"studioPreview":%s,"showRemoteModels":%s,"remoteBodyPhysics":%s,"remoteChestStrength":%d,"remoteVoice":%s,"remoteSubtitles":%s}',
+        math.max(0, math.min(100, math.floor((tonumber(clientPrefs.voiceVolume) or 50) + 0.5))),
+        clientPrefs.showSubtitles ~= false and "true" or "false",
+        clientPrefs.studioPreview ~= false and "true" or "false",
+        clientPrefs.showRemoteModels ~= false and "true" or "false",
+        clientPrefs.remoteBodyPhysics == true and "true" or "false",
+        math.max(0, math.min(100, math.floor((tonumber(clientPrefs.remoteChestStrength) or 0) + 0.5))),
+        clientPrefs.remoteVoice ~= false and "true" or "false",
+        clientPrefs.remoteSubtitles ~= false and "true" or "false"
+    )
+    GFL2CharacterRuntime.writeClientSettings(body)
+end
+
+local function applyClientPrefs(player)
+    if GFL2VoiceEngine then
+        if GFL2VoiceEngine.setVolume then GFL2VoiceEngine.setVolume(player, clientPrefs.voiceVolume) end
+        if GFL2VoiceEngine.setShowSubtitles then GFL2VoiceEngine.setShowSubtitles(clientPrefs.showSubtitles) end
+        if GFL2VoiceEngine.setRemoteVoiceEnabled then GFL2VoiceEngine.setRemoteVoiceEnabled(clientPrefs.remoteVoice) end
+        if GFL2VoiceEngine.setRemoteSubtitlesEnabled then GFL2VoiceEngine.setRemoteSubtitlesEnabled(clientPrefs.remoteSubtitles) end
+    end
+    if multiplayer and multiplayer.setShowRemoteModels then
+        multiplayer.setShowRemoteModels(clientPrefs.showRemoteModels)
+    end
+    if GFL2CharacterRuntime then
+        if GFL2CharacterRuntime.setStudioPreviewEnabled then GFL2CharacterRuntime.setStudioPreviewEnabled(clientPrefs.studioPreview ~= false) end
+        if GFL2CharacterRuntime.setRemoteBodyPhysics then GFL2CharacterRuntime.setRemoteBodyPhysics(clientPrefs.remoteBodyPhysics == true) end
+        if GFL2CharacterRuntime.setRemoteChestStrength then GFL2CharacterRuntime.setRemoteChestStrength(clientPrefs.remoteChestStrength or 0) end
+    end
+end
+
+local function loadClientPrefs(player)
+    if not clientPrefsLoaded and GFL2CharacterRuntime and GFL2CharacterRuntime.readClientSettings then
+        clientPrefsLoaded = true
+        local raw = GFL2CharacterRuntime.readClientSettings()
+        if type(raw) == "string" and raw ~= "" then
+            local vv = tonumber(raw:match('"voiceVolume"%s*:%s*(%d+)'))
+            if vv then clientPrefs.voiceVolume = math.max(0, math.min(100, math.floor(vv))) end
+            local rc = tonumber(raw:match('"remoteChestStrength"%s*:%s*(%d+)'))
+            if rc then clientPrefs.remoteChestStrength = math.max(0, math.min(100, math.floor(rc))) end
+            for _, field in ipairs({"showSubtitles", "studioPreview", "showRemoteModels", "remoteBodyPhysics", "remoteVoice", "remoteSubtitles"}) do
+                local v = raw:match('"' .. field .. '"%s*:%s*(%a+)')
+                if v == "true" then clientPrefs[field] = true
+                elseif v == "false" then clientPrefs[field] = false end
+            end
+        end
+    end
+    applyClientPrefs(player)
+end
 
 local function problem(player, message)
     if message and message ~= "" then
@@ -70,6 +133,7 @@ Events.OnTick.Add(function()
         if now>=deadline then
             voiceSaveEdits[player]=nil
             economy.saveLocal(player)
+            saveClientPrefs()
         end
     end
     for player in pairs(awaiting) do
@@ -134,6 +198,7 @@ end
 
 local function setVoiceVolume(player,volume,immediate)
     local clamped=math.max(0,math.min(100,math.floor((tonumber(volume) or 50)+0.5)))
+    clientPrefs.voiceVolume=clamped
     if GFL2VoiceEngine and GFL2VoiceEngine.setVolume then
         clamped=GFL2VoiceEngine.setVolume(player,clamped)
     elseif player then
@@ -145,10 +210,107 @@ local function setVoiceVolume(player,volume,immediate)
     if immediate then
         voiceSaveEdits[player]=nil
         economy.saveLocal(player)
+        saveClientPrefs()
     else
         voiceSaveEdits[player]=getTimestampMs()+250
     end
     return clamped
+end
+
+local function getShowSubtitles()
+    if GFL2VoiceEngine and GFL2VoiceEngine.getShowSubtitles then return GFL2VoiceEngine.getShowSubtitles() end
+    return clientPrefs.showSubtitles ~= false
+end
+
+local function setShowSubtitles(enabled)
+    local nextOn = enabled ~= false
+    clientPrefs.showSubtitles = nextOn
+    if GFL2VoiceEngine and GFL2VoiceEngine.setShowSubtitles then GFL2VoiceEngine.setShowSubtitles(nextOn) end
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getStudioPreview()
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.studioPreviewEnabled then return GFL2CharacterRuntime.studioPreviewEnabled() end
+    return clientPrefs.studioPreview ~= false
+end
+
+local function setStudioPreview(enabled)
+    local nextOn = enabled ~= false
+    clientPrefs.studioPreview = nextOn
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.setStudioPreviewEnabled then GFL2CharacterRuntime.setStudioPreviewEnabled(nextOn) end
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getShowRemoteModels()
+    if multiplayer and multiplayer.getShowRemoteModels then return multiplayer.getShowRemoteModels() end
+    return clientPrefs.showRemoteModels ~= false
+end
+
+local function setShowRemoteModels(enabled)
+    local nextOn = enabled ~= false
+    clientPrefs.showRemoteModels = nextOn
+    if multiplayer and multiplayer.setShowRemoteModels then multiplayer.setShowRemoteModels(nextOn) end
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getRemoteBodyPhysics()
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.remoteBodyPhysicsEnabled then return GFL2CharacterRuntime.remoteBodyPhysicsEnabled() end
+    return clientPrefs.remoteBodyPhysics == true
+end
+
+local function setRemoteBodyPhysics(enabled)
+    local nextOn = enabled == true
+    clientPrefs.remoteBodyPhysics = nextOn
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.setRemoteBodyPhysics then GFL2CharacterRuntime.setRemoteBodyPhysics(nextOn) end
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getRemoteChestStrength()
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.remoteChestStrength then return GFL2CharacterRuntime.remoteChestStrength() end
+    return clientPrefs.remoteChestStrength or 0
+end
+
+local function setRemoteChestStrength(player, strength, immediate)
+    local clamped = math.max(0, math.min(100, math.floor((tonumber(strength) or 0) + 0.5)))
+    clientPrefs.remoteChestStrength = clamped
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.setRemoteChestStrength then GFL2CharacterRuntime.setRemoteChestStrength(clamped) end
+    if immediate then
+        voiceSaveEdits[player] = nil
+        saveClientPrefs()
+    else
+        voiceSaveEdits[player] = getTimestampMs() + 250
+    end
+    return clamped
+end
+
+local function getRemoteVoiceEnabled()
+    if GFL2VoiceEngine and GFL2VoiceEngine.getRemoteVoiceEnabled then return GFL2VoiceEngine.getRemoteVoiceEnabled() end
+    return clientPrefs.remoteVoice ~= false
+end
+
+local function setRemoteVoiceEnabled(enabled)
+    local nextOn = enabled ~= false
+    clientPrefs.remoteVoice = nextOn
+    if GFL2VoiceEngine and GFL2VoiceEngine.setRemoteVoiceEnabled then GFL2VoiceEngine.setRemoteVoiceEnabled(nextOn) end
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getRemoteSubtitlesEnabled()
+    if GFL2VoiceEngine and GFL2VoiceEngine.getRemoteSubtitlesEnabled then return GFL2VoiceEngine.getRemoteSubtitlesEnabled() end
+    return clientPrefs.remoteSubtitles ~= false
+end
+
+local function setRemoteSubtitlesEnabled(enabled)
+    local nextOn = enabled ~= false
+    clientPrefs.remoteSubtitles = nextOn
+    if GFL2VoiceEngine and GFL2VoiceEngine.setRemoteSubtitlesEnabled then GFL2VoiceEngine.setRemoteSubtitlesEnabled(nextOn) end
+    saveClientPrefs()
+    return nextOn
 end
 
 local function clearAppearance(player)
@@ -179,6 +341,7 @@ end
 local function restore(player)
     if not player or not GFL2CharacterRuntime then return end
     economy.restoreLocal(player)
+    loadClientPrefs(player)
     if isClient() then return end
     local saved = player:getModData()[key]
     if type(saved) == "table" and type(saved.model) == "string" then
@@ -191,12 +354,26 @@ local function restore(player)
     end
 end
 
-local function open(player)
+local function open(player,target)
+    loadClientPrefs(player)
     window.open(player,{enable=enable,choice=choice,preset=preset,reload=reload,disable=disable,material=material,reset=reset,refresh=refresh,physicsReset=resetPhysics,bodyPhysics=setBodyPhysics,
         chestStrength=setChestStrength,getVoiceVolume=getVoiceVolume,setVoiceVolume=setVoiceVolume,
+        getShowSubtitles=getShowSubtitles,setShowSubtitles=setShowSubtitles,
+        getStudioPreview=getStudioPreview,setStudioPreview=setStudioPreview,
+        getShowRemoteModels=getShowRemoteModels,setShowRemoteModels=setShowRemoteModels,
+        getRemoteBodyPhysics=getRemoteBodyPhysics,setRemoteBodyPhysics=setRemoteBodyPhysics,
+        getRemoteChestStrength=getRemoteChestStrength,setRemoteChestStrength=setRemoteChestStrength,
+        getRemoteVoiceEnabled=getRemoteVoiceEnabled,setRemoteVoiceEnabled=setRemoteVoiceEnabled,
+        getRemoteSubtitlesEnabled=getRemoteSubtitlesEnabled,setRemoteSubtitlesEnabled=setRemoteSubtitlesEnabled,
         expressionRemember=function(p)remember(p,true)end,
-        expressionEdited=function(p)expressionEdits[p]=getTimestampMs()+250 end})
+        expressionEdited=function(p)expressionEdits[p]=getTimestampMs()+250 end},target)
 end
+
+GFL2CharacterActions = {
+    open = open,
+    resetPhysics = resetPhysics,
+    setBodyPhysics = setBodyPhysics,
+}
 
 local function menu(playerIndex, context, worldObjects, test)
     if test then return ISWorldObjectContextMenu.setTest() end

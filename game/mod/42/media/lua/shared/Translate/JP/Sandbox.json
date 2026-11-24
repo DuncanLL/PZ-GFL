@@ -1,0 +1,13 @@
+{
+    "Sandbox_GFL2Exilium": "ドルフロ2：エクシリウム",
+    "Sandbox_GFL2Exilium_AllowHoldGrant": "「+」長押しによる無料リソース補給を許可",
+    "Sandbox_GFL2Exilium_AllowHoldGrant_tooltip": "オンにすると、シングルプレイで整備室上部のクレジットや衣装許可の「+」を長押ししてテスト用クレジットや一時解放を利用できます。",
+    "Sandbox_GFL2Exilium_FreeUnlockAll": "全キャラ・衣装を無料解放",
+    "Sandbox_GFL2Exilium_FreeUnlockAll_tooltip": "オンにするとガチャや購入なしで、有効な全キャラクター・衣装・専用武器（許可時）を整備室ですぐに使用できます。",
+    "Sandbox_GFL2Exilium_CreditsPerCash": "紙幣1枚あたりのクレジット交換レート",
+    "Sandbox_GFL2Exilium_CreditsPerCash_tooltip": "整備室でゲーム内紙幣1枚を交換した際に得られるクレジット数（既定値 300、範囲 10〜5000）。",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons": "整備室からの専用武器取得を許可",
+    "Sandbox_GFL2Exilium_AllowSignatureWeapons_tooltip": "オフにすると整備室での専用武器ガチャ・受取を無効化し、キャラ外観とボイスのみ利用できます。",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines": "整備室での弾薬購入・マガジン受取を許可",
+    "Sandbox_GFL2Exilium_AllowAmmoAndMagazines_tooltip": "オフにすると整備室での弾薬箱購入と専用マガジン受取を禁止します。"
+}

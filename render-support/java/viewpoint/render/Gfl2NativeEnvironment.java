@@ -56,6 +56,8 @@ public final class Gfl2NativeEnvironment implements AutoCloseable {
         int block=GL31.glGetUniformBlockIndex(lighting.id(),"SkyLight"),binding=GL31.glGetActiveUniformBlocki(lighting.id(),block,GL31.GL_UNIFORM_BLOCK_BINDING),sky=GL30.glGetIntegeri(GL31.GL_UNIFORM_BUFFER_BINDING,binding);
         if(sky==0)throw new IllegalStateException("Actual Native SkyLight UBO is not bound");
         pack.use();pack.set("nativeRelativeSky",level[0],level[1],level[2]);pack.set("nativePrimaryStrength",strength);
+        var ds=Gfl2NativePackSelection.displaySettings();
+        if(pack.has("nativeShadowContrast"))pack.set("nativeShadowContrast",ds==null?1f:ds.shadowContrast());
         GL31.glUniformBlockBinding(pack.id(),GL31.glGetUniformBlockIndex(pack.id(),"NativeSkyLight"),binding);
         // The first actor writes the buffer before any copy or draw consumes it.
         lastEngine=null;

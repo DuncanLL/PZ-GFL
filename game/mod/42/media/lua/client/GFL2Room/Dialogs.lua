@@ -122,7 +122,9 @@ function M.install(W,ctx)
         local buyingCredits=key=="credits"
         local cost=buyingCredits and 1 or (buyingAmmo and ammo.price or economy.cost[key])
         local title=buyingAmmo and (ammo.name or tr("RoomAmmoBuy")) or tr(resourceTitles[key])
-        local rateLabel=buyingCredits and tr("RoomCashRate") or buyingAmmo and string.format(tr("RoomAmmoRate"),ammo.price)
+        local cashRate=economy.creditsRate()
+        local rateLabel=buyingCredits and tostring(tr("RoomCashRate")):gsub("300",tostring(cashRate),1)
+            or buyingAmmo and string.format(tr("RoomAmmoRate"),ammo.price)
             or tr(key=="targeted" and "RoomTargetedPermitRate" or "RoomPermitRate")
         card.prerender=function(p)
             local t=modalProgress(openedAt,150)
@@ -153,7 +155,7 @@ function M.install(W,ctx)
             label(p,tr(buyingCredits and "RoomCash" or "RoomCredits"),p.width/2+90,p.height-76,16,78,.78,.84,.86,t)
             if buyingCredits then
                 label(p,tr("RoomCredits"),198,133,16,85,.74,.82,.84,t)
-                number(p,s.quantity*economy.creditsPerCash,290,130,22,1,.78,.32)
+                number(p,s.quantity*cashRate,290,130,22,1,.78,.32)
             end
             local message=s.message or (s.maximum==0 and tr("RoomNotEnough"))
             if message then label(p,message,p.width/2,p.height-107,15,p.width-50,1,.58,.36,t,true) end

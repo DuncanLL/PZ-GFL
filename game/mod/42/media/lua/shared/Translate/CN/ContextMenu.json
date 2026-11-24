@@ -94,7 +94,7 @@
     "ContextMenu_GFL2_TidalNocturneDescription": "为罗蕾莱所定制的特装型号反器材步枪，枪管采用先进工艺重铸，并整合了新一代高效微声制退器。这套改造使其在具备极致远程精度的同时，开火时的声响和枪口焰被降至最低，能够在黑夜中，悄无声息地一举击中目标。",
     "ContextMenu_GFL2_Daydream": "白日梦",
     "ContextMenu_GFL2_DaydreamDescription": "米什缇被配给的高性能突击步枪，以无壳弹步枪11为原型，将威力进一步提升，配合上米什缇的高爆发，致力于击碎每一个敌人的白日梦。",
-    "ContextMenu_GFL2_CharacterSettingsTip": "调整角色语音音量、胸部物理与衣服/头发物理",
+    "ContextMenu_GFL2_CharacterSettingsTip": "调整语音、字幕、物理效果与联机显示设置",
     "ContextMenu_GFL2_ClothHairPhysicsOn": "衣服与头发物理已开启",
     "ContextMenu_GFL2_ClothHairPhysicsOff": "衣服与头发物理已关闭（不占用物理性能）",
     "ContextMenu_GFL2_ChestPhysicsTip": "0 为彻底关闭且不占用性能，100 为默认完整效果",
@@ -104,5 +104,18 @@
     "ContextMenu_GFL2_SilverWingedPistis": "银翼匹丝缇",
     "ContextMenu_GFL2_SilverWingedPistisDescription": "伊格蕾塔被配给的高性能手枪，以沙漠之鹰为原型，在加强破坏力的同时减轻了后坐力，赋予了她直面危险的勇气。用鹰啸般凌厉的枪火，照亮狩猎真相的远途。",
     "ContextMenu_GFL2_Sibyl": "西比尔",
-    "ContextMenu_GFL2_SibylDescription": "纳美西丝被配给的定制型狙击枪，以复仇女神为原型，显著提升了极端射程下的绝对精度与稳定性——或许这一次，她能够借此触碰真理。"
+    "ContextMenu_GFL2_SibylDescription": "纳美西丝被配给的定制型狙击枪，以复仇女神为原型，显著提升了极端射程下的绝对精度与稳定性——或许这一次，她能够借此触碰真理。",
+    "ContextMenu_GFL2_SubtitlesOn": "角色说话时在头顶显示对应语言字幕",
+    "ContextMenu_GFL2_SubtitlesOff": "隐藏角色说话时的头顶字幕（保留语音）",
+    "ContextMenu_GFL2_RemoteModelsOn": "联机时显示其他玩家的少前2角色模型",
+    "ContextMenu_GFL2_RemoteModelsOff": "将其他玩家回退为原版角色，适合大服低配机提升帧率",
+    "ContextMenu_GFL2_RemoteChestPhysicsTip": "调节联机中其他玩家的胸部软体物理强度（0 为关闭以节省性能）",
+    "ContextMenu_GFL2_RemoteClothHairOn": "已为其他玩家开启头发与衣服物理模拟",
+    "ContextMenu_GFL2_RemoteClothHairOff": "已关闭其他玩家的头发与衣服物理（默认关闭以节省联机 CPU）",
+    "ContextMenu_GFL2_RemoteVoiceOn": "播放周围队友的 3D 空间日语语音",
+    "ContextMenu_GFL2_RemoteVoiceOff": "屏蔽其他玩家的语音播放与头顶字幕",
+    "ContextMenu_GFL2_RemoteSubtitlesOn": "队友喊话时在其头顶显示字幕",
+    "ContextMenu_GFL2_RemoteSubtitlesOff": "隐藏队友头顶字幕（保留语音）",
+    "ContextMenu_GFL2_StudioPreviewOn": "开启光影（Native / Somber）时，整备室与物品栏人物预览同步启用少前2原材质渲染，闲置自动回收显存",
+    "ContextMenu_GFL2_StudioPreviewOff": "关闭界面原材质预览，回退为轻量预览并立即释放预览显存"
 }

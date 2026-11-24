@@ -66,6 +66,9 @@ public final class Bridge {
             ViewpointModel backend=session.viewpointModel;
             PmxDrawMesh prepared=backend==null?null:backend.prepared;if(prepared==null)return;
             if(body<0)return;
+            if(actor instanceof zombie.characters.IsoPlayer p&&p.isLocalPlayer()){
+                VmdCameraController.recordPlacement(p,sourcePlacement,session.scale);
+            }
             Matrix4f targetPlacement=bodyPlacement(session,sourcePlacement,slot.inVehicle,firstPerson);
             draw=new Frozen(session,prepared,data,draws,first,originalEnd);
             backend.retainHeldFrames(data,draw.previous,draw.older);

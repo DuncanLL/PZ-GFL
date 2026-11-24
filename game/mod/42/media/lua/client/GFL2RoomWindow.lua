@@ -406,10 +406,6 @@ end
 GFL2RoomWindow=ISCollapsableWindow:derive("GFL2RoomWindow")
 GFL2RoomWindow.instances={}
 local W=GFL2RoomWindow
-local motionEntryPlayers={}
-local function motionEntryVisible(window)
-    return motionEntryPlayers[window.playerIndex]==window.player
-end
 function W:titleBarHeight() return 50 end
 local function rosterCard(window, column, y)
     local cell = math.floor((window.gridWidth-12)/3)
@@ -529,6 +525,22 @@ local function button(parent,x,y,w,title,target,callback)
             if s.tooltip then s:updateTooltip() end
             return
         end
+        if s.roomLook=="topGear" then
+            local active=s.parent and s.parent.tab=="settings"
+            local h=s.roomHover or 0
+            local a=(active and .92 or (.74+h*.16))*ea
+            if active then
+                s:drawRect(0,0,s.width,s.height,a,.14,.115,.085)
+                s:drawRectBorder(0,0,s.width,s.height,.88*ea,.95,.62,.20)
+                s:drawRect(0,0,s.width,1,.55*ea,.98,.78,.42)
+            else
+                s:drawRect(0,0,s.width,s.height,a,.045+h*.03,.060+h*.03,.072+h*.03)
+                s:drawRectBorder(0,0,s.width,s.height,(.18+h*.34)*ea,.78+h*.17,.86-h*.22,.90-h*.68)
+                s:drawRect(0,0,s.width,1,.22*ea,.86,.92,.95)
+            end
+            if s.tooltip then s:updateTooltip() end
+            return
+        end
         local c=s.backgroundColor
         local a=enabled and c.a or .48
         if s.roomTab then a=.36+s.roomHover*.38 end
@@ -577,6 +589,22 @@ local function button(parent,x,y,w,title,target,callback)
         local a=enabled and 1 or .54
         if s.roomArrow then
             chevron(s,s.width/2,s.height/2,s.roomArrow,25,a*(.82+s.roomHover*.18))
+            return
+        end
+        if s.roomLook=="topGear" then
+            local active=s.parent and s.parent.tab=="settings"
+            local h=s.roomHover or 0
+            local icon=image(art.."settings.png")
+            if icon then
+                local sz=18
+                local ox=math.floor((s.width-sz)/2)
+                local oy=math.floor((s.height-sz)/2)+(s.pressed and enabled and 1 or 0)
+                if active then
+                    s:drawTextureScaled(icon,ox,oy,sz,sz,a,.97,.74,.32)
+                else
+                    s:drawTextureScaled(icon,ox,oy,sz,sz,a*(.86+h*.14),.80+h*.16,.86-h*.10,.90-h*.50)
+                end
+            end
             return
         end
         if s.roomFold then
@@ -918,13 +946,23 @@ function W:createChildren()
     self.physicsResetButton=button(self,0,0,86,tr("RoomPhysicsShort"),self,self.requestPhysicsReset)
     self.physicsResetButton.roomLook="quiet"
     self.physicsResetButton:setTooltip(tr("PhysicsReset"))
-    self.settingsButton=button(self,0,0,86,tr("CharacterSettings"),self,function(w)w:setTab("settings")end)
+    self.settingsButton=button(self,self.width-93,8,34,"",self,function(w)
+        if w.drawAnimation then return end
+        if w.tab=="settings" then
+            w:setTab(w.tabBeforeSettings or "overview")
+        else
+            w.tabBeforeSettings=(w.tab~="settings" and w.tab) or "overview"
+            w:setTab("settings")
+        end
+    end)
+    self.settingsButton:setHeight(34)
+    self.settingsButton.roomLook="topGear"
     self.settingsButton:setTooltip(getText("ContextMenu_GFL2_CharacterSettingsTip"))
     self.restoreButton=button(self,0,0,96,tr("Restore"),self,self.onRestore)
     self.restoreButton.roomLook="restore"
     self.motionTab=button(self,0,0,86,tr("RoomMotion"),self,self.requestMotionPage)
     self.gripButton.roomTile="grip";self.expressionButton.roomTile="expression"
-    self.motionTab.roomTile="play";self.settingsButton.roomTile="settings"
+    self.motionTab.roomTile="play"
     self.foldButton=button(self,self.width-53,7,34,"",self,function(w)w:toggleRoomFold()end)
     self.foldButton.roomFold=true;self.foldButton.roomLook="bare"
     self.foldButton:setTooltip(tr("RoomFold"))
@@ -1005,12 +1043,13 @@ local function resourceIcon(p,key,x,y,size)
     if t then p:drawTextureScaled(t,x,y,size,size,1,1,1,1) end
 end
 
-local function bindResourceHold(window,add,action)
+local function bindResourceHold(window,add,action,guard)
     local down,up,outside,moveOutside,update=add.onMouseDown,add.onMouseUp,add.onMouseUpOutside,add.onMouseMoveOutside,add.update
     local function eligible(b)
         return b.enable and b:getIsVisible() and b:isMouseOver() and window.roomPage=="appearance"
             and not window.closed and not window.folded and not window.foldStart
             and not window.exchange and not window.workshopPrompt and not window.drawAnimation
+            and (not guard or guard(window))
     end
     local function complete(b)
         if not b.resourceHold or getTimestampMs()-b.resourceHold<resourceHoldMs then return end
@@ -1049,7 +1088,7 @@ end
 function W:createRoomResources()
     self.resourceButtons={}
     local width=math.min(130,math.floor(self.width*.105))
-    local start=self.width-60-3*(width+9)
+    local start=self.width-102-3*(width+9)
     for i,key in ipairs(economy.keys)do
         local chip=ISPanel:new(start+(i-1)*(width+9),8,width,34)
         chip:initialise();chip.background=false
@@ -1082,20 +1121,14 @@ function W:createRoomResources()
             b:drawRect(7,16,12,2,.86+.14*h,.84+.16*h,.90+.04*h,.92-.34*h)
             b:drawRect(12,11,2,12,.86+.14*h,.84+.16*h,.90+.04*h,.92-.34*h)
         end
-        if key=="targeted" then
-            bindResourceHold(self,add,function(w)
-                if motionEntryVisible(w) then motionEntryPlayers[w.playerIndex]=nil
-                else motionEntryPlayers[w.playerIndex]=w.player end
-                w:layoutOverview()
-            end)
-        elseif key=="outfit" and not self.multiplayerSession then
+        if key=="outfit" and not self.multiplayerSession then
             bindResourceHold(self,add,function(w)
                 if economy.toggleRecordingUnlocks(w.player)~=nil then w:refresh() end
-            end)
+            end,function() return economy.allowHoldGrant() end)
         elseif key=="credits" and not self.multiplayerSession then
             bindResourceHold(self,add,function(w)
                 if economy.grantTestCredits(w.player) then w.player:Say(getText("ContextMenu_GFL2_TestCredits")) end
-            end)
+            end,function() return economy.allowHoldGrant() end)
         end
         self.resourceButtons[i]=chip
     end
@@ -1375,6 +1408,8 @@ function W:roomVisibility()
     end
     self.motionLibraryBox:setVisible(motions);self.motionBox:setVisible(motions)
     for _,b in ipairs(self.resourceButtons)do b:setVisible(appearance) end
+    self.settingsButton:setVisible(appearance)
+    self.settingsButton:setX(self.width-93)
     self.closeButton:setVisible(true)
     if appearance then self:layoutOverview()
     else for _,b in ipairs(self.drawButtons)do b:setVisible(false) end end
@@ -1395,7 +1430,6 @@ end
 
 function W:setRoomPage(page)
     if self.roomPage==page or self.folded or self.foldStart then return end
-    if page=="motions" and not motionEntryVisible(self) then return end
     self:closeAllModals()
     self.motionSeek:cancel()
     if page=="motions" then
@@ -1452,10 +1486,11 @@ function W:layoutOverview()
     local outfitDraw=available and self.tab=="outfitDraw" and self.browsed and self.browsed.outfitLocked
         and self.browsed.outfitPool~=nil
     local characterDraw=overview and locked
-    local signatureWeapon=loaded and character.recruitment and signatureWeapons.byCharacter[character.recruitment.pool]
+    local signatureWeapon=loaded and economy.allowSignatureWeapons() and character.recruitment and signatureWeapons.byCharacter[character.recruitment.pool]
     if signatureWeapon and not getScriptManager():FindItem(signatureWeapon.id) then signatureWeapon=nil end
     local previousWeapon=self.signatureWeapon
     self.signatureWeapon=signatureWeapon
+    if not signatureWeapon and self.tab=="weaponDraw" then self.tab="overview" end
     local weaponPage=signatureWeapon and self.tab=="weaponDraw"
     local progress=signatureWeapon and economy.weaponProgress(self.player,signatureWeapon.id) or {}
     local variants=weaponPage and weaponSkins.available(signatureWeapon.id) or {}
@@ -1463,7 +1498,7 @@ function W:layoutOverview()
     local weaponDraw=weaponPage and available and not progress.acquired
     local first,last=self.drawButtons[1],self.drawButtons[2]
     local claimVisible=not not (weaponPage and progress.acquired and not self.drawAnimation)
-    local magazineVisible=claimVisible and economy.weaponMagazine(signatureWeapon)~=nil
+    local magazineVisible=claimVisible and economy.allowAmmoAndMagazines() and economy.weaponMagazine(signatureWeapon)~=nil
     local magazineWidth=math.min(first.width,152)
     local claimX=magazineVisible and first.x+magazineWidth+12 or first.x
     self.magazineClaimButton:setX(first.x)
@@ -1482,7 +1517,7 @@ function W:layoutOverview()
     self.weaponSkinButton:setX(first.x-77)
     self.weaponSkinButton:setY(last.y)
     self.weaponSkinButton:setVisible(showSkins)
-    local showAmmo=claimVisible and economy.weaponAmmo(signatureWeapon)~=nil
+    local showAmmo=claimVisible and economy.allowAmmoAndMagazines() and economy.weaponAmmo(signatureWeapon)~=nil
     self.weaponAmmoButton:setX((showSkins and self.weaponSkinButton.x or first.x)-55)
     self.weaponAmmoButton:setY(last.y)
     self.weaponAmmoButton:setVisible(showAmmo)
@@ -1506,11 +1541,10 @@ function W:layoutOverview()
     local x,y,width=self.overviewX,self.overviewY,self.overviewWidth
     local inner=width-24
     local rowY=y+54
-    for _,b in ipairs({self.gripButton,self.expressionButton,self.motionTab,self.settingsButton}) do
-        local listed=(b~=self.motionTab or motionEntryVisible(self))
-        b:setVisible(not not (listed and available and overview))
+    for _,b in ipairs({self.gripButton,self.expressionButton,self.motionTab}) do
+        b:setVisible(not not (available and overview))
         b:setX(x+12);b:setY(rowY);b:setWidth(inner);b:setHeight(35)
-        if listed then rowY=rowY+37 end
+        rowY=rowY+37
     end
     local restore=available and overview and GFL2CharacterRuntime.isEnabled(self.player)
     self.physicsResetButton:setVisible(available and overview)
@@ -1530,7 +1564,7 @@ function W:layoutOverview()
     local splitFooter=available and (overview or skins)
     self.wearButton:setX(splitFooter and x+secondary+6 or x);self.wearButton:setY(math.floor(self.height*.919))
     self.wearButton:setWidth(splitFooter and width-secondary-6 or width);self.wearButton:setHeight(43)
-    self.wearButton:setVisible(available and self.tab~="outfitDraw" and not weaponPage and (overview or skins or not self:canEditCurrent()))
+    self.wearButton:setVisible(available and self.tab~="outfitDraw" and self.tab~="settings" and not weaponPage and (overview or skins or not self:canEditCurrent()))
     self.weaponCard:setX(x)
     self.weaponCard:setWidth(width)
     self.weaponCard:setHeight(clamp(math.floor(self.fullHeight*.15),84,132))
@@ -1791,7 +1825,6 @@ function W:toolMessage()
 end
 
 function W:requestMotionPage()
-    if not motionEntryVisible(self) then return end
     if self:canEditCurrent() then
         self.toolNotice=nil
         self:setRoomPage("motions")
@@ -1821,7 +1854,8 @@ function W:updateWear()
     self.wearButton:setEnable(self.browsed~=nil and not wearing and (not locked or skins) and not pendingUnlock and not self.waiting)
     local available=self.browsed~=nil and not locked and not pendingUnlock
     for _,button in ipairs({self.pageButton,self.physicsResetButton,
-        self.gripButton,self.expressionButton,self.motionTab,self.settingsButton}) do button:setEnable(available) end
+        self.gripButton,self.expressionButton,self.motionTab}) do button:setEnable(available) end
+    self.settingsButton:setEnable(not self.drawAnimation)
 end
 function W:previewEntry(entry)
     local id=entry and entry.id
@@ -1977,7 +2011,7 @@ function W:beginTabMotion(direction)
     local rows={}
     for _,widget in ipairs(self.widgets)do rows[widget]=widget.y end
     if self.tab=="overview" then
-        for _,widget in ipairs({self.gripButton,self.expressionButton,self.settingsButton,self.physicsResetButton,self.motionTab,self.restoreButton})do
+        for _,widget in ipairs({self.gripButton,self.expressionButton,self.physicsResetButton,self.motionTab,self.restoreButton})do
             if widget:getIsVisible() then rows[widget]=widget.y end
         end
     end
@@ -2456,7 +2490,41 @@ require("GFL2Room/Motion").install(W,roomCtx)
 require("GFL2Room/Weapon").install(W,roomCtx)
 require("GFL2Room/Tabs").install(W,roomCtx)
 
-function W.open(player,actions)
+function W:focusEquippedCharacter()
+    if not self.currentId or not self.characters then return false end
+    for _,character in ipairs(self.characters) do
+        for _,skin in ipairs(character.skins or {}) do
+            if skin.id==self.currentId then
+                if self.character~=character.name then self:onCharacter(character) end
+                if not self.browsed or self.browsed.id~=skin.id then self:previewEntry(skin) end
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function W:openTarget(target)
+    if not target or target=="" then return end
+    if self.folded then self:toggleRoomFold() end
+    if target=="motions" then
+        self:focusEquippedCharacter()
+        self:requestMotionPage()
+    elseif target=="grip" then
+        if self.roomPage=="motions" then self:setRoomPage("appearance") end
+        self:focusEquippedCharacter()
+        if self:canEditCurrent() then self:setTab("grip")
+        else self:setTab("overview");self.toolNotice=self:toolMessage() end
+    elseif target=="settings" then
+        if self.roomPage=="motions" then self:setRoomPage("appearance") end
+        self:setTab("settings")
+    elseif target=="overview" then
+        if self.roomPage=="motions" then self:setRoomPage("appearance") end
+        self:setTab("overview")
+    end
+end
+
+function W.open(player,actions,target)
     if not GFL2ReadyRoom then player:Say(getText("ContextMenu_GFL2Character_JavaUnavailable"));return end
     local index=player:getPlayerNum()
     local sw,sh=getCore():getScreenWidth(),getCore():getScreenHeight()
@@ -2468,6 +2536,7 @@ function W.open(player,actions)
         window:setY(clamp(window:getY(),0,math.max(0,sh-targetH)))
         window:setVisible(true)
         window:bringToTop()
+        if target then window:openTarget(target) end
         return window
     end
     if window then window:close() end
@@ -2481,12 +2550,13 @@ function W.open(player,actions)
     window.resizable=false;window.drawFrame=false;window.yaw=0;window.zoom=DEFAULT_ZOOM
     window.cameraPan=0;window.cameraFocus=0
     window:initialise();window:addToUIManager();W.instances[index]=window
-    window:setVisible(true);window:bringToTop();return window
+    window:setVisible(true);window:bringToTop()
+    if target then window:openTarget(target) end
+    return window
 end
 function W.closeAll()
     local windows=W.instances
     W.instances={}
-    motionEntryPlayers={}
     for _,window in pairs(windows)do window:close()end
     data=nil;textures={};roomText={};roleNames={};outfitNames={}
     biographies={};outfitDescriptions={};recruitmentText={};descriptionCache={}

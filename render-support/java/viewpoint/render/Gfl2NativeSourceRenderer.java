@@ -71,7 +71,7 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
     private record Ready(Actor actor,int identity,History old,boolean history,float[] placement,float[] eye,
                          Gfl2FrameInputs builder,Gfl2FrameInputs.Inputs packet,Map<String,float[]> input,
                          Gfl2NativeLocalLights lights,Gfl2NativeEnvironment.Shadow shadow,int attributes,
-                         int cube,int lighting,Map<String,Local> locals){}
+                         int cube,int lighting,float outlineScale,Map<String,Local> locals){}
     private record Job(Ready ready,Draw draw,int queue,float depth){}
     private static final List<String> STAGES=List.of("GFCharForward","GFHairShadow","GFCharFaceShadow","GFCharHairTransE","GFOutline","GFCharTransMrtWrtie","GFCharTransBack","GFCharTransFront","GFCharTransOutline");
     public Gfl2NativeSourceRenderer()throws Exception{
@@ -244,8 +244,11 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
                 depth[draw.index]=-position.z;
             }
             // Keep the host's palette and draw buffers attached across the source passes.
+            var displaySettings=viewpoint.platform.Gfl2NativePackSelection.displaySettings();
+            boolean skipOutline=displaySettings!=null&&displaySettings.outlineWidth()<=1e-4f;
             try(AutoCloseable bindings=modelBindings(models)){
                 for(String stage:STAGES){
+                    if(skipOutline&&(stage.equals("GFOutline")||stage.equals("GFCharTransOutline")))continue;
                     List<Job> jobs=new ArrayList<>();
                     for(Ready actor:ready)for(Draw draw:actor.actor.draws){
                         JSONObject pass=materials.optionalPass(draw.material,stage);if(pass==null)continue;
@@ -302,13 +305,30 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
         environment.reflection(frame,center,java.lang.Math.max(engine[3],0),identity);
         input.put("_MainLightWorldToShadow",shadow.sourceMatrices());input.put("_MainLightShadowParams",new float[]{1,1,0,0});input.put("_MainLightShadowmapSize",new float[]{1f/shadow.size(),1f/shadow.size(),shadow.size(),shadow.size()});input.put("_CascadeDepthBiasArray",new float[4]);input.put("_CascadeNormalBiasArray",new float[4]);
         if(packet.cameraFillSlot()>=0){float[] colors=input.get("_AdditionalLightsColor");float nativeLevel=java.lang.Math.max(engine[0],java.lang.Math.max(engine[1],engine[2]));for(int c=0;c<3;c++)colors[packet.cameraFillSlot()*4+c]*=nativeLevel;}
-        return new Ready(actor,identity,old,history,placement,eye,builder,packet,input,localLights,shadow,materials.attributeTexture(actor.model),environment.cube,lighting,new HashMap<>());
+        return new Ready(actor,identity,old,history,placement,eye,builder,packet,input,localLights,shadow,materials.attributeTexture(actor.model),environment.cube,lighting,outlineDistanceScale(input),new HashMap<>());
+    }
+    static float outlineDistanceScale(Map<String,float[]> input){
+        float[] objValues=input.get("unity_ObjectToWorld"),camValues=input.get("unity_CameraToWorld"),vpValues=input.get("unity_MatrixVP");
+        if(objValues==null||camValues==null||vpValues==null)return 1f;
+        Matrix4f obj=new Matrix4f().set(objValues),cam=new Matrix4f().set(camValues),vp=new Matrix4f().set(vpValues);
+        float meterLen=(float)Math.sqrt(obj.m10()*obj.m10()+obj.m11()*obj.m11()+obj.m12()*obj.m12());
+        if(!Float.isFinite(meterLen)||meterLen<=1e-6f)return 1f;
+        float ux=cam.m10(),uy=cam.m11(),uz=cam.m12(),uLen=(float)Math.sqrt(ux*ux+uy*uy+uz*uz);
+        if(!Float.isFinite(uLen)||uLen<=1e-6f){ux=0f;uy=1f;uz=0f;}else{ux/=uLen;uy/=uLen;uz/=uLen;}
+        var p0=new org.joml.Vector4f(0f,0.9f,0f,1f);obj.transform(p0);
+        var p1=new org.joml.Vector4f(p0.x+ux*meterLen,p0.y+uy*meterLen,p0.z+uz*meterLen,1f);
+        vp.transform(p0);vp.transform(p1);
+        if(p0.w<=1e-4f||p1.w<=1e-4f)return 1f;
+        float ndcPerMeter=Math.abs(p1.y/p1.w-p0.y/p0.w);
+        if(!Float.isFinite(ndcPerMeter))return 1f;
+        // Original GFOutline enforces a ~1.2px screen floor; keep close-up look at 1.0 and attenuate as actor shrinks on screen.
+        return Math.max(0.16f,Math.min(1f,ndcPerMeter/0.72f));
     }
     private void drawPrepared(FrameContext frame,ModelPass models,ModelDraws draws,Ready ready,Draw draw,String stage)throws Exception{
         String root=ready.actor.model.getJSONObject("renderer_frames").getJSONObject("materials").optString(Integer.toString(draw.material),null);
         Map<String,float[]> input=ready.input;
         Local local=root==null?new Local(input,input.get("unity_WorldToObject"),normal(matrix(input.get("unity_ObjectToWorld"))),ready.packet.previousInverse()):ready.locals.computeIfAbsent(root,r->local(ready.builder,r,draws,draw,input,ready.history,ready.identity));
-        Gfl2OriginalProgram program=nativePrograms.source(draw.material,stage);characterControls(program,draw.material);program.registers(registers(program,draw.material,root,local.values,ready.identity,false,ready.lighting));program.textures(materials.textureBindings(program,draw.material,ready.cube,ready.shadow.texture(),environment.shadowSampler));
+        Gfl2OriginalProgram program=nativePrograms.source(draw.material,stage);characterControls(program,draw.material,ready.outlineScale);program.registers(registers(program,draw.material,root,local.values,ready.identity,false,ready.lighting));program.textures(materials.textureBindings(program,draw.material,ready.cube,ready.shadow.texture(),environment.shadowSampler));
         program.nativeInputs(local.inverse,local.inverseNormal,ready.actor.model.getInt("attribute_records"));program.nativeFrame(ready.history?ready.old.placement:ready.placement,local.previousInverse,ready.history?ready.old.eye:ready.eye,new float[2],ready.history);
         program.nativeProgram().set("gf2NativeMotionJitter",ready.history?frame.jitterX/width-ready.old.jitterU:0,ready.history?frame.jitterY/height-ready.old.jitterV:0);
         GL13.glActiveTexture(GL13.GL_TEXTURE0+126);GL11.glBindTexture(GL11.GL_TEXTURE_2D,ready.attributes);
@@ -365,9 +385,15 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
         reliefFrame=index;
     }
     private void characterControls(Gfl2OriginalProgram program,int material){
+        characterControls(program,material,1f);
+    }
+    private void characterControls(Gfl2OriginalProgram program,int material,float outlineScale){
         var settings=viewpoint.platform.Gfl2NativePackSelection.displaySettings();GlProgram gl=program.nativeProgram();gl.use();
         gl.set("gf2CharacterEnhancement",settings==null?0:settings.surfaceDetail(),settings==null?0:settings.skinGloss(),materials.surfaceWeight(material));
-        if(gl.has("gf2CharacterOutlineWidth"))gl.set("gf2CharacterOutlineWidth",settings==null?1:settings.outlineWidth());
+        if(gl.has("gf2CharacterOutlineWidth")){
+            float width=settings==null?1f:Math.max(0f,settings.outlineWidth());
+            gl.set("gf2CharacterOutlineWidth",width*outlineScale);
+        }
     }
     private int drawNative(FrameContext frame,ModelPass models,Gfl2OriginalProgram program,JSONObject state,int selected,boolean trackCoverage)throws Exception{
         GlProgram gl=program.nativeProgram();gl.use();gl.setInt("uShadowPalette",0);gl.setInt("uIrisEntity",-1);gl.setInt("uIrisUntinted",0);gl.set("uIrisEye",frame.eyeX,frame.eyeY,frame.eyeZ);

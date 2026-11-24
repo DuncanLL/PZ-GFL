@@ -29,6 +29,9 @@ public final class PmxModel implements AutoCloseable {
     private boolean motionPaused,motionRestorePhysics;
     private float motionFrame,motionEnd,motionSpeed=1f;
     private String motionName="";
+    private VmdCamera camera;
+    private String cameraName="";
+    private boolean cameraEnabled=true;
 
     private static final class Profile {
         int format, bones, source_root, target_root, source_motion;
@@ -237,7 +240,27 @@ public final class PmxModel implements AutoCloseable {
     public synchronized boolean motionActive() { return motion!=0; }
     public synchronized boolean motionPaused() { return motion!=0&&motionPaused; }
     public synchronized String motionName() { return motionName; }
+    public synchronized float motionFrame() { return motionFrame; }
     public synchronized long motionRevision() { return motionRevision; }
+    public synchronized void loadCamera(Path file) throws IOException {
+        if(closed)throw new IllegalStateException("角色已关闭");
+        VmdCamera next=VmdCamera.load(file);
+        camera=next;
+        cameraName=file.getFileName().toString();
+        cameraEnabled=true;
+    }
+    public synchronized void clearCamera() {
+        camera=null;
+        cameraName="";
+        cameraEnabled=true;
+    }
+    public synchronized void toggleCamera() {
+        if(camera!=null)cameraEnabled=!cameraEnabled;
+    }
+    public synchronized VmdCamera.Sample sampleCamera() {
+        if(motion==0||camera==null||!cameraEnabled)return null;
+        return camera.sample(motionFrame);
+    }
     public synchronized void toggleMotionPause() { if(motion!=0)motionPaused=!motionPaused; }
     public synchronized void setMotionSpeed(float speed) {
         if(!Float.isFinite(speed)||speed<0f||speed>1f)throw new IllegalArgumentException("倍速须在 0～1 之间");
@@ -249,7 +272,8 @@ public final class PmxModel implements AutoCloseable {
     public synchronized JSONObject motionTimeline() {
         return new JSONObject().put("name",motionName).put("paused",motionPaused())
             .put("physics",physicsEnabled()).put("frame",motionFrame).put("endFrame",motionEnd).put("speed",motionSpeed)
-            .put("revision",Long.toString(motionRevision));
+            .put("revision",Long.toString(motionRevision))
+            .put("camera",cameraName).put("cameraEnabled",camera!=null&&cameraEnabled);
     }
     public synchronized boolean seekMotion(long revision,float fraction) {
         if(motion==0||motionEnd<=0||motionRevision!=revision||!Float.isFinite(fraction))return false;

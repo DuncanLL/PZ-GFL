@@ -456,11 +456,11 @@ if roomTranslations then
   end
  end
  local sliders,buttons=collectSettings()
- assert(#sliders==2 and #buttons==2,"editable chest settings must render 2 sliders and 2 buttons")
+ assert(#sliders==2 and #buttons==4,"editable chest settings must render 2 sliders and 4 buttons")
  assert(sliders[1].currentValue==40 and sliders[2].currentValue==80)
  assert(sliders[1].doToolTip==false and sliders[2].doToolTip==false)
  assert(type(sliders[1].tooltip)=="string" and type(sliders[2].tooltip)=="string")
- assert(buttons[1].roomActive==true)
+ assert(buttons[3].roomActive==true)
  sliders[1].onValueChange(sliders[1].target,25)
  sliders[2].onValueChange(sliders[2].target,65)
  assert(voiceVal==25 and chestVal==65)
@@ -468,19 +468,19 @@ if roomTranslations then
  renderWidgets()
  sliders[1].dragInside=false
  renderWidgets()
- buttons[1].onclick(buttons[1].target,buttons[1])
- assert(physics==false and buttons[1].roomActive==false)
- buttons[2].onclick(buttons[2].target,buttons[2])
+ buttons[3].onclick(buttons[3].target,buttons[3])
+ assert(physics==false and buttons[3].roomActive==false)
+ buttons[4].onclick(buttons[4].target,buttons[4])
  assert(voiceVal==50 and chestVal==100 and physics==true,"reset button must restore voice, chest strength, and cloth physics")
  hasChest=false
  w:setTab("settings")
  sliders,buttons=collectSettings()
- assert(#sliders==1 and #buttons==2,"no-chest editable settings must render voice slider, cloth toggle, and reset")
+ assert(#sliders==1 and #buttons==4,"no-chest editable settings must render voice slider, subtitles toggle, studio preview toggle, cloth toggle, and reset")
  renderWidgets()
  w.canEditCurrent=function()return false end
  w:setTab("settings")
  sliders,buttons=collectSettings()
- assert(#sliders==1 and #buttons==1,"read-only settings must still render voice slider and reset")
+ assert(#sliders==1 and #buttons==3,"read-only settings must still render voice slider, subtitles toggle, studio preview toggle, and reset")
  renderWidgets()
  w.canEditCurrent=function()return true end
  GFL2CharacterRuntime.modelPhysicsEnabled,w.actions.bodyPhysics=oldPhysics,oldToggle
@@ -488,8 +488,8 @@ if roomTranslations then
  w.actions.getVoiceVolume,w.actions.setVoiceVolume=oldVoiceGet,oldVoiceSet
  w:setTab("overview")
  w:layoutBiography(w.byCharacter[w.character])
- assert(w.settingsButton.visible and w.settingsButton.width==w.expressionButton.width)
- assert(w.settingsButton.y>=w.expressionButton.y+w.expressionButton.height)
+ assert(w.settingsButton.visible and w.settingsButton.roomLook=="topGear" and w.settingsButton.y==8 and w.settingsButton.x<w.foldButton.x)
+ assert(w.motionTab.visible and w.motionTab.width==w.expressionButton.width and w.motionTab.y>=w.expressionButton.y+w.expressionButton.height)
  assert(w.skinButton.x==w.overviewX and w.skinButton.x+w.skinButton.width<w.wearButton.x)
  assert(w.biographyPanel.y>=w.physicsResetButton.y+w.physicsResetButton.height)
  local bottom=w.weaponCard.visible and w.weaponCard.y or w.wearButton.y
@@ -515,36 +515,17 @@ do
  local function down(button)held=true;button:onMouseDown(5,10)end
  local function up(button)held=false;button:onMouseUp(5,10)end
 
- assert(not w.motionTab.visible and not w.motionLibraryBox.visible and not w.motionBox.visible)
- w:setRoomPage("motions");w:requestMotionPage()
- assert(w.roomPage=="appearance","hidden VMD tool opened")
+ assert(w.motionTab.visible and not w.motionLibraryBox.visible and not w.motionBox.visible)
+ assert(w.motionTab.x==w.expressionButton.x and w.motionTab.y>=w.expressionButton.y+w.expressionButton.height)
  w:updateTabMotion()
- local compactX,compactY=w.physicsResetButton.x,w.physicsResetButton.y
  local targeted=plus(w)
  local permit=(getTextOrNull and getTextOrNull("UI_GFL2_RoomTargetedPermit")) or roomData.text.RoomTargetedPermit
  local motion=(getTextOrNull and getTextOrNull("UI_GFL2_RoomMotion")) or roomData.text.RoomMotion
  assert(targeted.tooltip==permit and w.motionTab.roomTitle==motion)
  down(targeted);clock=clock+180;up(targeted)
- assert(purchases==1 and lastKey=="targeted" and not w.motionTab.visible)
- down(targeted);clock=clock+1500
- local chip=targeted.parent
- local oldRect=chip.drawRect
- local progress
- chip.drawRect=function(_,_,y,width,height,alpha)
-  if y==chip.height-2 and height==2 and alpha==.92 then progress=width end
- end
- chip:prerender()
- assert(progress==(chip.width-4)/2,"permit hold meter must follow the three-second timer")
- chip.drawRect=oldRect
- clock=clock+1499;targeted:update()
- assert(not w.motionTab.visible,"gesture completed before three seconds")
- clock=clock+1;targeted:update()
- assert(w.motionTab.visible and w.motionTab.x==w.expressionButton.x and w.motionTab.y>=w.expressionButton.y+w.expressionButton.height)
- assert(w.physicsResetButton.y>compactY,"list did not reflow around the revealed button")
- clock=clock+3000;targeted:update()
- assert(w.motionTab.visible,"one hold toggled the entry twice")
- up(targeted)
- assert(purchases==1,"a completed long press opened the permit exchange")
+ assert(purchases==1 and lastKey=="targeted" and w.motionTab.visible)
+ down(targeted);clock=clock+3500;targeted:update();up(targeted)
+ assert(w.motionTab.visible,"targeted hold must not hide the normal VMD entry")
 
  local canEditCurrent=w.canEditCurrent
  w.canEditCurrent=function()return true end
@@ -594,27 +575,23 @@ do
  assert(seek:onMouseDown(seek:getMouseX(),24));playback.revision=4;w:refreshMotionControls()
  assert(not seek.dragInside and not seek:onMouseUp(20) and seekCalls==1)
  GFL2ReadyRoom.motionCommand=oldCommand
+ w:openTarget("settings")
+ assert(w.roomPage=="appearance" and w.tab=="settings","openTarget(settings) failed")
+ w:openTarget("overview")
+ assert(w.roomPage=="appearance" and w.tab=="overview","openTarget(overview) failed")
+ w:openTarget("motions")
+ assert(w.roomPage=="motions","openTarget(motions) failed")
  w.canEditCurrent=canEditCurrent
  w:back()
  assert(w.roomPage=="appearance" and w.motionTab.visible)
  w:close()
  w=GFL2RoomWindow.open(actor,actions)
  w:onCharacter(w.byCharacter[newcomer.name])
- assert(w.motionTab.visible,"closing the window discarded the per-player session toggle")
-
- targeted=plus(w)
- down(targeted);clock=clock+3000;up(targeted)
- assert(not w.motionTab.visible and w.physicsResetButton.x==compactX and w.physicsResetButton.y==compactY)
- assert(purchases==1,"release after three seconds opened the permit exchange")
- down(targeted);clock=clock+1500
- over=false;targeted:onMouseMoveOutside(1,0)
- over=true;clock=clock+3000;targeted:update()
- assert(not w.motionTab.visible,"leaving the button failed to cancel the timer")
- targeted:onMouseUpOutside(0,0);held=false
+ assert(w.motionTab.visible,"VMD entry must remain visible on reopen")
 
  local outfit=plus(w,2)
  down(outfit);clock=clock+180;up(outfit)
- assert(not w.motionTab.visible and purchases==2 and lastKey=="outfit")
+ assert(w.motionTab.visible and purchases==3 and lastKey=="outfit")
  local characterBefore,outfitBefore,weaponBefore={},{},{}
  for _,character in ipairs(w.characters)do
   if character.recruitment then
@@ -633,13 +610,13 @@ do
  for id in pairs(weaponBefore)do assert(economy.weaponProgress(actor,id).acquired) end
  clock=clock+3000;outfit:update()
  assert(economy.outfitOwned(actor,"not-yet-owned"),"one hold toggled recording twice")
- up(outfit);assert(purchases==2 and not w.motionTab.visible)
+ up(outfit);assert(purchases==3 and w.motionTab.visible)
  down(outfit);clock=clock+3000;up(outfit)
  for key,owned in pairs(characterBefore)do assert(economy.characterUnlocked(actor,key)==owned) end
  for id,owned in pairs(outfitBefore)do assert(economy.outfitOwned(actor,id)==owned) end
  for id,owned in pairs(weaponBefore)do assert((economy.weaponProgress(actor,id).acquired==true)==owned) end
  assert(not economy.outfitOwned(actor,"not-yet-owned") and economy.balance(actor,"outfit")==permits)
- assert(purchases==2,"recording holds opened the permit exchange")
+ assert(purchases==3,"recording holds opened the permit exchange")
  local credits=plus(w,3)
  local balance=economy.balance(actor,"credits")
  local oldSay=actor.Say
@@ -648,7 +625,7 @@ do
  assert(economy.balance(actor,"credits")==balance,"credits granted before three seconds")
  clock=clock+1;credits:update()
  assert(economy.balance(actor,"credits")==balance+50000,"credits were not granted at three seconds")
- up(credits);assert(purchases==2,"credit hold opened the exchange")
+ up(credits);assert(purchases==3,"credit hold opened the exchange")
  actor.Say=oldSay
  local railWindow={content=UI:new(0,0,300,340),fullHeight=700,widgets={},browseId="one",tab="skins",
   updateWear=function()end,previewEntry=function(self,e)self.browsed=e end}
@@ -661,12 +638,10 @@ do
  assert(rail.index==3 and rail.slideFrom>1 and rail.slideFrom<2,"interrupted scroll snapped to the old target")
  clock=clock+200;rail:onMouseDown(150,160);rail:onMouseMove(90,0);rail:onMouseUp(240,160)
  assert(rail.index==2 and rail.slideFrom>2 and rail.slideFrom<3,"drag did not settle from the pointer position")
- down(targeted);clock=clock+3000;targeted:update();up(targeted)
- assert(w.motionTab.visible)
  GFL2RoomWindow.closeAll()
  w=GFL2RoomWindow.open(actor,actions)
  w:onCharacter(w.byCharacter[newcomer.name])
- assert(not w.motionTab.visible,"room session reset did not restore the hidden default")
+ assert(w.motionTab.visible,"VMD entry must remain visible after session reset")
  GFL2ReadyRoom.motionLibrary,GFL2ReadyRoom.motionState=motionLibrary,motionState
  getTimestampMs,isMouseButtonDown,ISUIElement=oldClock,oldMouse,oldElement
 end

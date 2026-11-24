@@ -72,6 +72,7 @@ final class ModelSession {
     record Snapshot(PmxDrawMesh.FrameData frame, Materials materials) {}
     Materials materials;
     final Main.Entry entry;
+    final boolean previewOnly;
     private long appearanceRevision=Long.MIN_VALUE,materialVersion,imageEpoch;
     private boolean hiddenHead;
 
@@ -79,8 +80,11 @@ final class ModelSession {
         this(api,grip,entry,false);
     }
     ModelSession(NativeFunc api,OzzGrip grip,Main.Entry entry,boolean previewOnly) throws Exception {
-        this.api=api;this.grip=grip;this.entry=entry;
-        profile=new JSONObject(Files.readString(entry.profile()));shading=previewOnly ? null : PmxShading.load(entry.model(),profile);scale=(float)profile.getDouble("unit_scale");
+        this.api=api;this.grip=grip;this.entry=entry;this.previewOnly=previewOnly;
+        profile=new JSONObject(Files.readString(entry.profile()));
+        boolean loadShading=!previewOnly||ReadyRoomPreview.studioPreviewAvailable();
+        shading=loadShading ? PmxShading.load(entry.model(),profile) : null;
+        scale=(float)profile.getDouble("unit_scale");
         var names=profile.getJSONArray("source_bone_names");sourceNames=new String[names.length()];
         for(int i=0;i<sourceNames.length;i++)sourceNames[i]=names.getString(i);
         var ref=profile.getJSONArray("source_reference");reference=new float[ref.length()];for(int i=0;i<reference.length;i++)reference[i]=(float)ref.getDouble(i);
@@ -155,7 +159,7 @@ final class ModelSession {
         boolean onFurniture=owner!=null && owner.isSittingOnFurniture() && owner.getSitOnFurnitureObject()!=null
                 && owner.getVehicle()==null && !model.motionActive();
         if(onFurniture && furnitureSeat==null)furnitureSeat=new FurnitureSeat(profile);
-        boolean useGpu=!viewpoint&&gpu!=null&&!gpuDisabled&&!(onFurniture&&furnitureSeat.needsMeasurement());
+        boolean useGpu=!viewpoint&&!previewOnly&&gpu!=null&&!gpuDisabled&&!(onFurniture&&furnitureSeat.needsMeasurement());
         if(useGpu)model.applyPose(poseForModel,holding?grip:null,seconds,-1,-1,gripAdjustment);
         else model.apply(poseForModel,holding?grip:null,seconds,firstPerson?sourceHead:-1,firstPerson?targetHead:-1,gripAdjustment);
         if(materials==null||appearanceRevision!=model.appearance().revision()||materials.epoch()!=imageEpoch) {
@@ -175,7 +179,7 @@ final class ModelSession {
         if(next==null)next=cpuFrame(finalMaterials,viewpoint);
         furnitureDrop=onFurniture ? furnitureSeat.offset(api,model,profile,scale,sourcePose,next,
             owner.getVariableBoolean("SitOnFurnitureStarted"),owner.isFemale()) : 0;
-        fullFrame=hideHead?new PmxDrawMesh.FrameData(next.positions(),next.normals(),model.appearance().readMaterials(false)):next;
+        fullFrame=hideHead?new PmxDrawMesh.FrameData(next.positions(),next.normals(),model.appearance().readMaterials(false),next.shadingHead()):next;
         long cpuNanos=System.nanoTime()-wallNanos,wallGap=lastWallNanos==0?0:wallNanos-lastWallNanos;
         if((cpuNanos>50_000_000L||wallGap>100_000_000L)&&(lastSlowFrame==Long.MIN_VALUE||frame-lastSlowFrame>=300)){
             lastSlowFrame=frame;
@@ -192,9 +196,11 @@ final class ModelSession {
         api.CopyDataToByteBuffer(normals,api.GetNormals(model.handle()),normals.capacity());
         float[] p=new float[positions.capacity()/4],n=new float[p.length];
         positions.asFloatBuffer().get(p);normals.asFloatBuffer().get(n);model.deformChest(p,n);
+        boolean needShading=shading!=null&&(viewpoint||ReadyRoomPreview.studioPreviewAvailable());
         return new PmxDrawMesh.FrameData(p,n,finalMaterials,
-            !viewpoint||shading==null?null:shading.freeze(api,model.handle(),finalMaterials,p,materials.paths()));
+            !needShading?null:shading.freeze(api,model.handle(),finalMaterials,p,materials.paths()));
     }
+    String pmxSha256(){return profile.getString("pmx_sha256");}
 
     synchronized void disableGpu(Throwable failure) {
         if(!gpuDisabled)System.err.println("[GFL2] GPU deformation fallback for "+entry.id()+": "+failure);
@@ -218,7 +224,7 @@ final class ModelSession {
             if(viewpoint){viewpointModel.upload(frame,materials);ready=viewpointModel.ready();}
             else {
                 preparePlainMaterials(materials);plainMesh(frame);ready=true;
-                if(gpu==null&&!gpuDisabled) {
+                if(!previewOnly&&gpu==null&&!gpuDisabled) {
                     try {gpu=GpuDeformation.create(api,model);gpuDisabled=gpu==null;}
                     catch(RuntimeException|LinkageError failure){disableGpu(failure);}
                 }
