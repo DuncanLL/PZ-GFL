@@ -109,7 +109,7 @@ final class ModelSession {
         try { candidate=new IdleHandPose(api,model,profile); }
         catch(RuntimeException e) { candidate=null;System.out.println("[GFL2CharacterRuntime] Idle hand unavailable: "+e); }
         idleHand=candidate;
-        idleAmbient=previewOnly?null:new IdleAmbientMotion(sourceNames);
+        idleAmbient=previewOnly?null:new IdleAmbientMotion(sourceNames,reference);
         positions=ByteBuffer.allocateDirect(Math.toIntExact(profile.getLong("vertices")*12)).order(ByteOrder.nativeOrder());
         normals=ByteBuffer.allocateDirect(positions.capacity()).order(ByteOrder.nativeOrder());
         }catch(RuntimeException|Error e){model.close();throw e;}
@@ -153,10 +153,13 @@ final class ModelSession {
         model.retargeter().setModelMotion(-x*scale/1.5f,z*2.4494896f*scale/1.5f,-y*scale/1.5f,player.getRenderedAngle());
         if(model.motionActive()&&player.getIsoGameCharacter() instanceof IsoPlayer actor&&!ReadyRoomPreview.motionAllowed(actor))model.stopMotion();
         long revision=model.motionRevision();boolean continuous=revision==lastMotionRevision&&frame==lastFrame+1;
-        float[] poseForModel=idleHand==null||model.motionActive()?sourcePose:idleHand.apply(sourcePose,sourceIndices,seconds,idleEligible);
+        float[] poseForModel=sourcePose;
         if(idleAmbient!=null&&!model.motionActive()) {
             boolean standing=!firstPerson&&IdleHandPose.standingIdle(player.getIsoGameCharacter());
             poseForModel=idleAmbient.apply(poseForModel,seconds,standing,holding);
+        }
+        if(idleHand!=null&&!model.motionActive()) {
+            poseForModel=idleHand.apply(poseForModel,sourceIndices,seconds,idleEligible);
         }
         preserveAimWeapon=holding&&firstPerson&&EfzAimCompatibility.keepsWeapon(player.getIsoGameCharacter());
         gripAdjustment=preserveAimWeapon&&adjustment!=null?adjustment.wristsOnly():adjustment;

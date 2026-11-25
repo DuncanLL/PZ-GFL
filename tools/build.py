@@ -112,6 +112,11 @@ def build(compare_baseline=False,native_candidate=None,release_reference=None):
         write(prefix + 'index.properties', index)
         for name in sorted(natives): write(prefix + name, natives[name].read_bytes())
         for name,path in sorted(resources.items()):write(name,path.read_bytes())
+        extra_res = ROOT / 'game/resources'
+        if extra_res.is_dir():
+            for path in sorted(extra_res.rglob('*')):
+                if path.is_file():
+                    write(path.relative_to(extra_res).as_posix(), path.read_bytes())
     with zipfile.ZipFile(temporary) as archive: assert archive.testzip() is None
     os.replace(temporary, jar)
     save(BUILD / 'build.json', {'status': 'PASS_FULL_SOURCE_BUILD_AND_RUNTIME_CLASS_PARITY' if compare_baseline else 'PASS_FULL_SOURCE_BUILD',
