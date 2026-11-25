@@ -34,6 +34,7 @@ final class IdleHandPose {
     private final float[] output;
     private final boolean available;
     private float strength,weight;
+    private boolean initialized;
 
     IdleHandPose(NativeFunc api,PmxModel model,JSONObject profile) {
         core=model.retargeter();
@@ -46,7 +47,7 @@ final class IdleHandPose {
         JSONArray metadata=new JSONArray(api.GetBoneMetadata(model.handle()));
         HashMap<String,Integer> lookup=new HashMap<>();
         for(int i=0;i<metadata.length();i++)lookup.put(normalize(metadata.getJSONObject(i).getString("name")),i);
-        ArrayList<Integer> roots=new ArrayList<>(),children=new ArrayList<>();ArrayList<Float> shares=new ArrayList<>();
+        ArrayList<Integer> roots=new ArrayList<>(),children=new ArrayList<>(),ends=new ArrayList<>();ArrayList<Float> shares=new ArrayList<>();
         ArrayList<Integer> thumbRoots=new ArrayList<>(),thumbMids=new ArrayList<>(),thumbTips=new ArrayList<>(),thumbSides=new ArrayList<>();
         HashSet<Integer> seen=new HashSet<>();JSONArray mapping=profile.getJSONArray("mapping");
         for(int i=0;i<mapping.length();i++) {
@@ -60,7 +61,7 @@ final class IdleHandPose {
                 if(child==null||end==null||parents.getInt(child)!=root||parents.getInt(end)!=child||!seen.add(child))continue;
                 float a=distance(pos,root,child),b=distance(pos,child,end);
                 if(!Float.isFinite(a+b)||a<=1e-5f||b<=1e-5f)continue;
-                roots.add(root);children.add(child);shares.add(a/(a+b));
+                roots.add(root);children.add(child);ends.add(seen.add(end)?end:-1);shares.add(a/(a+b));
             }else if(source.endsWith("_Finger0")){
                 if(!name.endsWith("0"))continue;
                 int side=source.contains("_L_")?0:source.contains("_R_")?1:-1;
@@ -69,11 +70,11 @@ final class IdleHandPose {
                 thumbRoots.add(root);thumbMids.add(mid);thumbTips.add(tip);thumbSides.add(side);
             }
         }
-        int[] r=new int[roots.size()],c=new int[roots.size()];float[] f=new float[roots.size()];
-        for(int i=0;i<r.length;i++){r[i]=roots.get(i);c[i]=children.get(i);f[i]=shares.get(i);}
+        int[] r=new int[roots.size()],c=new int[roots.size()],e=new int[roots.size()];float[] f=new float[roots.size()];
+        for(int i=0;i<r.length;i++){r[i]=roots.get(i);c[i]=children.get(i);e[i]=ends.get(i);f[i]=shares.get(i);}
         int[] tr=new int[thumbRoots.size()],tm=new int[thumbRoots.size()],tt=new int[thumbRoots.size()],ts=new int[thumbRoots.size()];
         for(int i=0;i<tr.length;i++){tr[i]=thumbRoots.get(i);tm[i]=thumbMids.get(i);tt[i]=thumbTips.get(i);ts[i]=thumbSides.get(i);}
-        core.configureFingerPreview(r,c,f,tr,tm,tt,ts);
+        core.configureFingerPreview(r,c,e,f,tr,tm,tt,ts);
         available=r.length>0&&hands[0]>=0&&hands[1]>=0&&fingers[0]>=0&&fingers[1]>=0;
         output=new float[names.length()*16];setStrength(profile.optDouble("hand_relax_strength",.7));
     }
@@ -111,21 +112,30 @@ final class IdleHandPose {
             throw new IllegalStateException(failure);
         }
     }
-    static boolean eligible(IsoGameCharacter actor,boolean holding) {
-        if(holding||actor==null)return false;
+    static boolean standingIdle(IsoGameCharacter actor) {
+        if(actor==null||actor.isDead()||actor.getVehicle()!=null)return false;
         try {
             var action=actor.getActionContext();if(action==null)return false;
             return "idle".equalsIgnoreCase(action.getCurrentStateName())&&childStateCount(action)==0
-                &&!actor.isMoving()&&!actor.isSneaking()&&!actor.isAiming()&&!actor.isSitting()&&!actor.isClimbing()
+                &&!actor.isMoving()&&!actor.isPlayerMoving()&&!actor.isSneaking()&&!actor.isAiming()
+                &&!actor.isSitting()&&!actor.isSittingOnFurniture()&&!actor.isClimbing()
                 &&!actor.isPerformingAttackAnimation()&&!actor.getVariableBoolean("IsPerformingAnAction")
                 &&!actor.getVariableBoolean("initiateAttack");
         } catch(IllegalStateException missingActorComponents) { return false; }
+    }
+    static boolean eligible(IsoGameCharacter actor,boolean holding) {
+        return !holding&&standingIdle(actor);
     }
     float[] apply(float[] source,int[] sourceIndices,float seconds,boolean eligible) {
         boolean valid=available;
         if(valid)for(int side=0;side<2;side++)valid&=sourceIndices[hands[side]]>=0&&sourceIndices[fingers[side]]>=0;
         float target=eligible&&valid?strength:0,previous=weight;
-        if(seconds>0&&weight!=target)weight+=(target-weight)*(1f-(float)Math.exp(-seconds/.12));
+        if(!initialized){
+            weight=target;
+            initialized=true;
+        } else if(seconds>0&&weight!=target) {
+            weight+=(target-weight)*(1f-(float)Math.exp(-seconds/.12));
+        }
         if(Math.abs(weight-target)<1e-4f)weight=target;
         if(weight!=previous)core.setFingerPreviewWeight(weight);
         if(weight<=0)return source;

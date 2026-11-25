@@ -27,6 +27,7 @@ import zombie.core.textures.Texture;
 final class ModelSession {
     final PmxModel model;
     final IdleHandPose idleHand;
+    final IdleAmbientMotion idleAmbient;
     final PmxShading shading;
     final NativeFunc api;
     final OzzGrip grip;
@@ -108,6 +109,7 @@ final class ModelSession {
         try { candidate=new IdleHandPose(api,model,profile); }
         catch(RuntimeException e) { candidate=null;System.out.println("[GFL2CharacterRuntime] Idle hand unavailable: "+e); }
         idleHand=candidate;
+        idleAmbient=previewOnly?null:new IdleAmbientMotion(sourceNames);
         positions=ByteBuffer.allocateDirect(Math.toIntExact(profile.getLong("vertices")*12)).order(ByteOrder.nativeOrder());
         normals=ByteBuffer.allocateDirect(positions.capacity()).order(ByteOrder.nativeOrder());
         }catch(RuntimeException|Error e){model.close();throw e;}
@@ -152,6 +154,10 @@ final class ModelSession {
         if(model.motionActive()&&player.getIsoGameCharacter() instanceof IsoPlayer actor&&!ReadyRoomPreview.motionAllowed(actor))model.stopMotion();
         long revision=model.motionRevision();boolean continuous=revision==lastMotionRevision&&frame==lastFrame+1;
         float[] poseForModel=idleHand==null||model.motionActive()?sourcePose:idleHand.apply(sourcePose,sourceIndices,seconds,idleEligible);
+        if(idleAmbient!=null&&!model.motionActive()) {
+            boolean standing=!firstPerson&&IdleHandPose.standingIdle(player.getIsoGameCharacter());
+            poseForModel=idleAmbient.apply(poseForModel,seconds,standing,holding);
+        }
         preserveAimWeapon=holding&&firstPerson&&EfzAimCompatibility.keepsWeapon(player.getIsoGameCharacter());
         gripAdjustment=preserveAimWeapon&&adjustment!=null?adjustment.wristsOnly():adjustment;
         // Fit both PMX palms to the posed source hands in the same head frame as the sight.

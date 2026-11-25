@@ -9,39 +9,62 @@ import org.joml.Vector3f;
 
 /** Allocate bend while preserving the chain's end rotation. */
 final class ForwardFingerPose {
-    private record Bend(int rootOffset,int childOffset,float fraction,int side,Vector3f curlAxis) {}
+    // Natural anatomical cascade from index(0) to pinky(3) layered during empty-hand idle.
+    private static final float[] IDLE_MCP_CURL={-.10f,0f,.10f,.18f};
+    private static final float[] IDLE_PIP_CURL={-.04f,.08f,.20f,.32f};
+    private static final float[] IDLE_DIP_CURL={.10f,.16f,.24f,.30f};
+    private static final float[] IDLE_SPLAY={-.035f,-.005f,.015f,.040f};
+    private record Bend(int rootOffset,int childOffset,int tipOffset,float fraction,int side,int fingerIndex,Vector3f curlAxis,Vector3f splayAxis) {}
     private record Thumb(int rootOffset,int midOffset,int tipOffset,int side,Vector3f baseAxis,Vector3f flexAxis) {}
     private final int[] destination;
     private final Bend[] bends;
     private final Thumb[] thumbs;
     private final int inputSize;
     private final float[] frame;
-    private final Quaternionf total=new Quaternionf(),rest=new Quaternionf(),change=new Quaternionf(),assigned=new Quaternionf(),remainder=new Quaternionf();
+    private final Quaternionf total=new Quaternionf(),rest=new Quaternionf(),change=new Quaternionf(),assigned=new Quaternionf(),remainder=new Quaternionf(),tipRot=new Quaternionf();
     ForwardFingerPose(int[] base,int[] parents,int[] roots,int[] tips,float[] fractions,float[] positions,int[] knuckles) {
-        this(base,parents,roots,tips,fractions,positions,knuckles,new int[0],new int[0],new int[0],new int[0]);
+        this(base,parents,roots,tips,new int[0],fractions,positions,knuckles,new int[0],new int[0],new int[0],new int[0]);
     }
     ForwardFingerPose(int[] base,int[] parents,int[] roots,int[] tips,float[] fractions,float[] positions,int[] knuckles,
             int[] thumbRoots,int[] thumbMids,int[] thumbTips,int[] thumbSides) {
+        this(base,parents,roots,tips,new int[0],fractions,positions,knuckles,thumbRoots,thumbMids,thumbTips,thumbSides);
+    }
+    ForwardFingerPose(int[] base,int[] parents,int[] roots,int[] tips,int[] ends,float[] fractions,float[] positions,int[] knuckles,
+            int[] thumbRoots,int[] thumbMids,int[] thumbTips,int[] thumbSides) {
         if(roots.length!=tips.length||tips.length!=fractions.length)throw new IllegalArgumentException("Finger description dimensions");
+        if(ends.length!=0&&ends.length!=tips.length)throw new IllegalArgumentException("Finger tip description dimensions");
         if(thumbRoots.length!=thumbMids.length||thumbMids.length!=thumbTips.length||thumbTips.length!=thumbSides.length)
             throw new IllegalArgumentException("Thumb description dimensions");
         var slots=new HashMap<Integer,Integer>();var occupied=new HashSet<Integer>();
         for(int i=0;i<base.length;i++){slots.put(base[i],i*10);occupied.add(base[i]);}
-        destination=Arrays.copyOf(base,base.length+tips.length+thumbRoots.length*2);
+        int endCount=0;
+        for(int end:ends)if(end>=0)endCount++;
+        destination=Arrays.copyOf(base,base.length+tips.length+endCount+thumbRoots.length*2);
         inputSize=base.length*10;frame=new float[destination.length*10];
         bends=new Bend[tips.length];
         Vector3f[] palmInward=new Vector3f[2],palmAcross=new Vector3f[2],palmForward=new Vector3f[2];
+        int endCursor=base.length+tips.length;
         for(int i=0;i<tips.length;i++) {
             Integer at=slots.get(roots[i]);float f=fractions[i];int tip=tips[i];
             if(at==null||tip<0||tip>=parents.length||parents[tip]!=roots[i]||!occupied.add(tip)||!Float.isFinite(f)||f<=0||f>=1)throw new IllegalArgumentException("Finger description is not a two-joint chain");
+            int end=i<ends.length?ends[i]:-1,endOffset=-1;
+            if(end>=0){
+                if(end>=parents.length||parents[end]!=tip||!occupied.add(end))throw new IllegalArgumentException("Finger description is not a three-joint chain");
+                destination[endCursor]=end;
+                endOffset=endCursor*10;
+                endCursor++;
+            }
             int knuckle=0;
             while(knuckle<knuckles.length&&knuckles[knuckle]!=roots[i])knuckle++;
             int side=knuckle<4?0:1;
-            Vector3f curlAxis=null;
+            int fingerIndex=knuckle<knuckles.length?knuckle%4:-1;
+            Vector3f curlAxis=null,splayAxis=null;
             if(knuckle<knuckles.length){
                 Vector3f direction=point(positions,tip).sub(point(positions,roots[i]));
                 Vector3f across=point(positions,knuckles[side*4+3]).sub(point(positions,knuckles[side*4]));
-                Vector3f inward=new Vector3f(direction).cross(across);
+                Vector3f rawNormal=new Vector3f(direction).cross(across);
+                if(rawNormal.lengthSquared()>1e-12f)splayAxis=new Vector3f(rawNormal).normalize();
+                Vector3f inward=new Vector3f(rawNormal);
                 if(inward.y>0)inward.negate();
                 if(palmInward[side]==null&&direction.lengthSquared()>1e-12f&&inward.lengthSquared()>1e-12f&&across.lengthSquared()>1e-12f){
                     palmForward[side]=new Vector3f(direction).normalize();
@@ -51,10 +74,10 @@ final class ForwardFingerPose {
                 Vector3f axis=direction.cross(inward);
                 if(axis.lengthSquared()>1e-12f)curlAxis=axis.normalize();
             }
-            destination[base.length+i]=tip;bends[i]=new Bend(at,inputSize+i*10,f,side,curlAxis);
+            destination[base.length+i]=tip;bends[i]=new Bend(at,inputSize+i*10,endOffset,f,side,fingerIndex,curlAxis,splayAxis);
         }
         thumbs=new Thumb[thumbRoots.length];
-        int thumbDst=base.length+tips.length;
+        int thumbDst=endCursor;
         for(int i=0;i<thumbRoots.length;i++){
             Integer at=slots.get(thumbRoots[i]);
             int mid=thumbMids[i],tip=thumbTips[i],side=thumbSides[i];
@@ -93,6 +116,7 @@ final class ForwardFingerPose {
         boolean held=leftCurl!=0||rightCurl!=0;
         for(Bend bend:bends) {
             rotation(requested,bend.rootOffset,total);rotation(reference,bend.rootOffset,rest);
+            tipRot.identity();
             if(held){
                 float curl=bend.curlAxis==null?0:bend.side==0?leftCurl:rightCurl;
                 assigned.set(total);
@@ -113,6 +137,28 @@ final class ForwardFingerPose {
             if(sine<1e-8)assigned.set(rest);
             else assigned.rotationAxis((float)(2*Math.atan2(sine,change.w)*bend.fraction),(float)(change.x/sine),(float)(change.y/sine),(float)(change.z/sine)).mul(rest);
             total.slerp(assigned,strength,assigned).normalize();assigned.difference(total,remainder).normalize();
+            if(strength>0&&bend.fingerIndex>=0&&bend.curlAxis!=null){
+                int k=bend.fingerIndex;
+                var axis=bend.curlAxis;
+                float mcp=IDLE_MCP_CURL[k]*strength;
+                if(mcp!=0){
+                    change.rotationAxis(mcp,axis.x,axis.y,axis.z);
+                    assigned.mul(change).normalize();
+                }
+                if(bend.splayAxis!=null){
+                    float sp=IDLE_SPLAY[k]*strength;
+                    if(sp!=0){
+                        change.rotationAxis(sp,bend.splayAxis.x,bend.splayAxis.y,bend.splayAxis.z);
+                        assigned.mul(change).normalize();
+                    }
+                }
+                float pip=IDLE_PIP_CURL[k]*strength;
+                if(pip!=0){
+                    change.rotationAxis(pip,axis.x,axis.y,axis.z);
+                    remainder.mul(change).normalize();
+                }
+                tipRot.rotationAxis(IDLE_DIP_CURL[k]*strength,axis.x,axis.y,axis.z);
+            }
             storeBend(bend);
         }
         for(Thumb thumb:thumbs) {
@@ -141,6 +187,17 @@ final class ForwardFingerPose {
                         change.identity();
                     }
                 }
+            } else if(strength>0){
+                if(thumb.baseAxis!=null){
+                    change.rotationAxis(.24f*strength,thumb.baseAxis.x,thumb.baseAxis.y,thumb.baseAxis.z);
+                    assigned.mul(change).normalize();
+                }
+                if(thumb.flexAxis!=null){
+                    remainder.rotationAxis(.22f*strength,thumb.flexAxis.x,thumb.flexAxis.y,thumb.flexAxis.z);
+                    change.rotationAxis(.26f*strength,thumb.flexAxis.x,thumb.flexAxis.y,thumb.flexAxis.z);
+                }else{
+                    change.identity();
+                }
             }
             storeThumb(thumb,assigned,remainder,change);
         }
@@ -151,6 +208,11 @@ final class ForwardFingerPose {
         int at=bend.childOffset;
         store(at,remainder);
         frame[at+7]=frame[at+8]=frame[at+9]=1;
+        if(bend.tipOffset>=0){
+            int tip=bend.tipOffset;
+            store(tip,tipRot);
+            frame[tip+7]=frame[tip+8]=frame[tip+9]=1;
+        }
     }
     private void storeThumb(Thumb thumb,Quaternionf baseQ,Quaternionf midQ,Quaternionf tipQ) {
         store(thumb.rootOffset,baseQ);

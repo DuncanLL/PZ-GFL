@@ -392,12 +392,16 @@ public final class WorldPoseRetargeter {
     }
 
     public synchronized void configureFingerPreview(int[] roots,int[] children,float[] fractions) {
-        configureFingerPreview(roots,children,fractions,new int[0],new int[0],new int[0],new int[0]);
+        configureFingerPreview(roots,children,new int[0],fractions,new int[0],new int[0],new int[0],new int[0]);
     }
     public synchronized void configureFingerPreview(int[] roots,int[] children,float[] fractions,
             int[] thumbRoots,int[] thumbMids,int[] thumbTips,int[] thumbSides) {
+        configureFingerPreview(roots,children,new int[0],fractions,thumbRoots,thumbMids,thumbTips,thumbSides);
+    }
+    public synchronized void configureFingerPreview(int[] roots,int[] children,int[] ends,float[] fractions,
+            int[] thumbRoots,int[] thumbMids,int[] thumbTips,int[] thumbSides) {
         fingerPreview=roots.length==0&&thumbRoots.length==0?null:new ForwardFingerPose(
-            publishBones,parents,roots,children,fractions,positions,palmTargetKnuckles,
+            publishBones,parents,roots,children,ends,fractions,positions,palmTargetKnuckles,
             thumbRoots,thumbMids,thumbTips,thumbSides);
         fingerPreviewWeight=0;
         fingerPoseDirty=false;
