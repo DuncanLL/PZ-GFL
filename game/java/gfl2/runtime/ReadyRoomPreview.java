@@ -445,6 +445,12 @@ public class ReadyRoomPreview {
             catch (RuntimeException e) { Main.error(e);return text("ExpressionFailure"); }
         }
     }
+    public static void notifySpeaking(IsoGameCharacter actor, double durationSeconds) {
+        ModelSession s = Main.session(actor);
+        if (s != null && s.liveFacial != null && Double.isFinite(durationSeconds) && durationSeconds > 0) {
+            s.liveFacial.notifySpeaking((float) durationSeconds);
+        }
+    }
     public static KahluaTable motionState(IsoGameCharacter actor) {
         ModelSession s=Main.session(actor);
         return (KahluaTable)lua(s==null

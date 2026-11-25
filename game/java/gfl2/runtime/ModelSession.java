@@ -28,6 +28,7 @@ final class ModelSession {
     final PmxModel model;
     final IdleHandPose idleHand;
     final IdleAmbientMotion idleAmbient;
+    final LiveFacialMotion liveFacial;
     final PmxShading shading;
     final NativeFunc api;
     final OzzGrip grip;
@@ -110,6 +111,7 @@ final class ModelSession {
         catch(RuntimeException e) { candidate=null;System.out.println("[GFL2CharacterRuntime] Idle hand unavailable: "+e); }
         idleHand=candidate;
         idleAmbient=previewOnly?null:new IdleAmbientMotion(sourceNames,reference);
+        liveFacial=previewOnly?null:new LiveFacialMotion(api,model);
         positions=ByteBuffer.allocateDirect(Math.toIntExact(profile.getLong("vertices")*12)).order(ByteOrder.nativeOrder());
         normals=ByteBuffer.allocateDirect(positions.capacity()).order(ByteOrder.nativeOrder());
         }catch(RuntimeException|Error e){model.close();throw e;}
@@ -168,6 +170,9 @@ final class ModelSession {
         boolean onFurniture=owner!=null && owner.isSittingOnFurniture() && owner.getSitOnFurnitureObject()!=null
                 && owner.getVehicle()==null && !model.motionActive();
         if(onFurniture && furnitureSeat==null)furnitureSeat=new FurnitureSeat(profile);
+        if(liveFacial!=null) {
+            liveFacial.update(model.appearance(),player.getIsoGameCharacter(),seconds,model.motionActive(),firstPerson);
+        }
         boolean useGpu=!viewpoint&&!previewOnly&&gpu!=null&&!gpuDisabled&&!(onFurniture&&furnitureSeat.needsMeasurement());
         if(useGpu)model.applyPose(poseForModel,holding?grip:null,seconds,-1,-1,gripAdjustment);
         else model.apply(poseForModel,holding?grip:null,seconds,firstPerson?sourceHead:-1,firstPerson?targetHead:-1,gripAdjustment);

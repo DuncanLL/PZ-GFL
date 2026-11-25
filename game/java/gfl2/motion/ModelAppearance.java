@@ -30,6 +30,8 @@ public final class ModelAppearance {
     private long revision;
     private Set<String> animatedMorphs=Set.of();
     private List<FacialExpressions.Control> facialControls;
+    private float[] resolvedMorphs, dynamicScratch;
+    private boolean dynamicActive;
 
     public ModelAppearance(NativeFunc api,long model) {
         this.api=api;this.model=model;
@@ -113,10 +115,53 @@ public final class ModelAppearance {
         }
         api.SetPZAnimationState(model,new long[0],new float[0],new boolean[0],Arrays.copyOf(ids,count),Arrays.copyOf(manual,count));
     }
+    private float[] baseResolvedMorphs() {
+        if (resolvedMorphs == null || resolvedMorphs.length != weights.length) {
+            resolvedMorphs = weights.clone();
+            wardrobe.resolve(selected, visible.clone(), resolvedMorphs);
+        }
+        return resolvedMorphs;
+    }
+    public synchronized void applyDynamicMorphs(int[] ids, float[] deltas, int count) {
+        if (!animatedMorphs.isEmpty()) {
+            dynamicActive = false;
+            return;
+        }
+        boolean any = false;
+        for (int i = 0; i < count; i++) {
+            if (ids[i] >= 0 && ids[i] < weights.length && deltas[i] > 1e-4f && !wardrobe.managesMorph(ids[i])) {
+                any = true;
+                break;
+            }
+        }
+        if (!any) {
+            clearDynamicMorphs();
+            return;
+        }
+        float[] base = baseResolvedMorphs();
+        if (dynamicScratch == null || dynamicScratch.length != base.length) dynamicScratch = new float[base.length];
+        System.arraycopy(base, 0, dynamicScratch, 0, base.length);
+        for (int i = 0; i < count; i++) {
+            int idx = ids[i];
+            if (idx >= 0 && idx < dynamicScratch.length && deltas[i] > 1e-4f && !wardrobe.managesMorph(idx)) {
+                dynamicScratch[idx] = Math.min(1f, dynamicScratch[idx] + deltas[i]);
+            }
+        }
+        api.SetPZAnimationState(model, new long[0], new float[0], new boolean[0], morphIds, dynamicScratch);
+        dynamicActive = true;
+    }
+    public synchronized void clearDynamicMorphs() {
+        if (!dynamicActive) return;
+        dynamicActive = false;
+        if (animatedMorphs.isEmpty()) {
+            applyMorphs(baseResolvedMorphs());
+        }
+    }
     synchronized void setAnimatedMorphs(Set<String> names) {
         animatedMorphs=Set.copyOf(names);
-        float[] resolved=weights.clone();wardrobe.resolve(selected,visible.clone(),resolved);
-        applyMorphs(resolved);
+        dynamicActive=false;
+        resolvedMorphs=null;
+        applyMorphs(baseResolvedMorphs());
     }
     synchronized void apply(Prepared next) {
         if(next.changed()) {
@@ -130,6 +175,8 @@ public final class ModelAppearance {
         }
         visible=next.visible();effectiveVisible=next.resolved();alpha=next.alpha();weights=next.weights();colours=next.colours();bothFaces=next.bothFaces();textures=next.textures();
         wardrobe=next.wardrobe();selected=next.selected();groups=next.groups();
+        resolvedMorphs=next.resolvedWeights().clone();
+        dynamicActive=false;
     }
     public synchronized void choose(String group,String option) {
         JSONObject state=new JSONObject(stateJson());state.getJSONObject("choices").put(group,option);configure(state.toString());
@@ -223,6 +270,8 @@ public final class ModelAppearance {
         wardrobe.resolve(selected, visible.clone(), resolved);
         applyMorphs(resolved);
         weights = next;
+        resolvedMorphs = resolved;
+        dynamicActive = false;
         revision++;
     }
     public synchronized float[] readMaterials(){return read(true,true);}

@@ -131,8 +131,11 @@ function M.playRemote(player,sound,kind)
     local emitter=player.getEmitter and player:getEmitter()
     if emitter and emitter.setVolume then emitter:setVolume(handle,volume/50.0) end
     remoteHandles[player]=handle
+    local meta=M.clipsBySound[sound]
+    if GFL2ReadyRoom and GFL2ReadyRoom.notifySpeaking then
+        GFL2ReadyRoom.notifySpeaking(player,(meta and meta.clip and meta.clip.duration) or 2.5)
+    end
     if M.remoteSubtitlesEnabled~=false and (kind=="shout" or kind=="sneakShout" or kind=="manual") then
-        local meta=M.clipsBySound[sound]
         local text=meta and subtitle(meta.clip)
         if text and text~="" and player.addLineChatElement then
             local width=(getPlayerScreenWidth and getPlayerScreenWidth(0) or 1280)-32
@@ -250,6 +253,9 @@ local function play(player,state,candidate,now,allowAsleep,alreadyEligible)
     state.startedAt=now
     state.currentKind=candidate.kind
     Core.commit(state,candidate,now,clip.duration,cfg)
+    if GFL2ReadyRoom and GFL2ReadyRoom.notifySpeaking then
+        GFL2ReadyRoom.notifySpeaking(player,clip.duration or 2.5)
+    end
     local text=M.showSubtitles~=false and subtitle(clip) or nil
     if text and text~="" then caption(player,state,text,now) end
     if isClient and isClient() then
