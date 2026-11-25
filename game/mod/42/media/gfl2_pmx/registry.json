@@ -145,6 +145,14 @@
     "GFL2Kuro": [
       "pmx-89dc57d4d8ae6b78",
       "pmx-a8fa8833483e0e68"
+    ],
+    "GFL2Sakura": [
+      "pmx-45901679a5f4c2a5",
+      "pmx-0302314c014d09c4"
+    ],
+    "GFL2Qiongjiu": [
+      "pmx-d032a88a31e425fd",
+      "pmx-3831188cd10f09a1"
     ]
   },
   "pack_mod_ids": {
@@ -177,6 +185,8 @@
     "GFL2Tololo": "GFL2Tololo",
     "GFL2Eagletta": "GFL2Eagletta",
     "GFL2Nemesis": "GFL2Nemesis",
-    "GFL2Kuro": "GFL2Kuro"
+    "GFL2Kuro": "GFL2Kuro",
+    "GFL2Sakura": "GFL2Sakura",
+    "GFL2Qiongjiu": "GFL2Qiongjiu"
   }
 }

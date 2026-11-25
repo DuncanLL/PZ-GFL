@@ -132,5 +132,9 @@
   "ContextMenu_GFL2_StudioPreviewOn": "Use GFL2 original-material shading in Ready Room & Inventory previews when Native/Somber shaders are active (auto-reclaims VRAM when idle)",
   "ContextMenu_GFL2_StudioPreviewOff": "Use lightweight UI preview shading and immediately release preview VRAM",
   "ContextMenu_GFL2_ThresholdStorm": "Threshold Storm",
-  "ContextMenu_GFL2_ThresholdStormDescription": "A high-performance assault rifle issued to Kuro, modeled on the MDR assault rifle and heavily customized for her unique combat style. Rain down a tempest of punishment upon any haters who dare cross the streamer."
+  "ContextMenu_GFL2_ThresholdStormDescription": "A high-performance assault rifle issued to Kuro, modeled on the MDR assault rifle and heavily customized for her unique combat style. Rain down a tempest of punishment upon any haters who dare cross the streamer.",
+  "ContextMenu_GFL2_CrimsonCovenant": "Crimson Covenant",
+  "ContextMenu_GFL2_CrimsonCovenantDescription": "A high-performance submachine gun issued to Sakura, modeled after the Sakura SMG with dramatically enhanced firepower. Where muzzle flash blooms, a hail of bullets arrives right on schedule.",
+  "ContextMenu_GFL2_GoldenMelody": "Golden Melody",
+  "ContextMenu_GFL2_GoldenMelodyDescription": "A high-performance assault rifle issued to Qiongjiu, modeled after the Type 191 rifle with improved stopping power and stability across diverse environments. Beneath its measured cadence lies an unchanging resolve."
 }

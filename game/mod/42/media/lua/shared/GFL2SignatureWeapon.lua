@@ -392,6 +392,33 @@ local weapons = {{
     previewZoom = 15,
     startsWithMagazine = true,
     ammoBox = "Base.308Box",
+}, {
+    id = "GFL2.CrimsonCovenant",
+    mod = "GFL2Sakura",
+    character = "GFL2Sakura",
+    name = "ContextMenu_GFL2_CrimsonCovenant",
+    description = "ContextMenu_GFL2_CrimsonCovenantDescription",
+    icon = "media/textures/Item_GFL2CrimsonCovenant.png",
+    card = "media/ui/GFL2/CrimsonCovenantCard.png",
+    previewCenterY = 0.071271,
+    previewCenterZ = -0.030909,
+    previewZoom = 16,
+    startsWithMagazine = true,
+    ammoBox = "Base.Bullets9mmBox",
+}, {
+    id = "GFL2.GoldenMelody",
+    mod = "GFL2Qiongjiu",
+    character = "GFL2Qiongjiu",
+    name = "ContextMenu_GFL2_GoldenMelody",
+    description = "ContextMenu_GFL2_GoldenMelodyDescription",
+    icon = "media/textures/Item_GFL2GoldenMelody.png",
+    card = "media/ui/GFL2/GoldenMelodyCard.png",
+    previewCenterY = 0.066327,
+    previewCenterZ = -0.025708,
+    previewZoom = 16,
+    startsWithMagazine = true,
+    ammoBox = "Base.556Box",
+    efzAmmoBox = "EscapeFromZomboidFirearms.Box545x39",
 }}
 
 local catalog = {byId = {}, byCharacter = {}}

@@ -132,5 +132,9 @@
   "ContextMenu_GFL2_StudioPreviewOn": "Native / Somber シェーダー有効時、整備室とインベントリのキャラプレビューにも原材質描画を適用します（未使用時はVRAMを自動解放）",
   "ContextMenu_GFL2_StudioPreviewOff": "UIプレビューを軽量描画に戻し、プレビュー用VRAMを即時解放します",
   "ContextMenu_GFL2_ThresholdStorm": "スレッショルド・ストーム",
-  "ContextMenu_GFL2_ThresholdStormDescription": "クロに配備された高性能アサルトライフル。MDRアサルトライフルを原型に、クロ独自の戦闘スタイルに合わせて徹底的に改造されている。配信者様に刃向かうアンチどもに、嵐のような制裁を浴びせてやろう。"
+  "ContextMenu_GFL2_ThresholdStormDescription": "クロに配備された高性能アサルトライフル。MDRアサルトライフルを原型に、クロ独自の戦闘スタイルに合わせて徹底的に改造されている。配信者様に刃向かうアンチどもに、嵐のような制裁を浴びせてやろう。",
+  "ContextMenu_GFL2_CrimsonCovenant": "緋色の約束",
+  "ContextMenu_GFL2_CrimsonCovenantDescription": "サクラに配備された高性能サブマシンガン。サクラ短機関銃を原型に火力を大幅に強化している。火花が閃く場所へ、弾雨が約束通りに降り注ぐ。",
+  "ContextMenu_GFL2_GoldenMelody": "金石奏",
+  "ContextMenu_GFL2_GoldenMelodyDescription": "瓊玖に配備された高性能アサルトライフル。一九一式を原型に多様な環境への汎用性を保ちつつ威力と安定性を高めた。落ち着いたリズムの奥には、変わらぬ初心が宿る。"
 }

@@ -132,5 +132,9 @@
   "ContextMenu_GFL2_StudioPreviewOn": "开启光影（Native / Somber）时，整备室与物品栏人物预览同步启用少前2原材质渲染，闲置自动回收显存",
   "ContextMenu_GFL2_StudioPreviewOff": "关闭界面原材质预览，回退为轻量预览并立即释放预览显存",
   "ContextMenu_GFL2_ThresholdStorm": "阈限风暴",
-  "ContextMenu_GFL2_ThresholdStormDescription": "卡萝被配给的高性能突击步枪，以MDR突击步枪为原型，针对卡萝别具一格的作战方式进行了深度改造。对胆敢冒犯主播大人的黑子们降下如暴风骤雨般的制裁吧。"
+  "ContextMenu_GFL2_ThresholdStormDescription": "卡萝被配给的高性能突击步枪，以MDR突击步枪为原型，针对卡萝别具一格的作战方式进行了深度改造。对胆敢冒犯主播大人的黑子们降下如暴风骤雨般的制裁吧。",
+  "ContextMenu_GFL2_CrimsonCovenant": "绯红契约",
+  "ContextMenu_GFL2_CrimsonCovenantDescription": "樱花被配给的高性能冲锋枪，以樱花冲锋枪为原型，大幅提升火力。火光乍现处，弹雨如约至。",
+  "ContextMenu_GFL2_GoldenMelody": "金石奏",
+  "ContextMenu_GFL2_GoldenMelodyDescription": "琼玖被配给的高性能突击步枪，以一九一式为原型，在保证多种环境泛用的基础上，提升了威力和稳定性。沉稳的节奏之下，是未曾改变的初心。"
 }

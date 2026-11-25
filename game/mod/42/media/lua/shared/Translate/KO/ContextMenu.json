@@ -132,5 +132,9 @@
   "ContextMenu_GFL2_StudioPreviewOn": "Native / Somber 셰이더 사용 시 정비실 및 인벤토리 미리보기에도 소녀전선2 원재질 렌더링을 적용합니다 (유휴 시 VRAM 자동 회수)",
   "ContextMenu_GFL2_StudioPreviewOff": "UI 미리보기를 경량 렌더링으로 되돌리고 미리보기 VRAM을 즉시 해제합니다",
   "ContextMenu_GFL2_ThresholdStorm": "스레시홀드 스톰",
-  "ContextMenu_GFL2_ThresholdStormDescription": "쿠로에게 지급된 고성능 돌격소총. MDR 돌격소총을 원형으로 쿠로만의 독특한 전투 방식에 맞춰 대대적으로 개조되었다. 스트리머님께 감히 대드는 악플러들에게 폭풍우 같은 제재를 내려 주자."
+  "ContextMenu_GFL2_ThresholdStormDescription": "쿠로에게 지급된 고성능 돌격소총. MDR 돌격소총을 원형으로 쿠로만의 독특한 전투 방식에 맞춰 대대적으로 개조되었다. 스트리머님께 감히 대드는 악플러들에게 폭풍우 같은 제재를 내려 주자.",
+  "ContextMenu_GFL2_CrimsonCovenant": "진홍의 서약",
+  "ContextMenu_GFL2_CrimsonCovenantDescription": "사쿠라에게 지급된 고성능 기관단총. 사쿠라 기관단총을 원형으로 화력을 대폭 강화했다. 불꽃이 번뜩이는 곳에 탄환의 비가 약속처럼 쏟아진다.",
+  "ContextMenu_GFL2_GoldenMelody": "금석주",
+  "ContextMenu_GFL2_GoldenMelodyDescription": "경구에게 지급된 고성능 돌격소총. 191식을 원형으로 다양한 환경에서의 범용성을 유지하며 위력과 안정성을 높였다. 차분한 리듬 아래 변치 않는 초심이 깃들어 있다."
 }

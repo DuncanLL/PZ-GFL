@@ -29,6 +29,8 @@ local options = {
     ["GFL2.Trailblazer"] = { { id="4336185", model="GFL2.TrailblazerSkin4336185", detached=false } },
     ["GFL2.TwilightRose"] = { { id="4337535", model="GFL2.TwilightRoseSkin4337535", detached=false } },
     ["GFL2.UnspokenCalling"] = { { id="4334095", model="GFL2.UnspokenCallingSkin4334095", detached=true } },
+    ["GFL2.CrimsonCovenant"] = { { id="4332365", model="GFL2.CrimsonCovenantSkin4332365", detached=false } },
+    ["GFL2.GoldenMelody"] = { { id="4334015", model="GFL2.GoldenMelodySkin4334015", detached=false } },
 }
 local M = {}
 
