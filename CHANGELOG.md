@@ -24,6 +24,7 @@
   - 修复原版斜 45° 渲染管线与 Tomb's Player Body / VS 可变身形（Variable Skin）等角色身形模组的兼容性问题（[VanillaWorld.java](game/java/gfl2/runtime/VanillaWorld.java)、[VanillaWorldPatch.java](game/java/gfl2/runtime/VanillaWorldPatch.java)）。
   - 修复 **米什缇**（G11）新衣装「迷盹睡鼠」（`pmx-2a37b36707a4f3f2`）遗漏语音绑定导致不发声的问题（[ZZ_GFL2PmxMechtyVoice.lua](game/packs/GFL2Mechty/42/media/lua/client/ZZ_GFL2PmxMechtyVoice.lua)）。
   - 修复整备室「握持校准」预览采样未叠加实况站立姿态的问题（[GripRoomPreview.java](game/java/gfl2/runtime/GripRoomPreview.java)），并修复维克托专武「报丧轻语」临时枪声声明问题（[GFL2BansheesWhisperSounds.txt](game/packs/GFL2Vector/42/media/scripts/GFL2BansheesWhisperSounds.txt)）。
+  - 全量 32 把专武与 8 级契约涂装的 3D 武器贴图（64 张，含原 4K/2K 贴图）统一无损等比降采样至上限 `1024px`（`1024×1024` / `1024×512`），专武显存峰值下降 **79.9%**（`1,096 MB → 220 MB`）、贴图体积减少 **52.1%**。
 
 ## 0.8.1 · 卡萝与米什缇新装接入、第一人称遮挡修复、设置页／沙盒／Q 轮盘／VMD 镜头与兼容升级（2026-11-24）
 
