@@ -4,6 +4,26 @@
 
 游戏动作、人物状态和光影接线详见 [维护手册](docs/maintenance/README.md)。
 
+## 0.8.2 · 樱花与琼玖全量接入、1:1 原游身高体型还原、实时面部表情与 13 套站立待机小动作（2026-11-25）
+
+- 新增 2 名角色、4 套衣装、2 把专武与 346 条专属日语语音（全模组总计 **32 人 / 87 外观 / 32 专武 / 5,536 条日语语音与四国字幕**）：
+  - 新角色 **樱花**（`GFL2Sakura`）：原皮「非常规配送」、衣装「蝶影绮谭」（含配饰与脱鞋丝袜部件开关）、专武「绯红契约」（`GFL2.CrimsonCovenant`）及 8 级契约涂装「涂装·心速共鸣」（塔科夫 UZI PRO 室内消音枪声 + 原厂机械音）、173 条专属日语语音与 CN / EN / JP / KO 四语字幕（双外观均已绑定）、原游官方 2D 封面／海报／双头像／招募卡。
+  - 新角色 **琼玖**（`GFL2Qiongjiu`）：原皮「云辉定仪」（补齐胸部软体物理 `chest.bin`）、衣装「义薄云天」（含脱鞋部件开关）、专武「金石奏」（`GFL2.GoldenMelody`）及 8 级契约涂装「涂装·神形兼备之美」（塔科夫 RPK-16 室外消音枪声 + AK-74 机械音）、173 条专属日语语音与 CN / EN / JP / KO 四语字幕（双外观均已绑定）、原游官方 2D 封面／海报／双头像／招募卡。
+  - 清理两包未引用 `normalmap/` 冗余资源共瘦身 78.8 MB，并刷新 [GFL2MultiplayerCatalog.lua](game/mod/42/media/lua/shared/GFL2MultiplayerCatalog.lua) 联机目录。
+- **全员 1:1 原游真实身高与三维体型还原**（零运行时性能开销）：
+  - 在 [PmxModel.java](game/java/gfl2/motion/PmxModel.java) 与 [ModelSession.java](game/java/gfl2/runtime/ModelSession.java) 统一全员缩放标尺 `CANONICAL_UNIT_SCALE = 20.5f`，不再按原版女角色骨架强行抹平高矮，完整还原少前2原游约 24.5% 真实身高与肩宽/头身比差异（娇小档如夏安/米什缇/樱花/索米、中等档如可露凯/卡萝/莱娅、偏高档如阿斯缇亚/春田/琼玖、高挑御姐档如罗蕾莱/黛烟/纳美西丝），联机双端一致且武器／背包保持原版 1:1 尺寸。
+- **角色动态鲜活度全面升级（待机小动作 + 实时面部表情）**：
+  - **13 套烘焙站立待机小动作**（[IdleAmbientMotion.java](game/java/gfl2/runtime/IdleAmbientMotion.java) + `idle_clips.bin`）：空手站立静止一段时间后自然触发 13 套量化骨骼微动作（含玩手机 `#26`、俏皮舒展 `#30` 等），搭配自然三节手指放松级联（[IdleHandPose.java](game/java/gfl2/runtime/IdleHandPose.java)）、呼吸起伏与持枪轻幅环顾；常规站立基座保持静止不乱晃。
+  - **实时面部动态表情系统**（[LiveFacialMotion.java](game/java/gfl2/runtime/LiveFacialMotion.java)）：自动接入全员 PMX 变形目标，支持自然随机眨眼、语音播放与聊天发话同步口型（含 [VoiceEngine.lua](game/mod/42/media/lua/client/GFL2Voice/VoiceEngine.lua) 实时发声状态联动），以及举枪瞄准微闭单眼/专注皱眉与近战攻击表情，零额外配置自动适配新老角色。
+- **全量皮肤定价按原游商店校准**：
+  - 直接按《少女前线2：追放》`StoreGoodData` 信用币官方原价校准 [catalog.json](game/mod/42/media/ui/GFL2ReadyRoom/catalog.json) 全部 47 套直购衣装定价（原游直购档位 `980 / 1080 / 1280 / 1580 / 2580`，活动/班组类衣装维持 `600`，既有 45 套中校准 37 套、新增樱花/琼玖衣装均为 `1280`）。
+- **核心动作、兼容与稳定性修复**：
+  - 修复第三方动画模组手臂异常轴向扭转（拧麻花）问题，自动将上臂/前臂扭转分配到 PMX `腕捩`/`手捩` 辅助骨（[WorldPoseRetargeter.java](game/java/gfl2/motion/WorldPoseRetargeter.java)）。
+  - 修复 AMD 显卡在整备室原材质 3D 预览（`Gfl2StudioPreviewRenderer`）下的画面闪烁与状态泄漏问题（[Gfl2GlScope.java](render-support/java/viewpoint/render/Gfl2GlScope.java)、[Gfl2StudioPreviewRenderer.java](render-support/java/viewpoint/render/Gfl2StudioPreviewRenderer.java)）。
+  - 修复原版斜 45° 渲染管线与 Tomb's Player Body / VS 可变身形（Variable Skin）等角色身形模组的兼容性问题（[VanillaWorld.java](game/java/gfl2/runtime/VanillaWorld.java)、[VanillaWorldPatch.java](game/java/gfl2/runtime/VanillaWorldPatch.java)）。
+  - 修复 **米什缇**（G11）新衣装「迷盹睡鼠」（`pmx-2a37b36707a4f3f2`）遗漏语音绑定导致不发声的问题（[ZZ_GFL2PmxMechtyVoice.lua](game/packs/GFL2Mechty/42/media/lua/client/ZZ_GFL2PmxMechtyVoice.lua)）。
+  - 修复整备室「握持校准」预览采样未叠加实况站立姿态的问题（[GripRoomPreview.java](game/java/gfl2/runtime/GripRoomPreview.java)），并修复维克托专武「报丧轻语」临时枪声声明问题（[GFL2BansheesWhisperSounds.txt](game/packs/GFL2Vector/42/media/scripts/GFL2BansheesWhisperSounds.txt)）。
+
 ## 0.8.1 · 卡萝与米什缇新装接入、第一人称遮挡修复、设置页／沙盒／Q 轮盘／VMD 镜头与兼容升级（2026-11-24）
 
 - **⚠ 已知问题（暂未解决）**：部分玩家在 Viewpoint 3D 视角下可能偶发手持武器隐形（切回原版斜 45° 视角正常可见）；该问题目前尚未定位根因、暂未修复（关闭 ProjectViewpointADS 等模组后仍有玩家遇到，尚不确定是 Viewpoint 本体、第三方模组交互还是其它触发条件所致），后续持续排查。
