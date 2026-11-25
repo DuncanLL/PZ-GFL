@@ -1435,6 +1435,7 @@ function W:roomVisibility()
 end
 
 function W:back()
+    if self.motionMusicDialog then self:closeMotionMusicDialog();return end
     if self.motionPathDialog then self:closeMotionPathDialog();return end
     if self.workshopPrompt then self:closeWorkshopPrompt();return end
     if self.exchange then self:closeExchange();return end
@@ -1450,7 +1451,9 @@ end
 function W:setRoomPage(page)
     if self.roomPage==page or self.folded or self.foldStart then return end
     self:closeAllModals()
+    if self.motionMusicDialog then self:closeMotionMusicDialog() end
     self.motionSeek:cancel()
+    if self.motionMusicSeek then self.motionMusicSeek:cancel() end
     if page=="motions" then
         GFL2ReadyRoom.release(self.player)
         self.appearanceX,self.appearanceY=self:getX(),self:getY()
@@ -1458,6 +1461,7 @@ function W:setRoomPage(page)
         self:setWidth(self.motionPanelWidth)
         self:setHeight(self.motionPanelHeight)
     else
+        if self.roomPage=="motions" and GFL2VmdMusic then GFL2VmdMusic.stop() end
         self:setX(self.appearanceX);self:setY(self.appearanceY)
         self:setWidth(self.fullWidth);self:setHeight(self.fullHeight)
     end
@@ -1473,7 +1477,9 @@ end
 function W:toggleRoomFold()
     if self.drawAnimation then return end
     self:closeAllModals()
+    if self.motionMusicDialog then self:closeMotionMusicDialog() end
     self.motionSeek:cancel()
+    if self.motionMusicSeek then self.motionMusicSeek:cancel() end
     self:endTabMotion()
     self.folded=not self.folded
     self.preview:onMouseUp()
@@ -1986,6 +1992,7 @@ function W:setTab(tab)
     local returning=tab=="overview" or (tab=="skins" and (self.tab=="parts" or self.tab=="outfitDraw"))
     if self.tab~=tab then
         self:closeWorkshopPrompt()
+        if self.motionMusicDialog then self:closeMotionMusicDialog() end
         if self.tab=="grip" then
             self.preview:onMouseUp()
             GFL2ReadyRoom.release(self.player)
@@ -2463,6 +2470,8 @@ end
 function W:close()
     if self.closed then return end
     self.closed=true
+    if self.motionMusicDialog then self:closeMotionMusicDialog() end
+    if GFL2VmdMusic then GFL2VmdMusic.stop() end
     if self.weaponPreview and self.weaponPreview.orbit then self.weaponPreview:onMouseUp() end
     self:closeAllModals()
     if W.instances[self.playerIndex]==self then W.instances[self.playerIndex]=nil end
@@ -2472,6 +2481,7 @@ function W:close()
     hideTooltip(self.workshopButton)
     self:refreshExpressionSlots(false)
     if self.motionSeek then self.motionSeek:cancel() end
+    if self.motionMusicSeek then self.motionMusicSeek:cancel() end
     if self.motionSpeed then self.motionSpeed.dragInside=false end
     if self.carouselPanel then self.carouselPanel.dragging=false;self.carouselPanel:setCapture(false)end
     self:clearContent();self.preview:onMouseUp();self.sidebar.roomDown=false;self.sidebar:setCapture(false)

@@ -36,6 +36,8 @@ import viewpoint.platform.Gfl2NativePackSelection;
 final class Gfl2StudioPreviewRenderer implements AutoCloseable {
     private static final int MAX_CACHED_MODELS = 2;
     private static final int MAX_FBO_DIM = 1280;
+    private static final int BLIT_HDR_UNIT = 119;
+    private static final int BLIT_LUT_UNIT = 120;
     private static final long IDLE_RECLAIM_NANOS = 3_000_000_000L;
     private static final String LUT_RESOURCE = "/gfl2/render/gf2-original-display.rgba16f";
     private static final String FACE_FORWARD = "a2f224c7144485694aa46c3c3b302b9e22e401b29eae813ee19e8ea14c740a8a";
@@ -335,8 +337,14 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         if (initialized) return;
         blitProgram = GlProgram.fromSources("GF2 studio preview blit",
                 new GlProgram.Sources(BLIT_VS, null, null, null, BLIT_FS), Map.of(), Map.of(), List.of());
-        blitProgram.sampler("uStudioHdr", 0);
-        blitProgram.sampler("uStudioLut", 1);
+        if (blitProgram.id() == 0) {
+            String err = GlProgram.lastError();
+            blitProgram.delete();
+            blitProgram = null;
+            throw new IllegalStateException("GF2 studio preview blit link failed: " + err);
+        }
+        blitProgram.sampler("uStudioHdr", BLIT_HDR_UNIT);
+        blitProgram.sampler("uStudioLut", BLIT_LUT_UNIT);
         blitVao = GL30.glGenVertexArrays();
 
         // Load checksum-verified original GF2 1024x32 RGBA16F display LUT (256 KB).
@@ -419,7 +427,7 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         ssboPalettes = GL45.glCreateBuffers();
         ssboDraws = GL45.glCreateBuffers();
         ssboDummy = GL45.glCreateBuffers();
-        GL45.glNamedBufferData(ssboDummy, 64L, GL15.GL_STATIC_DRAW);
+        GL45.glNamedBufferData(ssboDummy, direct(new byte[64]), GL15.GL_STATIC_DRAW);
         initialized = true;
     }
 
@@ -775,7 +783,8 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             drawRec[20] = 1f; drawRec[21] = 1f; drawRec[22] = 1f; drawRec[23] = 1f;
             drawRec[28] = 0f; drawRec[29] = 0f; drawRec[30] = 1f; drawRec[31] = 1f;
             System.arraycopy(placement, 0, drawRec, 36, 16);
-            drawRec[63] = 1f;
+            // PLACED (2) bypasses Viewpoint FarRelief terrain lifting in iris/model_vertex.glsl.
+            drawRec[63] = 2f;
             GL45.glNamedBufferData(ssboDraws, drawRec, GL15.GL_DYNAMIC_DRAW);
 
             // Orbit studio camera around character target matching ReadyRoomPreview framing 1:1.
@@ -914,7 +923,6 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
                     Gfl2OriginalProgram prog = program(srcMat, stage);
                     GlProgram glp = prog.nativeProgram();
                     glp.use();
-                    bindSsbos(glp.id());
 
                     Map<Integer, Integer> regs = new HashMap<>();
                     for (int slot = 0; slot < 6; slot++) {
@@ -943,6 +951,11 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
                     prog.textures(textureBindings(model, prog, srcMat));
                     prog.nativeInputs(invArr, invNrm, modelJson.getInt("attribute_records"));
                     prog.nativeFrame(placement, invArr, eyeArr, new float[2], false);
+                    // Neutralize Viewpoint FarRelief onUse hook AFTER the final glp.use() so studio vertices never shift.
+                    if (glp.has("uReliefGrid")) {
+                        glp.set("uReliefGrid", 0f, 0f, 0f, 0f);
+                    }
+                    bindSsbos(glp.id());
                     glp.setInt("uShadowPalette", 0);
                     glp.setInt("uIrisEntity", -1);
                     glp.setInt("uIrisUntinted", 0);
@@ -971,6 +984,9 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glDisable(GL11.GL_STENCIL_TEST);
             GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL13.GL_SAMPLE_ALPHA_TO_COVERAGE);
+            GL11.glDisable(GL32.GL_DEPTH_CLAMP);
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
             GL11.glColorMask(true, true, true, true);
             GL11.glEnable(GL11.GL_BLEND);
             GL14.glBlendEquation(GL14.GL_FUNC_ADD);
@@ -979,12 +995,12 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
 
             blitProgram.use();
             blitProgram.set("uStudioExposure", 1.0f);
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0 + BLIT_HDR_UNIT);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, colourTex);
-            GL33.glBindSampler(0, 0);
-            GL13.glActiveTexture(GL13.GL_TEXTURE1);
+            GL33.glBindSampler(BLIT_HDR_UNIT, 0);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0 + BLIT_LUT_UNIT);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, lutTexture);
-            GL33.glBindSampler(1, 0);
+            GL33.glBindSampler(BLIT_LUT_UNIT, 0);
             GL30.glBindVertexArray(blitVao);
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 3);
             return true;
@@ -1002,10 +1018,10 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
     }
 
     private void bindSsbos(int programId) {
-        bindSsbo(programId, "ModelPalettes", ssboPalettes, 0);
-        bindSsbo(programId, "ModelDraws", ssboDraws, 1);
-        bindSsbo(programId, "ReliefWalls", ssboDummy, 2);
-        bindSsbo(programId, "ReliefFlow", ssboDummy, 3);
+        bindSsbo(programId, "ModelPalettes", ssboPalettes, 8);
+        bindSsbo(programId, "ModelDraws", ssboDraws, 9);
+        bindSsbo(programId, "ReliefWalls", ssboDummy, 12);
+        bindSsbo(programId, "ReliefFlow", ssboDummy, 13);
     }
 
     private static void bindSsbo(int programId, String name, int buffer, int slot) {

@@ -215,7 +215,7 @@ public class ReadyRoomPreview {
             return "";
         }catch(Exception e){return motionError(e,"MotionRemovePath");}
     }
-    private static KahluaTable listVmds(java.util.function.Predicate<Path> accept) {
+    static KahluaTable listVmds(java.util.function.Predicate<Path> accept) {
         var entries=new LinkedHashSet<String>();
         try {
             List<String> local=motionNames(Files.createDirectories(library()),accept);
@@ -457,7 +457,7 @@ public class ReadyRoomPreview {
             ?new JSONObject().put("name","").put("paused",false).put("physics",false).put("frame",0).put("endFrame",0).put("speed",1).put("revision","").put("camera","").put("cameraEnabled",false)
             :s.model.motionTimeline());
     }
-    private static Path resolveMotionInput(String name) throws IOException {
+    static Path resolveMotionInput(String name) throws IOException {
         if(name==null||name.isBlank())throw new MotionInput("MotionSelect");
         Path file;
         if(name.startsWith(SAMPLE_PREFIX)){

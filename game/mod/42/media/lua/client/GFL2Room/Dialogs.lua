@@ -34,6 +34,7 @@ function M.install(W,ctx)
     function W:closeAllModals()
         self:closeWorkshopPrompt()
         self:closeExchange()
+        if self.motionMusicDialog then self:closeMotionMusicDialog() end
         self:closeMotionPathDialog()
     end
 
