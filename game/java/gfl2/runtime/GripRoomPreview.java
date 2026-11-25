@@ -93,11 +93,12 @@ final class GripRoomPreview {
         ModelInstance held=side==1?actor.primaryHandModel:side==0?actor.secondaryHandModel:null;
         if(held!=null&&(held.model==null||!held.model.isStatic||!held.model.mesh.isReady()))held=null;
         aiming=aiming&&item!=null;
-        AnimationPlayer pose=basePose(live.getModel(),poseClip(actor,item,aiming),aiming);
+        boolean useLive=useLiveStandingPose(actor,item,aiming);
+        AnimationPlayer pose=useLive?live:basePose(live.getModel(),poseClip(actor,item,aiming),aiming);
         if(pose==null)return;
         long revision=equipped.model.appearance().revision();
         KahluaTable calibration=item==null?null:GripCalibration.currentRow(actor,session.entry.id(),item,aiming);
-        if(view!=null&&item==lastItem&&held==lastHeld&&pose==lastPose&&aiming==lastAim&&revision==appearanceRevision&&calibration==lastCalibration)return;
+        if(!useLive&&view!=null&&item==lastItem&&held==lastHeld&&pose==lastPose&&aiming==lastAim&&revision==appearanceRevision&&calibration==lastCalibration)return;
         if(revision!=appearanceRevision) {
             var appearance=new JSONObject(equipped.model.appearance().stateJson());
             session.applySettings(new JSONObject().put("appearance",appearance)
@@ -129,6 +130,14 @@ final class GripRoomPreview {
         }
         view=new View(viewAnchor,List.copyOf(parts));
         lastItem=item;lastHeld=held;lastPose=pose;lastAim=aiming;lastCalibration=calibration;appearanceRevision=revision;
+    }
+
+    private static boolean useLiveStandingPose(IsoGameCharacter actor,InventoryItem item,boolean aiming) {
+        if(aiming||item==null||actor.isDead()||actor.getVehicle()!=null||actor.isAiming()
+            ||actor.isSneaking()||actor.isPlayerMoving()||actor.isSittingOnFurniture())return false;
+        String right=actor.getVariableString("RightHandMask");
+        String left=actor.getVariableString("LeftHandMask");
+        return (right!=null&&!right.isEmpty())||(left!=null&&!left.isEmpty());
     }
 
     static String poseClip(IsoGameCharacter actor,InventoryItem item,boolean aiming) {
