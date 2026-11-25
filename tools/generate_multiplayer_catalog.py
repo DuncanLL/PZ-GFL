@@ -21,13 +21,16 @@ def catalog_source():
                 continue
             meta = cards[model]
             character = meta['character']
-            pool = catalog['roomRecruitment'].get(character, {}).get('pool', pack)
+            rec = catalog['roomRecruitment'].get(character, {})
+            pool = rec.get('pool', pack)
+            free_char = bool(rec.get('free'))
             draw = model in catalog['roomOutfitPools']
             free = (meta.get('included') or meta.get('isDefault')
                     or model == catalog['roomStarterSkins'].get(character))
             price = 0 if free or draw else catalog['roomOutfitPrices'].get(model, 1080)
             mod = registry['pack_mod_ids'][pack]
-            rows.append(f'    ["{model}"] = {{ mod = "{mod}", character = "{pool}", '
+            free_field = 'free = true, ' if free_char else ''
+            rows.append(f'    ["{model}"] = {{ mod = "{mod}", character = "{pool}", {free_field}'
                         f'outfitDraw = {str(draw).lower()}, price = {price} }},')
     return '\n'.join([*rows, '}', ''])
 

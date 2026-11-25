@@ -799,5 +799,7 @@
   "UI_GFL2_PartOption_P1 高跟鞋": "하이힐 착용",
   "UI_GFL2_PartOption_P1 丝袜（脱鞋）": "스타킹(맨발)",
   "UI_GFL2_PartOption_穿着鞋子": "신발 착용",
-  "UI_GFL2_PartOption_脱下鞋子": "신발 벗기"
+  "UI_GFL2_PartOption_脱下鞋子": "신발 벗기",
+  "UI_GFL2_Role_GFL2Helena": "헬레나",
+  "UI_GFL2_Outfit_pmx-31e2ec60a620a541": "기본"
 }

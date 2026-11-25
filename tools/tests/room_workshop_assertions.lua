@@ -56,9 +56,14 @@ for _,c in ipairs(w.characters)do
  assert(not c.locked)
  w:onCharacter(c)
  assert(not w.workshopButton.visible,"loaded character shows missing-MOD action")
- assert(c.unlockRequired and c.recruitment and w.drawButtons[1].visible and w.drawButtons[1].enable,
-  c.name.." must start locked and have a working recruitment button")
- assert(not w:selectSkin(c.baseSkin),c.name.." can be equipped before recruitment")
+ if c.recruitment and c.recruitment.free then
+  assert(not c.unlockRequired and not w.drawButtons[1].visible and w.wearButton.visible,
+   c.name.." free character must start unlocked with wear button")
+ else
+  assert(c.unlockRequired and c.recruitment and w.drawButtons[1].visible and w.drawButtons[1].enable,
+   c.name.." must start locked and have a working recruitment button")
+  assert(not w:selectSkin(c.baseSkin),c.name.." can be equipped before recruitment")
+ end
  w:requestWorkshopPage()
  assert(not w.workshopPrompt)
 end
@@ -222,21 +227,25 @@ if roomTranslations then
   c.unlockRequired=false
   w:layoutBiography(c)
   local panel=w.biographyPanel
-  assert(panel.visible and panel.y+panel.height<=w.height-14,"profile exceeds the room for "..c.name)
-  if type(expected)=="table" then
-   assert(table.concat(panel.lines)==table.concat(expected),"profile lost text for "..c.name)
+  if not expected then
+   assert(not panel.visible,"blank-bio character should hide biography panel for "..c.name)
   else
-   assert(table.concat(panel.lines):gsub("%s+","")==expected:gsub("%s+",""),"profile lost text for "..c.name)
-   for _,line in ipairs(panel.lines) do
-    assert(measureStockFont(line)<=panel.textWidth,"profile line exceeds the panel for "..c.name)
+   assert(panel.visible and panel.y+panel.height<=w.height-14,"profile exceeds the room for "..c.name)
+   if type(expected)=="table" then
+    assert(table.concat(panel.lines)==table.concat(expected),"profile lost text for "..c.name)
+   else
+    assert(table.concat(panel.lines):gsub("%s+","")==expected:gsub("%s+",""),"profile lost text for "..c.name)
+    for _,line in ipairs(panel.lines) do
+     assert(measureStockFont(line)<=panel.textWidth,"profile line exceeds the panel for "..c.name)
+    end
    end
+   panel:onMouseWheel(1000)
+   assert(panel:getYScroll()==math.min(0,panel.height-panel:getScrollHeight()),
+    "profile cannot scroll to the end for "..c.name)
   end
-  panel:onMouseWheel(1000)
-  assert(panel:getYScroll()==math.min(0,panel.height-panel:getScrollHeight()),
-   "profile cannot scroll to the end for "..c.name)
   c.unlockRequired=locked
   w:layoutBiography(c)
-  assert(not panel.visible)
+  if c.unlockRequired or not expected then assert(not panel.visible) end
  end
  getTextManager=oldMetrics
 end
@@ -378,7 +387,7 @@ if localizedBiographies then
    end
    shown=shown+1
   end
-  assert(shown==87 and pools>0)
+  assert(shown==88 and pools>0)
   w.tab,w.browsed,w.character=tab,browsed,character
   w.drawText,w.drawTextureScaled=oldText,oldPicture
  end
@@ -398,7 +407,7 @@ w.drawAnimation=nil
 w:refresh()
 assert(not w.byCharacter[newcomer.name].unlockRequired)
 for _,c in ipairs(w.characters)do
- if c.name~=newcomer.name then assert(c.unlockRequired) end
+ if c.name~=newcomer.name and not (c.recruitment and c.recruitment.free) then assert(c.unlockRequired) end
 end
 if roomTranslations then
  local oldEdit,oldLabel=w.canEditCurrent,w.addLabel

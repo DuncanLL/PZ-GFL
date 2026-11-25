@@ -32,7 +32,7 @@ end
 local function canWear(player, id)
     if id == "" then return true end
     local model = openModel(id)
-    return model and economy.characterUnlocked(player, model.character)
+    return model and (model.free or economy.characterUnlocked(player, model.character))
         and ((model.price == 0 and not model.outfitDraw) or economy.outfitOwned(player, id))
 end
 

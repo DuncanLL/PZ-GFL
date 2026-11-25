@@ -1920,7 +1920,7 @@ function W:refresh()
         local character=self.byCharacter[meta.character]
         if not character then
             local card=data.roomRecruitment[meta.character] or (meta.pack and {pool=meta.pack})
-            local locked=card~=nil and not economy.characterUnlocked(self.player,card.pool)
+            local locked=card~=nil and not card.free and not economy.characterUnlocked(self.player,card.pool)
             if self.drawAnimation and self.drawAnimation.character==meta.character then locked=true end
             character={name=meta.character,portrait=meta.portrait,skins={},locked=true,unlockRequired=not not locked,recruitment=card}
             self.byCharacter[meta.character]=character;table.insert(self.characters,character)
@@ -2155,7 +2155,7 @@ function W:layoutBiography(character)
         and self.tab=="overview" and not self.toolNotice and not self.folded and not self.foldStart
         and self.roomPage~="motions" and available>18
     local source=show and (biographies[character.name] or (data.roomCharacterDescriptions or {})[character.name])
-    if not source then
+    if not source or source=="" or (type(source)=="table" and #source==0) then
         if panel.roomScrollDrag then panel:onMouseUp() end
         if panel:getIsVisible() then panel:setVisible(false) end
         panel.lines=nil

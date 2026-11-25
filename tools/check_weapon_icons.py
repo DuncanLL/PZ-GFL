@@ -1,10 +1,11 @@
 """Verify all signature weapon Item_GFL2*.png icons are 32x32 with matching WeaponIcons and mods/Workshop parity."""
 from pathlib import Path
 import hashlib
+import json
 import struct
 import sys
 
-from common import settings
+from common import ROOT, settings
 
 
 def png_size(path: Path) -> tuple[int, int]:
@@ -36,7 +37,9 @@ def main() -> None:
     assets_root = Path(cfg['asset_root']).parent / 'localized-characters' / 'Workshop'
 
     roots = [(name, r) for name, r in [('mods', mods_root), ('Workshop', ws_root), ('GFL2Assets', assets_root)] if r and r.is_dir()]
-    packs = sorted({d.name for _, r in roots for d in r.iterdir() if d.is_dir() and d.name.startswith('GFL2') and d.name != 'GFL2Exilium'})
+    catalog = json.loads((ROOT / 'game/mod/42/media/ui/GFL2ReadyRoom/catalog.json').read_text('utf-8'))
+    no_weapon_packs = {row['pack'] for row in catalog['models'].values() if catalog['roomRecruitment'].get(row['character'], {}).get('free')}
+    packs = sorted({d.name for _, r in roots for d in r.iterdir() if d.is_dir() and d.name.startswith('GFL2') and d.name != 'GFL2Exilium' and d.name not in no_weapon_packs})
     assert packs, f'No GFL2 character packs found under {roots}'
 
     errors: list[str] = []

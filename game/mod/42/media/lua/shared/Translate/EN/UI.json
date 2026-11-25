@@ -799,5 +799,7 @@
   "UI_GFL2_PartOption_P1 高跟鞋": "Heels On",
   "UI_GFL2_PartOption_P1 丝袜（脱鞋）": "Stockings (Shoes Off)",
   "UI_GFL2_PartOption_穿着鞋子": "Shoes On",
-  "UI_GFL2_PartOption_脱下鞋子": "Shoes Off"
+  "UI_GFL2_PartOption_脱下鞋子": "Shoes Off",
+  "UI_GFL2_Role_GFL2Helena": "Helena",
+  "UI_GFL2_Outfit_pmx-31e2ec60a620a541": "Default"
 }

@@ -13,10 +13,15 @@ media = mod / 'media'
 catalog = json.loads((media / 'ui/GFL2ReadyRoom/catalog.json').read_text('utf-8'))
 required = {'UI_GFL2_' + key for key in catalog['text']}
 pack_ids = {row['pack'] for row in catalog['models'].values()}
+free_packs = {row['pack'] for row in catalog['models'].values()
+              if catalog['roomRecruitment'].get(row['character'], {}).get('free')}
+standard_packs = pack_ids - free_packs
 characters = {row['character'] for row in catalog['models'].values()}
+standard_characters = {row['character'] for row in catalog['models'].values() if row['pack'] in standard_packs}
 role_keys = {'UI_GFL2_Role_' + pack for pack in pack_ids}
 outfit_keys = {'UI_GFL2_Outfit_' + model for model in catalog['models']}
-outfit_description_keys = {'UI_GFL2_OutfitDescription_' + model for model in catalog['models']}
+outfit_description_keys = {'UI_GFL2_OutfitDescription_' + model
+                           for model, row in catalog['models'].items() if row['pack'] in standard_packs}
 provenance = ROOT/'provenance/localization'
 doll_names = json.loads((provenance/'official-dolls.json').read_text('utf8'))
 outfit_ids = json.loads((provenance/'official-outfit-ids.json').read_text('utf8'))['outfits']
@@ -27,16 +32,16 @@ assert paint_names.keys() == catalog['weaponStyle']['skins'].keys()
 signature_definitions = (media/'lua/shared/GFL2SignatureWeapon.lua').read_text('utf8')
 weapon_keys = dict(re.findall(r'id\s*=\s*"(GFL2\.\w+)",.*?name\s*=\s*"(ContextMenu_GFL2_\w+)"',
                               signature_definitions, re.S))
-assert len(weapon_keys) == len(pack_ids)
-assert all(catalog['roomCharacterDescriptions'].get(character) for character in characters)
+assert len(weapon_keys) == len(standard_packs)
+assert all(catalog['roomCharacterDescriptions'].get(character) for character in standard_characters)
 assert all(catalog['roomRecruitment'][character].get(field)
-           for character in characters for field in ('element', 'tags'))
+           for character in standard_characters for field in ('element', 'tags'))
 assert all(catalog['skinDescriptions'].get(model)
            or catalog['skinDescriptions'].get(row.get('card', ''))
-           for model, row in catalog['models'].items())
-biography_keys = {'UI_GFL2_Biography_' + pack for pack in pack_ids}
+           for model, row in catalog['models'].items() if row['pack'] in standard_packs)
+biography_keys = {'UI_GFL2_Biography_' + pack for pack in standard_packs}
 recruitment_keys = {'UI_GFL2_Recruit' + field + '_' + pack
-                    for pack in pack_ids for field in ('Phase', 'Tags')}
+                    for pack in standard_packs for field in ('Phase', 'Tags')}
 facial_source = (ROOT/'game/java/gfl2/motion/FacialExpressions.java').read_text('utf8')
 facial_keys = {
     'UI_GFL2_ExpressionControl_' + label
@@ -150,6 +155,10 @@ try:
     embedded_subtitles = {}
     embedded_caption_text = {'CN': [], 'JP': []}
     for pack in packs:
+        if pack in free_packs:
+            voice_keys[pack] = set()
+            embedded_subtitles[pack] = 0
+            continue
         media_path = data_packs/pack/'42/media'
         declarations = [
             sound for file in (media_path/'scripts').glob('*Voice_Sounds.txt')
@@ -215,13 +224,17 @@ try:
         inventory_names = {}
         for pack in packs:
             module = data_packs/pack/'42'
-            items = load(lang, 'ItemName', language, module)
-            expected_items = json.loads((module/'media/lua/shared/Translate/CN/ItemName.json').read_text('utf8'))
-            assert items.keys() == expected_items.keys(), (lang, pack)
-            assert not items.keys() & inventory_names.keys(), (lang, pack)
-            for item in items.keys() & weapon_keys.keys():
-                assert items[item] == menu[weapon_keys[item]], (lang, pack, item)
-            inventory_names.update(items)
+            cn_items_file = module/'media/lua/shared/Translate/CN/ItemName.json'
+            if cn_items_file.is_file():
+                items = load(lang, 'ItemName', language, module)
+                expected_items = json.loads(cn_items_file.read_text('utf8'))
+                assert items.keys() == expected_items.keys(), (lang, pack)
+                assert not items.keys() & inventory_names.keys(), (lang, pack)
+                for item in items.keys() & weapon_keys.keys():
+                    assert items[item] == menu[weapon_keys[item]], (lang, pack, item)
+                inventory_names.update(items)
+            elif pack not in free_packs:
+                raise AssertionError((lang, pack, 'missing ItemName.json'))
             subtitle_file = module/'media/lua/shared/Translate'/lang/'IG_UI.json'
             if subtitle_file.is_file():
                 subtitles = load(lang, 'IG_UI', language, module)
@@ -236,7 +249,7 @@ try:
                 external += len(keys)
         assert weapon_keys.keys() <= inventory_names.keys(), lang
         if lang in ('EN','KO'):
-            assert set(complete_packs) == pack_ids, (lang, sorted(pack_ids - set(complete_packs)))
+            assert set(complete_packs) == standard_packs, (lang, sorted(standard_packs - set(complete_packs)))
         print(json.dumps(dict(locale=lang, embedded_japanese_lines=sum(embedded_subtitles.values()) if lang=='JP' else 0,
                               translated_voice_lines=external, voice_packs_complete=complete_packs,
                               caption_counts=caption_counts)))
