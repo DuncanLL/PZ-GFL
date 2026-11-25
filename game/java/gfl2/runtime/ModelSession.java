@@ -56,9 +56,20 @@ final class ModelSession {
     private FurnitureSeat furnitureSeat;
     private float furnitureDrop;
     private volatile ModelInstance drawMarker;
+    record HeldAttachment(ModelInstance instance,Matrix4f local,long frame) {}
+    private volatile HeldAttachment[] heldAttachments;
 
     float furnitureDrop() { return furnitureDrop; }
     float furnitureBlend() { return furnitureSeat == null ? 0 : furnitureSeat.blend; }
+    void setHeldAttachments(HeldAttachment[] attachments) { heldAttachments=attachments; }
+    Matrix4f heldAttachmentLocal(ModelInstance instance,long currentFrame) {
+        if(failed||retired||!ready||instance==null)return null;
+        HeldAttachment[] list=heldAttachments;
+        if(list==null)return null;
+        for(HeldAttachment entry:list)
+            if(entry.instance()==instance&&Math.abs(currentFrame-entry.frame())<=15L)return entry.local();
+        return null;
+    }
     ModelInstance drawMarker(IsoGameCharacter actor) {
         if (drawMarker == null) drawMarker = new ModelInstance();
         drawMarker.character = actor;
@@ -326,7 +337,7 @@ final class ModelSession {
     }
     void fail(Throwable e) { if(!failed){failed=true;ready=false;Main.error(e);} }
     synchronized void retire() {
-        if(retired)return;retired=true;ready=false;
+        if(retired)return;retired=true;ready=false;heldAttachments=null;
         ViewpointMode.retire(()->{
             try{ResourceCleanup.close(viewpointModel,plainMesh,plainTextures,gpu,model);}
             catch(Throwable e){Main.error(e);}

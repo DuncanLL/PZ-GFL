@@ -83,6 +83,8 @@ public final class Bridge {
                 DrawAccess.style(draws,body,n);continuous|=backend.followDraw(draws,n,frame.number);
                 if(draw.low!=null)draws.bounds(n,targetPlacement,draw.low,draw.high,1);
             }
+            Matrix4f sourceInverse=null;
+            ArrayList<ModelSession.HeldAttachment> retargetedAttachments=null;
             for(int n=first;n<originalEnd;n++) {
                 ModelInstance instance=DrawAccess.instance(draws,n);DrawAccess.Gear gear=equipment.get(instance);
                 if(gear==null)DrawAccess.flags(draws,n,0);
@@ -97,9 +99,19 @@ public final class Bridge {
                     draws.bounds(n,placement,mesh.minXyz,mesh.maxXyz,1);
                     DrawAccess.ownPlacement(draws,n,originalEnd,continuous);
                     draw.addHeld(held);
+                    if(sourceInverse==null&&Math.abs(sourcePlacement.determinant())>1e-8f)
+                        sourceInverse=new Matrix4f(sourcePlacement).invert();
+                    if(sourceInverse!=null) {
+                        Matrix4f local=new Matrix4f().scaling(slot.finalScale).mul(sourceInverse).mul(placement);
+                        if(local.isFinite()) {
+                            if(retargetedAttachments==null)retargetedAttachments=new ArrayList<>(2);
+                            retargetedAttachments.add(new ModelSession.HeldAttachment(instance,local,gameFrame));
+                        }
+                    }
                 }
             }
-        } catch(Throwable e) { if(draw!=null){draw.customEnd=draws.count();draw.restore();}session.fail(e); }
+            session.setHeldAttachments(retargetedAttachments==null?null:retargetedAttachments.toArray(ModelSession.HeldAttachment[]::new));
+        } catch(Throwable e) { session.setHeldAttachments(null);if(draw!=null){draw.customEnd=draws.count();draw.restore();}session.fail(e); }
     }
     static Matrix4f heldSource(ModelInstanceRenderData part,Matrix4f inverseBody) {
         // The game slot contains the bone and script mounts before Viewpoint's render placement.

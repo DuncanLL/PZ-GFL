@@ -37,6 +37,7 @@ public class Main {
     private static NativeFunc api;
     private static OzzGrip grip;
     private static Path directory;
+    private static List<String> configuredModIds=List.of();
     private static volatile boolean remoteBodyPhysicsEnabled=false;
     private static volatile int remoteChestStrength=0;
 
@@ -44,7 +45,7 @@ public class Main {
         // ZombieBuddy retransforms loaded game classes when the package is dispatched.
         // Resolve these two lazy stock renderer classes before it applies the advice.
         ClassLoader loader=Main.class.getClassLoader();
-        for(String type:new String[]{"zombie.core.skinnedmodel.model.Model","zombie.core.skinnedmodel.model.ModelInstanceRenderData","zombie.ui.UI3DModel$Drawer"}) {
+        for(String type:new String[]{"zombie.core.skinnedmodel.model.Model","zombie.core.skinnedmodel.model.ModelInstance","zombie.core.skinnedmodel.model.ModelInstanceRenderData","zombie.ui.UI3DModel$Drawer"}) {
             try { Class.forName(type,false,loader); }
             catch(ClassNotFoundException | LinkageError failure) { error(failure); }
         }
@@ -77,7 +78,8 @@ public class Main {
         return result;
     }
     private static synchronized void configure() throws Exception {
-        if (directory!=null) return;
+        List<String> currentMods=List.copyOf(ZomboidFileSystem.instance.getModIDs());
+        if (directory!=null && currentMods.equals(configuredModIds)) return;
         Path d=locate(),root=d.resolve("media/gfl2_pmx").normalize();
         JSONObject registry=new JSONObject(Files.readString(root.resolve("registry.json")));
         ArrayList<Entry> loaded=new ArrayList<>();HashSet<String> hidden=new HashSet<>();
@@ -108,7 +110,7 @@ public class Main {
             }catch(Exception e){System.err.println("[GFL2Exilium] Character pack "+mod+": "+e);}
         }
         entries.clear();entries.addAll(loaded);hiddenEntries.clear();hiddenEntries.addAll(hidden);
-        enabledPacks=List.copyOf(packs);directory=d;
+        enabledPacks=List.copyOf(packs);directory=d;configuredModIds=currentMods;
     }
     static synchronized List<CharacterPack> enabledCharacterPacks() throws Exception {
         configure();
@@ -126,8 +128,9 @@ public class Main {
         }
     }
     public static synchronized String refreshLibrary() {
-        Path previous=directory;directory=null;
-        try{configure();return "";}catch(Throwable e){directory=previous;error(e);return lastError;}
+        Path previous=directory;List<String> previousMods=configuredModIds;
+        directory=null;configuredModIds=List.of();
+        try{configure();return "";}catch(Throwable e){directory=previous;configuredModIds=previousMods;error(e);return lastError;}
     }
     private static synchronized void nativeRuntime() throws Exception {
         if (api!=null) return;

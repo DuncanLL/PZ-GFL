@@ -38,7 +38,7 @@ public final class VanillaWorld {
         }
     }
 
-    private record Hand(ModelInstance root,Matrix4f correction) {}
+    private record Hand(ModelInstance root,Matrix4f correction,Matrix4f heldLocal) {}
 
     private static final class Draw {
         final ModelSession session;
@@ -111,6 +111,16 @@ public final class VanillaWorld {
             Matrix4f targetBody=placement(bodyXfrm,selected.scale,selected.furnitureDrop());
             Hand primary=hand(selected,slot,actor.primaryHandModel,primaryData,1,mainItem==null?"":mainItem.getType(),inverseBody,targetBody);
             Hand secondary=hand(selected,slot,actor.secondaryHandModel,secondaryData,0,offItem==null?"":offItem.getType(),inverseBody,targetBody);
+            int count=(primary!=null&&primary.heldLocal()!=null?1:0)+(secondary!=null&&secondary.heldLocal()!=null?1:0);
+            if(count>0) {
+                ModelSession.HeldAttachment[] list=new ModelSession.HeldAttachment[count];
+                int at=0;
+                if(primary!=null&&primary.heldLocal()!=null)list[at++]=new ModelSession.HeldAttachment(primary.root(),primary.heldLocal(),frame);
+                if(secondary!=null&&secondary.heldLocal()!=null)list[at]=new ModelSession.HeldAttachment(secondary.root(),secondary.heldLocal(),frame);
+                selected.setHeldAttachments(list);
+            } else {
+                selected.setHeldAttachments(null);
+            }
             QUEUED.put(slot,new Draw(selected,snapshot,body,bodyData,targetBody,primary,secondary));
         } catch(Throwable failure) { selected.fail(failure); }
     }
@@ -118,17 +128,22 @@ public final class VanillaWorld {
     private static Hand hand(ModelSession session,ModelSlotRenderData slot,ModelInstance root,
             ModelInstanceRenderData data,int side,String key,Matrix4f inverseBody,Matrix4f targetBody) {
         if(root==null)return null;
-        Matrix4f correction=null;
+        Matrix4f correction=null,heldLocal=null;
         if(data!=null&&data.model.isStatic&&inverseBody!=null&&inverseBody.isFinite()&&session.profile.optBoolean("palm_ready")) {
             Matrix4f original=new Matrix4f(data.xfrm).transpose();
             if(original.isFinite()&&Math.abs(original.determinant())>1e-8f) {
                 Matrix4f local=new Matrix4f(inverseBody).mul(original);
                 Matrix4f mapped=session.attachment(root,side,key,local,slot.animPlayer);
-                Matrix4f candidate=new Matrix4f(targetBody).mul(mapped).mul(original.invert());
-                if(candidate.isFinite())correction=candidate;
+                Matrix4f placed=new Matrix4f(targetBody).mul(mapped);
+                Matrix4f candidate=new Matrix4f(placed).mul(original.invert());
+                if(candidate.isFinite()) {
+                    correction=candidate;
+                    Matrix4f scaled=new Matrix4f().scaling(slot.finalScale).mul(placed);
+                    if(scaled.isFinite())heldLocal=scaled;
+                }
             }
         }
-        return new Hand(root,correction);
+        return new Hand(root,correction,heldLocal);
     }
 
     public static void keepReady(ModelSlotRenderData slot) {

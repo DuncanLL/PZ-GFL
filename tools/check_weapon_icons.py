@@ -4,6 +4,7 @@ import hashlib
 import json
 import struct
 import sys
+import zlib
 
 from common import ROOT, settings
 
@@ -13,6 +14,64 @@ def png_size(path: Path) -> tuple[int, int]:
     if len(head) < 24 or head[:8] != b'\x89PNG\r\n\x1a\n':
         return (-1, -1)
     return struct.unpack('>II', head[16:24])
+
+
+def png_vertical_alpha_coverage(path: Path) -> float | None:
+    """Return non-transparent vertical span ratio [0..1] for 8-bit RGBA PNGs (catches flat horizontal-card icons)."""
+    data = path.read_bytes()
+    if len(data) < 33 or data[:8] != b'\x89PNG\r\n\x1a\n':
+        return None
+    pos = 8
+    w = h = bd = ct = 0
+    idat = bytearray()
+    while pos + 8 <= len(data):
+        ln, ctype = struct.unpack('>I4s', data[pos:pos + 8])
+        chunk = data[pos + 8:pos + 8 + ln]
+        pos += 12 + ln
+        if ctype == b'IHDR':
+            w, h, bd, ct = struct.unpack('>IIBB', chunk[:10])
+        elif ctype == b'IDAT':
+            idat.extend(chunk)
+        elif ctype == b'IEND':
+            break
+    if bd != 8 or ct != 6 or w <= 0 or h <= 0:
+        return None
+    raw = zlib.decompress(bytes(idat))
+    bpp = 4
+    stride = w * bpp
+    prev = bytearray(stride)
+    rows_with_alpha = []
+    idx = 0
+    for y in range(h):
+        ftype = raw[idx]
+        idx += 1
+        cur = bytearray(raw[idx:idx + stride])
+        idx += stride
+        if ftype == 1:
+            for i in range(bpp, stride):
+                cur[i] = (cur[i] + cur[i - bpp]) & 0xFF
+        elif ftype == 2:
+            for i in range(stride):
+                cur[i] = (cur[i] + prev[i]) & 0xFF
+        elif ftype == 3:
+            for i in range(stride):
+                a = cur[i - bpp] if i >= bpp else 0
+                cur[i] = (cur[i] + ((a + prev[i]) >> 1)) & 0xFF
+        elif ftype == 4:
+            for i in range(stride):
+                a = cur[i - bpp] if i >= bpp else 0
+                b = prev[i]
+                c = prev[i - bpp] if i >= bpp else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                cur[i] = (cur[i] + pr) & 0xFF
+        if any(cur[x * 4 + 3] > 10 for x in range(w)):
+            rows_with_alpha.append(y)
+        prev = cur
+    if not rows_with_alpha:
+        return 0.0
+    return (rows_with_alpha[-1] - rows_with_alpha[0] + 1) / h
 
 
 def sha256(path: Path) -> str:
@@ -63,6 +122,13 @@ def main() -> None:
                 w, h = png_size(item_png)
                 if (w, h) != (32, 32):
                     errors.append(f'[{label}] {pack}/{item_png.name}: expected 32x32, got {w}x{h}')
+                elif 'Skin' not in item_png.name:
+                    hcov = png_vertical_alpha_coverage(item_png)
+                    if hcov is not None and hcov < 0.75:
+                        errors.append(
+                            f'[{label}] {pack}/{item_png.name}: vertical alpha coverage {hcov:.2f} < 0.75 '
+                            f'(must use official 256x256 diagonal icon Weapon_*_5_256.png, not horizontal card)'
+                        )
                 item_hashes.setdefault(item_png.name, {})[label] = sha256(item_png)
 
                 wi_name = item_png.name.removeprefix('Item_')

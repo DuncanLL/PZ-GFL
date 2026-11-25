@@ -153,9 +153,6 @@
     "GFL2Qiongjiu": [
       "pmx-d032a88a31e425fd",
       "pmx-3831188cd10f09a1"
-    ],
-    "GFL2Helena": [
-      "pmx-31e2ec60a620a541"
     ]
   },
   "pack_mod_ids": {
@@ -190,7 +187,6 @@
     "GFL2Nemesis": "GFL2Nemesis",
     "GFL2Kuro": "GFL2Kuro",
     "GFL2Sakura": "GFL2Sakura",
-    "GFL2Qiongjiu": "GFL2Qiongjiu",
-    "GFL2Helena": "GFL2Helena"
+    "GFL2Qiongjiu": "GFL2Qiongjiu"
   }
 }

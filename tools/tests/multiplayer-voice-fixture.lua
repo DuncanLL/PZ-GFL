@@ -156,24 +156,5 @@ function verifyVoiceLifecycle()
     GFL2VoiceEngine.syncRemote(other,false)
     assert(other.prefix=="VoiceFemale" and #other.stopped==2)
 
-    -- Voice-free character (GFL2Helena) mutes vanilla PZ voice locally (SP/MP), survives save/reload, stays silent on shout, and restores vanilla on unequip.
-    local helena="pmx-31e2ec60a620a541"
-    local pubBefore=#published
-    localPlayer.model=helena
-    GFL2VoiceEngine.modelChanged(localPlayer)
-    assert(not a.isActive(localPlayer) and not b.isActive(localPlayer))
-    assert(localPlayer.prefix=="GFL2PmxSilent","Helena must mute vanilla voice via GFL2PmxSilent")
-    assert(localPlayer.data.GFL2PmxSilentOriginalVoicePrefix=="VoiceFemale")
-    events.OnSave()
-    assert(localPlayer.prefix=="VoiceFemale","OnSave must restore vanilla voice prefix for Helena")
-    events.OnPostSave()
-    assert(localPlayer.prefix=="GFL2PmxSilent","OnPostSave must re-mute vanilla voice for Helena")
-    localPlayer.shouting=true
-    ISEmoteRadialMenu.onKeyReleased(17)
-    assert(#published==pubBefore,"Helena must not publish voice clips on shout")
-    localPlayer.ready=false;localPlayer.model=""
-    GFL2VoiceEngine.modelChanged(localPlayer)
-    assert(localPlayer.prefix=="VoiceFemale","unequipping Helena must restore original vanilla voice")
-
     return "PASS production multiplayer voice routing, remote vanilla muting, 3D teammate playback and CN/EN/JP/KO captions"
 end

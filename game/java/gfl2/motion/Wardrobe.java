@@ -54,9 +54,10 @@ public final class Wardrobe {
     }
     public JSONObject choices(JSONObject requested) {
         JSONObject selected=new JSONObject();JSONArray groups=definition.getJSONArray("groups");
-        for(String key:requested.keySet())validateChoice(key,requested.getString(key));
         for(int i=0;i<groups.length();i++) {
-            JSONObject group=groups.getJSONObject(i);String id=group.getString("id");selected.put(id,requested.optString(id,group.getString("default")));
+            JSONObject group=groups.getJSONObject(i);String id=group.getString("id");
+            String value=requested.optString(id,"");
+            selected.put(id,options.get(id).contains(value)?value:group.getString("default"));
         }
         return selected;
     }

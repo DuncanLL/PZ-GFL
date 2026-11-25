@@ -10,7 +10,7 @@ local saves = {}
 ModData = {getOrCreate=function() return saves end}
 local enabled = true
 function getActivatedMods()
-    return {contains=function(_,mod) return enabled and (mod=="GFL2Laiya" or mod=="GFL2Soppo" or mod=="GFL2Helena") end}
+    return {contains=function(_,mod) return enabled and (mod=="GFL2Laiya" or mod=="GFL2Soppo") end}
 end
 local player = {
     getUsername=function() return "player-a" end,
@@ -115,11 +115,6 @@ function verifyServer()
     saves["player-a"].wallet.targeted=10
     request(player,"Appearance",appearance)
     assert(replies.AppearanceRejected.attempt==1 and replies.Appearance==nil)
-    -- Free character (GFL2Helena) can be worn immediately with empty wallet (no recruitment pull).
-    local helena="pmx-31e2ec60a620a541"
-    request(player,"Wear",{target=helena,request=1})
-    assert(replies.Transaction.result.status=="ok","free character GFL2Helena must be wearable without pulling")
-    saves["player-a"].request=0
     request(player,"DrawCharacter",{target=model,count=10,request=1})
     assert(replies.Transaction.result.status=="unlocked")
     assert(saves["player-a"].wallet.targeted==9 and rolls==1)
