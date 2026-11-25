@@ -15,6 +15,8 @@ import org.json.JSONObject;
 
 /** One original PMX and generated model data, consumed by the same action core. */
 public final class PmxModel implements AutoCloseable {
+    /** Unified GF2 canonical PMX-units-per-PZ-unit scale so all dolls preserve authentic 1:1 height differences. */
+    public static final float CANONICAL_UNIT_SCALE = 20.5f;
     private final NativeFunc api;
     private final long handle;
     private final WorldPoseRetargeter core;
@@ -52,7 +54,10 @@ public final class PmxModel implements AutoCloseable {
         Profile(JSONObject j) {
             format=j.getInt("format"); bones=j.getInt("bones"); vertices=j.getLong("vertices");
             source_root=j.getInt("source_root"); target_root=j.getInt("target_root");
-            pmx_sha256=j.getString("pmx_sha256"); unit_scale=(float)j.getDouble("unit_scale");
+            pmx_sha256=j.getString("pmx_sha256");
+            double rawScale=j.getDouble("unit_scale");
+            if(!Double.isFinite(rawScale)||rawScale<=0)throw new IllegalArgumentException("Invalid profile unit_scale");
+            unit_scale=CANONICAL_UNIT_SCALE;
             palm_ready=j.getBoolean("palm_ready");
             JSONObject physics=j.optJSONObject("physics");
             physics_enabled=physics!=null && physics.optBoolean("enabled",false);

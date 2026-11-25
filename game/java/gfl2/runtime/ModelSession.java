@@ -86,7 +86,7 @@ final class ModelSession {
         profile=new JSONObject(Files.readString(entry.profile()));
         boolean loadShading=!previewOnly||ReadyRoomPreview.studioPreviewAvailable();
         shading=loadShading ? PmxShading.load(entry.model(),profile) : null;
-        scale=(float)profile.getDouble("unit_scale");
+        scale=PmxModel.CANONICAL_UNIT_SCALE;
         var names=profile.getJSONArray("source_bone_names");sourceNames=new String[names.length()];
         for(int i=0;i<sourceNames.length;i++)sourceNames[i]=names.getString(i);
         var ref=profile.getJSONArray("source_reference");reference=new float[ref.length()];for(int i=0;i<reference.length;i++)reference[i]=(float)ref.getDouble(i);
