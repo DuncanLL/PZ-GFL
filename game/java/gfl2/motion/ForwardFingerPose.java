@@ -10,9 +10,9 @@ import org.joml.Vector3f;
 /** Allocate bend while preserving the chain's end rotation. */
 final class ForwardFingerPose {
     // Natural anatomical cascade from index(0) to pinky(3) layered during empty-hand idle.
-    private static final float[] IDLE_MCP_CURL={-.10f,0f,.10f,.18f};
-    private static final float[] IDLE_PIP_CURL={-.04f,.08f,.20f,.32f};
-    private static final float[] IDLE_DIP_CURL={.10f,.16f,.24f,.30f};
+    private static final float[] IDLE_MCP_CURL={-.04f,.06f,.16f,.25f};
+    private static final float[] IDLE_PIP_CURL={.06f,.18f,.30f,.42f};
+    private static final float[] IDLE_DIP_CURL={.14f,.22f,.30f,.36f};
     private static final float[] IDLE_SPLAY={-.035f,-.005f,.015f,.040f};
     private record Bend(int rootOffset,int childOffset,int tipOffset,float fraction,int side,int fingerIndex,Vector3f curlAxis,Vector3f splayAxis) {}
     private record Thumb(int rootOffset,int midOffset,int tipOffset,int side,Vector3f baseAxis,Vector3f flexAxis) {}
@@ -189,12 +189,12 @@ final class ForwardFingerPose {
                 }
             } else if(strength>0){
                 if(thumb.baseAxis!=null){
-                    change.rotationAxis(.24f*strength,thumb.baseAxis.x,thumb.baseAxis.y,thumb.baseAxis.z);
+                    change.rotationAxis(.62f*strength,thumb.baseAxis.x,thumb.baseAxis.y,thumb.baseAxis.z);
                     assigned.mul(change).normalize();
                 }
                 if(thumb.flexAxis!=null){
-                    remainder.rotationAxis(.22f*strength,thumb.flexAxis.x,thumb.flexAxis.y,thumb.flexAxis.z);
-                    change.rotationAxis(.26f*strength,thumb.flexAxis.x,thumb.flexAxis.y,thumb.flexAxis.z);
+                    remainder.rotationAxis(.32f*strength,thumb.flexAxis.x,thumb.flexAxis.y,thumb.flexAxis.z);
+                    change.rotationAxis(.38f*strength,thumb.flexAxis.x,thumb.flexAxis.y,thumb.flexAxis.z);
                 }else{
                     change.identity();
                 }
