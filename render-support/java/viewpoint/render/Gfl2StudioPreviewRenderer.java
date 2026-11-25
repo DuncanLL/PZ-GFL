@@ -88,7 +88,7 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
 
     private record ProgramKey(String vertex, String fragment) {}
     private record StateKey(int material, String pass) {}
-    private record RegisterKey(String sha, int binding) {}
+    private record RegisterKey(String sha, int binding, String root) {}
 
     private static final class RefTexture {
         final Gfl2OriginalTexture texture;
@@ -160,7 +160,8 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             }
             buf.flip();
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-            GL15.glBufferSubData(GL15.GL_ARRAY_BUFFER, 0, buf);
+            // Orphan previous storage before upload so animated preview frames never stall or race in-flight draws.
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, buf, GL15.GL_STREAM_DRAW);
         }
 
         void close() {
@@ -216,13 +217,12 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
                         int off = vOff + vi * 8;
                         srcVerts[vi] = geomBb.getInt(off);
                         long attIdx = Integer.toUnsignedLong(geomBb.getInt(off + 4));
-                        uv2[vi * 2] = (float) (2048.0 + (64.0 + srcMat) * 32.0 + 16.0 + (attIdx % 512L) / 64.0 - 7.5);
+                        uv2[vi * 2] = (float) (2048.0 + (64.0 + pmxMat) * 32.0 + 16.0 + (attIdx % 512L) / 64.0 - 7.5);
                         uv2[vi * 2 + 1] = (float) (16.0 + Math.floor(attIdx / 512.0) / 64.0 - 2.0);
                     }
                     int[] indices = new int[iCnt];
                     for (int ii = 0; ii < iCnt; ii++) indices[ii] = geomBb.getInt(iOff + ii * 4);
                     built.add(new PartMesh(pmxMat, srcMat, eye, srcVerts, uv2, indices));
-                    materialIds.add(srcMat);
                 }
             } catch (RuntimeException | Error e) {
                 GL11.glDeleteTextures(attTex);
@@ -604,6 +604,7 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         JSONObject glsl = data.manifest.getJSONObject("glsl");
         String vs = new String(data.bytes(glsl.getJSONObject(vsHash)), StandardCharsets.UTF_8);
         String fs = new String(data.bytes(glsl.getJSONObject(fsHash)), StandardCharsets.UTF_8);
+        fs = neutralizeStudioSunVisibility(fs);
         if ("GFCharForward".equals(passName)) {
             fs = Gfl2SurfaceControls.adapt(fs, programMetadata.get(fsHash));
             if (FACE_FORWARD.equals(fsHash)) fs = softenFaceMask(fs);
@@ -611,6 +612,18 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         Gfl2OriginalProgram created = new Gfl2OriginalProgram(vs, fs, vsHash, fsHash);
         programs.put(key, created);
         return created;
+    }
+
+    private static String neutralizeStudioSunVisibility(String source) {
+        if (!source.contains("gf2NativeSunVisibility")) return source;
+        return source
+                .replace("uniform sampler2D gf2NativeSunVisibility;", "")
+                .replace("gf2ShadowTransmission=texelFetch(gf2NativeSunVisibility,ivec2(gl_FragCoord.xy),0).r;",
+                        "gf2ShadowTransmission=1.0;")
+                .replace("float gf2IncomingSunShadowLod(sampler2DShadow sm,vec3 p,float lod){return textureLod(sm,p,lod)*gf2ShadowTransmission;}",
+                        "float gf2IncomingSunShadowLod(sampler2DShadow sm,vec3 p,float lod){return 1.0;}")
+                .replace("float gf2IncomingSunShadow(sampler2DShadow sm,vec3 p){return texture(sm,p)*gf2ShadowTransmission;}",
+                        "float gf2IncomingSunShadow(sampler2DShadow sm,vec3 p){return 1.0;}");
     }
 
     private static String softenFaceMask(String source) {
@@ -696,8 +709,8 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         return result;
     }
 
-    private Gfl2RegisterBank registerBank(String sha, int binding) {
-        return registerBanks.computeIfAbsent(new RegisterKey(sha, binding), key -> {
+    private Gfl2RegisterBank registerBank(String sha, int binding, String root) {
+        return registerBanks.computeIfAbsent(new RegisterKey(sha, binding, root), key -> {
             JSONObject layout = null;
             for (Object v : data.manifest.getJSONObject("consumed").getJSONObject(sha).getJSONArray("buffers")) {
                 JSONObject candidate = (JSONObject) v;
@@ -830,10 +843,19 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             boolean skipOutline = baseOutline <= 1e-4f;
             float effOutline = baseOutline * Gfl2NativeSourceRenderer.outlineDistanceScale(inputs);
 
-            // Render all GF2 stages into our private RGBA16F + D32F/S8 studio FBO.
+            // Render all GF2 stages into our private RGBA16F + D24S8 studio FBO.
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
             GL11.glDisable(GL11.GL_SCISSOR_TEST);
             GL11.glViewport(0, 0, fboWidth, fboHeight);
+            GL11.glDepthRange(0.0, 1.0);
+            GL11.glDisable(GL30.GL_FRAMEBUFFER_SRGB);
+            GL11.glEnable(GL32.GL_TEXTURE_CUBE_MAP_SEAMLESS);
+            GL11.glDisable(GL32.GL_DEPTH_CLAMP);
+            if (scope.isCompatibility()) {
+                GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
+                GL11.glDisable(GL11.GL_ALPHA_TEST);
+                GL11.glDisable(GL11.GL_COLOR_LOGIC_OP);
+            }
             GL11.glColorMask(true, true, true, true);
             GL11.glDepthMask(true);
             GL11.glStencilMask(255);
@@ -843,6 +865,11 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             GL30.glClearBufferfv(GL11.GL_COLOR, 2, new float[]{65504f, 65504f, 0f, 0f});
             GL30.glClearBufferfi(GL30.GL_DEPTH_STENCIL, 0, 1.0f, 0);
             GL11.glFrontFace(GL11.GL_CCW);
+            GL33.glBindSampler(126, 0);
+
+            long frameRevision = ++bankRevision;
+            Set<RegisterKey> updatedBanks = new HashSet<>();
+            GL42.glMemoryBarrier(GL42.GL_BUFFER_UPDATE_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
 
             JSONObject rendererFrames = modelJson.getJSONObject("renderer_frames").getJSONObject("materials");
             Map<String, LocalTransform> localCache = new HashMap<>();
@@ -902,8 +929,13 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
                         if (layout != null && "UnityPerMaterial".equals(layout.getString("name"))) {
                             regs.put(slot, acquireMaterialBuffer(model, srcMat));
                         } else {
-                            Gfl2RegisterBank bank = registerBank(sha, binding);
-                            bank.update(regInputs, ++bankRevision);
+                            String bankRoot = layout != null && "UnityPerDraw".equals(layout.getString("name")) ? root : null;
+                            RegisterKey bankKey = new RegisterKey(sha, binding, bankRoot);
+                            Gfl2RegisterBank bank = registerBank(sha, binding, bankRoot);
+                            if (updatedBanks.add(bankKey)) {
+                                bank.update(regInputs, frameRevision);
+                                GL42.glMemoryBarrier(GL42.GL_BUFFER_UPDATE_BARRIER_BIT | GL43.GL_UNIFORM_BARRIER_BIT);
+                            }
                             regs.put(slot, bank.buffer);
                         }
                     }

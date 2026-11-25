@@ -44,7 +44,7 @@ public class Main {
         // ZombieBuddy retransforms loaded game classes when the package is dispatched.
         // Resolve these two lazy stock renderer classes before it applies the advice.
         ClassLoader loader=Main.class.getClassLoader();
-        for(String type:new String[]{"zombie.core.skinnedmodel.model.Model","zombie.ui.UI3DModel$Drawer"}) {
+        for(String type:new String[]{"zombie.core.skinnedmodel.model.Model","zombie.core.skinnedmodel.model.ModelInstanceRenderData","zombie.ui.UI3DModel$Drawer"}) {
             try { Class.forName(type,false,loader); }
             catch(ClassNotFoundException | LinkageError failure) { error(failure); }
         }

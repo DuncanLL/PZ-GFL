@@ -21,6 +21,12 @@ public final class VanillaWorldPatch {
         @Patch.OnExit(onThrowable=Throwable.class) public static void exit() { VanillaWorld.end(); }
     }
 
+    @Patch(className="zombie.core.skinnedmodel.model.ModelInstanceRenderData",methodName="RenderCharacter")
+    public static final class Part {
+        @Patch.OnEnter(skipOn=true) public static boolean enter(@Patch.This ModelInstanceRenderData data,
+                @Patch.Argument(0) ModelSlotRenderData slot) { return VanillaWorld.replace(slot,data); }
+    }
+
     @Patch(className="zombie.core.skinnedmodel.model.Model",methodName="DrawChar")
     public static final class Paint {
         @Patch.OnEnter(skipOn=true) public static boolean enter(@Patch.Argument(0) ModelSlotRenderData slot,

@@ -31,7 +31,7 @@ public final class Gfl2GlScope implements AutoCloseable {
     private final long[] uboRanges,ssboRanges;
     private final int[] uboSlots,ssboSlots;
     private final Gfl2FixedState explicit;
-    private final boolean seamless,depthClamp;
+    private final boolean seamless,depthClamp,framebufferSrgb,compatibility;
     private final int readBuffer;
     private static final int[] SHADER_UBOS={3,8,9,10,11,12,13}, NATIVE_UBOS={0,2,3,8,9,10,11,12,13};
     private static final int[] MODEL_SSBOS={0,7,8,9,10,12,13}, GLASS_SSBOS={0,1,2,3,7,8,9,10,12,13};
@@ -52,10 +52,12 @@ public final class Gfl2GlScope implements AutoCloseable {
         readBuffer=GL11.glGetInteger(GL11.GL_READ_BUFFER);
         depthClamp=GL11.glIsEnabled(GL32.GL_DEPTH_CLAMP);
         seamless=GL11.glIsEnabled(GL32.GL_TEXTURE_CUBE_MAP_SEAMLESS);
+        framebufferSrgb=GL11.glIsEnabled(GL30.GL_FRAMEBUFFER_SRGB);
         // ShaderLab uses broadcast blend/mask commands. The compatibility attribute stack
         // preserves every indexed colour state they change, regardless of attached MRT count.
         ContextLimits limits=limits();
-        if(limits.compatibility()){
+        compatibility=limits.compatibility();
+        if(compatibility){
             GL11.glPushAttrib(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT|GL11.GL_STENCIL_BUFFER_BIT|
                     GL11.GL_POLYGON_BIT|GL11.GL_SCISSOR_BIT|GL11.GL_VIEWPORT_BIT|GL13.GL_MULTISAMPLE_BIT);
             explicit=null;
@@ -65,7 +67,7 @@ public final class Gfl2GlScope implements AutoCloseable {
         save(0,D2|SAMPLER);save(91,D2);save(92,D2);
         boolean probe=phase==Phase.PROBE_LIGHT||phase==Phase.PROBE_GEOMETRY;
         if(!probe){
-            save(126,D2);
+            save(126,D2|SAMPLER);
             // ModelPass.end clears all native model samplers; LayeredLooks.bind may populate these six targets.
             for(int u=64;u<80;u++)save(u,SAMPLER);
             for(int u=143;u<=148;u++)save(u,u==145?D2:ARRAY);
@@ -154,6 +156,7 @@ public final class Gfl2GlScope implements AutoCloseable {
             else GL30.glBindBufferBase(target,slots[i],ids[i]);
         }
     }
+    boolean isCompatibility(){return compatibility;}
     @Override public void close(){
         CURRENT.set(enclosing);
         for(int u=0;u<unitMask.length;u++)if(unitMask[u]!=0){
@@ -173,6 +176,7 @@ public final class Gfl2GlScope implements AutoCloseable {
         } else explicit.restore();
         GL11.glReadBuffer(readBuffer);
         if(seamless)GL11.glEnable(GL32.GL_TEXTURE_CUBE_MAP_SEAMLESS);else GL11.glDisable(GL32.GL_TEXTURE_CUBE_MAP_SEAMLESS);
+        if(framebufferSrgb)GL11.glEnable(GL30.GL_FRAMEBUFFER_SRGB);else GL11.glDisable(GL30.GL_FRAMEBUFFER_SRGB);
         if(audit!=null)audit.verify(phase.name());
     }
 }

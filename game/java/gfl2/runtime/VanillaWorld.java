@@ -6,8 +6,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL33;
 import zombie.characters.IsoGameCharacter;
+import zombie.core.PerformanceSettings;
 import zombie.core.SpriteRenderer;
 import zombie.core.opengl.GLStateRenderThread;
 import zombie.core.skinnedmodel.advancedanimation.AnimatedModel.AnimatedModelInstanceRenderData;
@@ -42,14 +44,16 @@ public final class VanillaWorld {
         final ModelSession session;
         final ModelSession.Snapshot snapshot;
         final ModelInstance body;
+        final ModelInstanceRenderData bodyData;
+        final Matrix4f bodyPlacement;
         final Hand primary,secondary;
-        final float furnitureDrop;
         final IdentityHashMap<ModelInstanceRenderData,Matrix4f> heldTransforms=new IdentityHashMap<>();
         boolean painted;
 
-        Draw(ModelSession session,ModelSession.Snapshot snapshot,ModelInstance body,Hand primary,Hand secondary) {
-            this.session=session;this.snapshot=snapshot;this.body=body;this.primary=primary;this.secondary=secondary;
-            furnitureDrop=session.furnitureDrop();
+        Draw(ModelSession session,ModelSession.Snapshot snapshot,ModelInstance body,ModelInstanceRenderData bodyData,
+                Matrix4f bodyPlacement,Hand primary,Hand secondary) {
+            this.session=session;this.snapshot=snapshot;this.body=body;this.bodyData=bodyData;
+            this.bodyPlacement=bodyPlacement;this.primary=primary;this.secondary=secondary;
         }
 
         Hand hand(ModelInstanceRenderData part) {
@@ -79,12 +83,13 @@ public final class VanillaWorld {
         boolean holding=mainItem!=null||offItem!=null;
         ModelInstance body=slot.modelSlot.model;
         ModelInstanceRenderData bodyData=null,primaryData=null,secondaryData=null;
-        if(actor.primaryHandModel!=null||actor.secondaryHandModel!=null)for(var data:slot.modelData) {
+        for(var data:slot.modelData) {
             if(data.modelInstance==body)bodyData=data;
-            if(data.modelInstance==actor.primaryHandModel)primaryData=data;
-            if(data.modelInstance==actor.secondaryHandModel)secondaryData=data;
+            if(actor.primaryHandModel!=null&&data.modelInstance==actor.primaryHandModel)primaryData=data;
+            if(actor.secondaryHandModel!=null&&data.modelInstance==actor.secondaryHandModel)secondaryData=data;
         }
-        Matrix4f inverseBody=bodyData==null?null:new Matrix4f(bodyData.xfrm).transpose().invert();
+        Matrix4f bodyXfrm=bodyData==null?new Matrix4f():new Matrix4f(bodyData.xfrm);
+        Matrix4f inverseBody=bodyData==null||(primaryData==null&&secondaryData==null)?null:new Matrix4f(bodyData.xfrm).transpose().invert();
         int calibrationSide=GripCalibration.heldSide(actor);
         var heldData=calibrationSide==1?primaryData:calibrationSide==0?secondaryData:null;
         Matrix4f weapon=heldData==null||!heldData.model.isStatic||inverseBody==null?null:
@@ -103,10 +108,10 @@ public final class VanillaWorld {
             if(!selected.ready)return;
             ModelSession.Snapshot snapshot=selected.snapshot();
             if(snapshot==null)return;
-            Matrix4f targetBody=bodyData==null?null:placement(bodyData,selected.scale,selected.furnitureDrop());
+            Matrix4f targetBody=placement(bodyXfrm,selected.scale,selected.furnitureDrop());
             Hand primary=hand(selected,slot,actor.primaryHandModel,primaryData,1,mainItem==null?"":mainItem.getType(),inverseBody,targetBody);
             Hand secondary=hand(selected,slot,actor.secondaryHandModel,secondaryData,0,offItem==null?"":offItem.getType(),inverseBody,targetBody);
-            QUEUED.put(slot,new Draw(selected,snapshot,body,primary,secondary));
+            QUEUED.put(slot,new Draw(selected,snapshot,body,bodyData,targetBody,primary,secondary));
         } catch(Throwable failure) { selected.fail(failure); }
     }
 
@@ -143,10 +148,14 @@ public final class VanillaWorld {
 
     public static boolean replace(ModelSlotRenderData slot,ModelInstanceRenderData data) {
         Draw draw=QUEUED.get(slot);
-        if(draw==null||draw.session.retired||draw.session.failed)return false;
+        if(draw==null||draw.session.retired||draw.session.failed) {
+            // Suppress late outline passes (e.g. ModelOutlines.endFrame after postRender) for active GFL2 characters.
+            return WORLD.get()!=slot&&slot!=null&&slot.character!=null&&Main.hasAppearance(slot.character)&&!ViewpointMode.active();
+        }
         if(WORLD.get()!=slot)return true;
         Hand hand=draw.hand(data);
         if(hand!=null) {
+            if(!draw.painted)paint(slot,draw,draw.bodyData!=null?draw.bodyData:data);
             if(draw.painted&&hand.correction()!=null&&data.model.isStatic) {
                 // RenderList keeps the per-slot properties for queued/instanced equipment draws.
                 Matrix4f transform=draw.heldTransforms.computeIfAbsent(data,part->
@@ -156,7 +165,11 @@ public final class VanillaWorld {
             }
             return false;
         }
-        if(draw.body!=data.modelInstance)return draw.painted;
+        if(!draw.painted)return paint(slot,draw,draw.bodyData!=null?draw.bodyData:data);
+        return true;
+    }
+
+    private static boolean paint(ModelSlotRenderData slot,Draw draw,ModelInstanceRenderData source) {
         ReadyRoomPreview.State saved=new ReadyRoomPreview.State();
         Shader shader=null;
         boolean shaderStarted=false;
@@ -171,14 +184,26 @@ public final class VanillaWorld {
             // Must go through VertexBufferObject so ShaderProgram's cached modelView/projection
             // stays in sync with the GPU uniform for subsequent static world items (e.g. radios at 25%/50% zoom).
             VertexBufferObject.setModelViewProjection(shader);
-            shader.startCharacter(slot,data);
-            shader.setTransformMatrix(placement(data,draw.session.scale,draw.furnitureDrop),false);
+            shader.startCharacter(slot,source);
+            shader.setTransformMatrix(draw.bodyPlacement,false);
+            if(slot.modelSlot!=null&&slot.modelSlot.model!=null) {
+                shader.setTargetDepth(PerformanceSettings.fboRenderChunk?slot.modelSlot.model.targetDepth:0.5f);
+            }
+            shader.setDepthBias(0f);
             shader.setScale(slot.finalScale);
-            shader.setHueShift(0);
-            shader.setTint(1,1,1);
+            shader.setHueShift(0f);
+            shader.setTint(1f,1f,1f);
+            shader.setAlpha(slot.alpha);
+            if(source.ignoreLighting&&!slot.debugChunkState) {
+                shader.setAmbient(slot.ambientR*0.45f,slot.ambientG*0.45f,slot.ambientB*0.45f);
+            }
             GL13.glActiveTexture(GL13.GL_TEXTURE0);GL33.glBindSampler(0,0);
             GL11.glDisable(GL11.GL_CULL_FACE);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);GL11.glDepthFunc(GL11.GL_LEQUAL);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);GL11.glDepthFunc(GL11.GL_LEQUAL);GL11.glDepthMask(true);
+            GL11.glEnable(GL11.GL_BLEND);GL14.glBlendEquation(GL14.GL_FUNC_ADD);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glEnable(GL11.GL_ALPHA_TEST);GL11.glAlphaFunc(GL11.GL_GREATER,0.01f);
+            Texture.lastTextureID=-1;
             for(int part=0;part<mesh.materials.length;part++) {
                 int material=mesh.materials[part];
                 if(draw.snapshot.frame().materials()[material*12+3]<=0)continue;
@@ -205,8 +230,8 @@ public final class VanillaWorld {
         }
     }
 
-    private static Matrix4f placement(ModelInstanceRenderData data,float scale,float furnitureDrop) {
+    private static Matrix4f placement(Matrix4f xfrm,float scale,float furnitureDrop) {
         // Shader.startCharacter uploads xfrm with transpose=true.
-        return new Matrix4f(data.xfrm).transpose().translate(0,-furnitureDrop,0).scale(1/scale,1/scale,-1/scale);
+        return new Matrix4f(xfrm).transpose().translate(0,-furnitureDrop,0).scale(1/scale,1/scale,-1/scale);
     }
 }

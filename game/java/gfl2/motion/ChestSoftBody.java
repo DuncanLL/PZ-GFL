@@ -113,7 +113,7 @@ public final class ChestSoftBody implements AutoCloseable {
             }
             if(input.hasRemaining())throw new IOException("Unexpected chest data tail");
             var tune=lib.call("sb_tune",FunctionDescriptor.of(JAVA_INT,ADDRESS,JAVA_FLOAT,JAVA_FLOAT,JAVA_FLOAT));
-            int tuned=(int)tune.invokeExact(handle,stiffness(DEFAULT[0]),(float)(.035+.085*DEFAULT[1]/100),(float)(.6+.8*DEFAULT[2]/100));
+            int tuned=(int)tune.invoke(handle,stiffness(DEFAULT[0]),(float)(.035+.085*DEFAULT[1]/100),(float)(.6+.8*DEFAULT[2]/100));
             if(tuned!=0)throw new IOException("Cannot apply the chest physics preset");
             affected=used.stream().toArray();
             if(!api.SetAnimationOwnedPhysicsBones(model,driven))throw new IOException("Cannot transfer chest bone ownership");

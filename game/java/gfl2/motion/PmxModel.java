@@ -154,9 +154,11 @@ public final class PmxModel implements AutoCloseable {
                 p.source_root, p.target_root, p.source_motion);
             core.configureClavicleTwistGuard(p.source_spine1, p.source_l_clavicle, p.source_l_upper_arm,
                 p.source_r_clavicle, p.source_r_upper_arm);
+            core.configureForearmTwistGuard(p.source_arms);
             if (p.palm_ready) core.calibratePalms(p.palm_source_hands, p.palm_source_knuckles,
                 p.palm_target_hands, p.palm_target_knuckles);
             core.apply(p.source_bend); core.calibrateGripAxes(p.target_arms);
+            core.configureArmTwistDistribution(p.target_arms);
             core.setPhysicsEnabled(!previewOnly && p.physics_enabled);
             return new PmxModel(api, handle, core, p, modelPath, previewOnly);
         } catch (IOException | RuntimeException | Error e) {

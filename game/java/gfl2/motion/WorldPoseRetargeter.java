@@ -17,7 +17,9 @@ public final class WorldPoseRetargeter {
     private final NativeFunc api;
     private final long handle;
     private final int[] targetBones, sourceBones, parents, order, levels;
-    private final float[] positions, neutralQps, qps;
+    private int[] publishBones;
+    private final float[] positions;
+    private float[] neutralQps, qps;
     private final Matrix4f[] sourceRestInverse, targetReference;
     private final Matrix4f[] sourceReference;
     private final Matrix4f basis = new Matrix4f().scaling(1, 1, -1);
@@ -34,10 +36,18 @@ public final class WorldPoseRetargeter {
     private final Quaternionf localRotation=new Quaternionf(), parentRotation=new Quaternionf();
     private static final float CLAVICLE_TWIST_KEEP=(float)Math.toRadians(35);
     private static final float CLAVICLE_TWIST_CLEAR=(float)Math.toRadians(60);
+    private static final float FOREARM_TWIST_KEEP=(float)Math.toRadians(2);
+    private static final float FOREARM_TWIST_CLEAR=(float)Math.toRadians(10);
     private int clavicleSpine=-1, leftClavicle=-1, rightClavicle=-1;
     private final Vector3f leftClavicleAxis=new Vector3f(1,0,0), rightClavicleAxis=new Vector3f(-1,0,0);
+    private int leftUpperArm=-1, leftForearm=-1, rightUpperArm=-1, rightForearm=-1;
+    private final Vector3f leftForearmAxis=new Vector3f(1,0,0), rightForearmAxis=new Vector3f(-1,0,0);
     private final Quaternionf spineDelta=new Quaternionf(), clavDelta=new Quaternionf(),
         clavRel=new Quaternionf(), clavTwist=new Quaternionf(), clavSwing=new Quaternionf();
+    private final int[] armUpperSlots={-1,-1}, armTwistSlots={-1,-1}, armWristSlots={-1,-1}, handTwistSlots={-1,-1};
+    private final Vector3f[] armTwistAxes={new Vector3f(),new Vector3f()}, handTwistAxes={new Vector3f(),new Vector3f()};
+    private boolean hasArmTwistDistribution;
+    private final Quaternionf twistRot=new Quaternionf(), twistPart=new Quaternionf(), swingPart=new Quaternionf();
     private final ModelPhysics physics;
     private ForwardFingerPose fingerPreview;
     private float fingerPreviewWeight;
@@ -59,6 +69,7 @@ public final class WorldPoseRetargeter {
         physics = new ModelPhysics(api,handle);
         this.sourceBones = sourceBones.clone();
         this.targetBones = targetBones.clone();
+        this.publishBones = this.targetBones;
         this.parents = parents.clone();
         positions = initialPositions.clone();
         this.neutralQps = neutralQps.clone();
@@ -138,26 +149,111 @@ public final class WorldPoseRetargeter {
     public synchronized void configureClavicleTwistGuard(int spine, int left, int leftChild, int right, int rightChild) {
         int limit = sourceReference.length;
         clavicleSpine = spine >= 0 && spine < limit ? spine : -1;
-        leftClavicle = setClavicleAxis(left, leftChild, limit, leftClavicleAxis);
-        rightClavicle = setClavicleAxis(right, rightChild, limit, rightClavicleAxis);
+        leftClavicle = setBoneAxis(left, leftChild, limit, leftClavicleAxis);
+        rightClavicle = setBoneAxis(right, rightChild, limit, rightClavicleAxis);
     }
 
-    private int setClavicleAxis(int clavicle, int child, int limit, Vector3f dest) {
-        if (clavicle < 0 || clavicle >= limit || child < 0 || child >= limit) return -1;
-        Vector3f start = sourceReference[clavicle].getTranslation(new Vector3f());
+    /** Strip non-physiological axial twist on elbows (vanilla PZ has 0.0 deg forearm axial roll;
+     *  Blender FBX mods often twist Forearm directly, corrupting Ozz IK mid_axis and wringing elbows). */
+    public synchronized void configureForearmTwistGuard(int[] sourceArms) {
+        if (sourceArms == null || sourceArms.length != 6) return;
+        int limit = sourceReference.length;
+        leftUpperArm = sourceArms[0] >= 0 && sourceArms[0] < limit ? sourceArms[0] : -1;
+        leftForearm = leftUpperArm >= 0 ? setBoneAxis(sourceArms[1], sourceArms[2], limit, leftForearmAxis) : -1;
+        rightUpperArm = sourceArms[3] >= 0 && sourceArms[3] < limit ? sourceArms[3] : -1;
+        rightForearm = rightUpperArm >= 0 ? setBoneAxis(sourceArms[4], sourceArms[5], limit, rightForearmAxis) : -1;
+    }
+
+    /** Auto-detect PMX upper-arm (腕捩) and forearm (手捩) helper twist bones from parents[] so axial roll
+     *  distributes smoothly across 25/50/75/100% append chains with zero wrist position or rotation drift. */
+    public synchronized void configureArmTwistDistribution(int[] targetArms) {
+        if (fingerPreview != null) throw new IllegalStateException("Configure arm twist before finger preview");
+        if (targetArms == null || targetArms.length != 6) return;
+        Arrays.fill(armUpperSlots, -1); Arrays.fill(armTwistSlots, -1);
+        Arrays.fill(armWristSlots, -1); Arrays.fill(handTwistSlots, -1);
+        int[] extra = new int[4];
+        int extraCount = 0;
+        for (int side = 0; side < 2; side++) {
+            int up = targetArms[side * 3], el = targetArms[side * 3 + 1], wr = targetArms[side * 3 + 2];
+            int upSlot = targetIndex(up), wrSlot = targetIndex(wr);
+            if (upSlot >= 0 && el >= 0 && el < parents.length) {
+                int at = parents[el];
+                if (at >= 0 && at != up && parents[at] == up && targetIndex(at) < 0 && !containsBone(extra, extraCount, at)) {
+                    if (setTargetAxis(up, at, el, armTwistAxes[side])) {
+                        armUpperSlots[side] = upSlot;
+                        armTwistSlots[side] = targetBones.length + extraCount;
+                        extra[extraCount++] = at;
+                    }
+                }
+            }
+            if (wrSlot >= 0 && el >= 0 && wr >= 0 && wr < parents.length) {
+                int ht = parents[wr];
+                if (ht >= 0 && ht != el && parents[ht] == el && targetIndex(ht) < 0 && !containsBone(extra, extraCount, ht)) {
+                    if (setTargetAxis(ht, wr, el, handTwistAxes[side])) {
+                        armWristSlots[side] = wrSlot;
+                        handTwistSlots[side] = targetBones.length + extraCount;
+                        extra[extraCount++] = ht;
+                    }
+                }
+            }
+        }
+        int baseLen = targetBones.length;
+        float[] baseNeutral = Arrays.copyOf(neutralQps, baseLen * 10);
+        if (extraCount == 0) {
+            publishBones = targetBones;
+            neutralQps = baseNeutral;
+            qps = baseNeutral.clone();
+            hasArmTwistDistribution = false;
+            return;
+        }
+        publishBones = Arrays.copyOf(targetBones, baseLen + extraCount);
+        neutralQps = Arrays.copyOf(baseNeutral, publishBones.length * 10);
+        for (int i = 0; i < extraCount; i++) {
+            publishBones[baseLen + i] = extra[i];
+            int off = (baseLen + i) * 10;
+            neutralQps[off + 6] = -1f;
+            neutralQps[off + 7] = neutralQps[off + 8] = neutralQps[off + 9] = 1f;
+        }
+        qps = neutralQps.clone();
+        hasArmTwistDistribution = true;
+    }
+
+    private static boolean containsBone(int[] array, int length, int bone) {
+        for (int i = 0; i < length; i++) if (array[i] == bone) return true;
+        return false;
+    }
+
+    private boolean setTargetAxis(int from, int to, int fallbackEnd, Vector3f dest) {
+        dest.set(positions[to * 3] - positions[from * 3],
+            positions[to * 3 + 1] - positions[from * 3 + 1],
+            positions[to * 3 + 2] - positions[from * 3 + 2]);
+        if (dest.lengthSquared() < 1e-10f) {
+            dest.set(positions[fallbackEnd * 3] - positions[from * 3],
+                positions[fallbackEnd * 3 + 1] - positions[from * 3 + 1],
+                positions[fallbackEnd * 3 + 2] - positions[from * 3 + 2]);
+            if (dest.lengthSquared() < 1e-10f) return false;
+        }
+        dest.normalize();
+        return true;
+    }
+
+    private int setBoneAxis(int bone, int child, int limit, Vector3f dest) {
+        if (bone < 0 || bone >= limit || child < 0 || child >= limit) return -1;
+        Vector3f start = sourceReference[bone].getTranslation(new Vector3f());
         Vector3f end = sourceReference[child].getTranslation(new Vector3f());
         end.sub(start);
         if (end.lengthSquared() < 1e-10f) return -1;
         dest.set(end).normalize();
-        return clavicle;
+        return bone;
     }
 
-    /** Strip non-physiological axial bone-roll offsets (>35 deg, e.g. Blender FBX exports) on clavicles
-     *  while preserving genuine swing direction and keeping all vanilla animations bit-identical. */
-    private boolean buildClavicleDelta(float[] sourceWorld, int source, Vector3f axis) {
-        poseMatrix.set(sourceWorld, clavicleSpine * 16).setTranslation(0, 0, 0).mul(sourceRestInverse[clavicleSpine])
+    /** Strip non-physiological axial bone-roll offsets (e.g. Blender FBX exports) while preserving
+     *  genuine swing direction and keeping all vanilla animations bit-identical. */
+    private boolean buildAxialTwistGuardedDelta(float[] sourceWorld, int parentSource, int childSource,
+            Vector3f axis, float keepRad, float clearRad) {
+        poseMatrix.set(sourceWorld, parentSource * 16).setTranslation(0, 0, 0).mul(sourceRestInverse[parentSource])
             .getUnnormalizedRotation(spineDelta).normalize();
-        poseMatrix.set(sourceWorld, source * 16).setTranslation(0, 0, 0).mul(sourceRestInverse[source])
+        poseMatrix.set(sourceWorld, childSource * 16).setTranslation(0, 0, 0).mul(sourceRestInverse[childSource])
             .getUnnormalizedRotation(clavDelta).normalize();
         clavRel.set(spineDelta).conjugate().mul(clavDelta).normalize();
         if (clavRel.w < 0f) clavRel.set(-clavRel.x, -clavRel.y, -clavRel.z, -clavRel.w);
@@ -167,8 +263,8 @@ public final class WorldPoseRetargeter {
         if (lenSq < 1e-10f) return false;
         clavTwist.normalize();
         float angle = 2f * (float) Math.acos(Math.min(1f, clavTwist.w));
-        if (angle <= CLAVICLE_TWIST_KEEP) return false;
-        float t = Math.min(1f, (angle - CLAVICLE_TWIST_KEEP) / (CLAVICLE_TWIST_CLEAR - CLAVICLE_TWIST_KEEP));
+        if (angle <= keepRad) return false;
+        float t = Math.min(1f, (angle - keepRad) / (clearRad - keepRad));
         float keep = 1f - t * t * (3f - 2f * t);
         clavTwist.conjugate();
         clavSwing.set(clavRel).mul(clavTwist).normalize();
@@ -182,11 +278,56 @@ public final class WorldPoseRetargeter {
         return true;
     }
 
+    private void readQuat(int offset, Quaternionf dest) {
+        dest.set(qps[offset + 3], qps[offset + 4], -qps[offset + 5], -qps[offset + 6]).normalize();
+    }
+
+    private void writeQuat(int offset, Quaternionf src) {
+        qps[offset + 3] = src.x;
+        qps[offset + 4] = src.y;
+        qps[offset + 5] = -src.z;
+        qps[offset + 6] = -src.w;
+    }
+
+    private static void decomposeTwist(Quaternionf q, Vector3f axis, Quaternionf dest) {
+        if (q.w < 0f) q.set(-q.x, -q.y, -q.z, -q.w);
+        float dot = q.x * axis.x + q.y * axis.y + q.z * axis.z;
+        dest.set(axis.x * dot, axis.y * dot, axis.z * dot, q.w);
+        if (dest.lengthSquared() < 1e-10f) dest.identity();
+        else dest.normalize();
+    }
+
+    private void distributeArmTwist() {
+        if (!hasArmTwistDistribution) return;
+        for (int side = 0; side < 2; side++) {
+            int upSlot = armUpperSlots[side], atSlot = armTwistSlots[side];
+            if (upSlot >= 0 && atSlot >= 0) {
+                readQuat(upSlot * 10, twistRot);
+                decomposeTwist(twistRot, armTwistAxes[side], twistPart);
+                twistPart.conjugate();
+                swingPart.set(twistRot).mul(twistPart).normalize();
+                twistPart.conjugate();
+                writeQuat(upSlot * 10, swingPart);
+                writeQuat(atSlot * 10, twistPart);
+            }
+            int wrSlot = armWristSlots[side], htSlot = handTwistSlots[side];
+            if (wrSlot >= 0 && htSlot >= 0) {
+                readQuat(wrSlot * 10, twistRot);
+                decomposeTwist(twistRot, handTwistAxes[side], twistPart);
+                twistPart.conjugate();
+                swingPart.set(twistPart).mul(twistRot).normalize();
+                twistPart.conjugate();
+                writeQuat(htSlot * 10, twistPart);
+                writeQuat(wrSlot * 10, swingPart);
+            }
+        }
+    }
+
     private void applyBody(float[] sourceWorld, boolean needsFinalPalette) {
         if (sourceWorld.length != sourceRestInverse.length * 16)
             throw new IllegalArgumentException("Source skeleton changed");
         System.arraycopy(neutralQps, 0, qps, 0, qps.length);
-        api.SetBoneAdditiveTransformBatch(handle, targetBones, qps);
+        api.SetBoneAdditiveTransformBatch(handle, publishBones, qps);
         api.EvaluateSkeleton(handle);
         evaluations = 1;
         readPalette();
@@ -197,7 +338,16 @@ public final class WorldPoseRetargeter {
                 int index = order[cursor++], target = targetBones[index], source = sourceBones[index];
                 Matrix4f delta;
                 if (clavicleSpine >= 0 && (source == leftClavicle || source == rightClavicle)
-                        && buildClavicleDelta(sourceWorld, source, source == leftClavicle ? leftClavicleAxis : rightClavicleAxis)) {
+                        && buildAxialTwistGuardedDelta(sourceWorld, clavicleSpine, source,
+                            source == leftClavicle ? leftClavicleAxis : rightClavicleAxis,
+                            CLAVICLE_TWIST_KEEP, CLAVICLE_TWIST_CLEAR)) {
+                    delta = deltaMatrix;
+                } else if ((source == leftForearm && leftUpperArm >= 0
+                        && buildAxialTwistGuardedDelta(sourceWorld, leftUpperArm, source, leftForearmAxis,
+                            FOREARM_TWIST_KEEP, FOREARM_TWIST_CLEAR))
+                        || (source == rightForearm && rightUpperArm >= 0
+                        && buildAxialTwistGuardedDelta(sourceWorld, rightUpperArm, source, rightForearmAxis,
+                            FOREARM_TWIST_KEEP, FOREARM_TWIST_CLEAR))) {
                     delta = deltaMatrix;
                 } else {
                     delta = deltaMatrix.set(basis).mul(poseMatrix.set(sourceWorld,source*16).setTranslation(0, 0, 0))
@@ -221,7 +371,7 @@ public final class WorldPoseRetargeter {
                     qps[offset+2]=-(motionLever.z-rotatedLever.z)+(sourceWorld[at+2]-sourceMotionReference.z)*unitScale;
                 }
             }
-            api.SetBoneAdditiveTransformBatch(handle, targetBones, qps);
+            api.SetBoneAdditiveTransformBatch(handle, publishBones, qps);
             // Without a grip solve, the final pose update evaluates the last layer.
             if (cursor < order.length && api.TryUpdateRetargetParents(handle,palette)) continue;
             if (cursor < order.length || needsFinalPalette) {
@@ -247,7 +397,7 @@ public final class WorldPoseRetargeter {
     public synchronized void configureFingerPreview(int[] roots,int[] children,float[] fractions,
             int[] thumbRoots,int[] thumbMids,int[] thumbTips,int[] thumbSides) {
         fingerPreview=roots.length==0&&thumbRoots.length==0?null:new ForwardFingerPose(
-            targetBones,parents,roots,children,fractions,positions,palmTargetKnuckles,
+            publishBones,parents,roots,children,fractions,positions,palmTargetKnuckles,
             thumbRoots,thumbMids,thumbTips,thumbSides);
         fingerPreviewWeight=0;
         fingerPoseDirty=false;
@@ -262,10 +412,13 @@ public final class WorldPoseRetargeter {
     }
 
     private void finishPose(float seconds,float leftCurl,float rightCurl) {
+        distributeArmTwist();
         boolean active=fingerPreviewWeight>0||leftCurl!=0||rightCurl!=0;
         if(fingerPreview!=null&&(active||fingerPoseDirty)){
             fingerPreview.publish(api,handle,qps,neutralQps,fingerPreviewWeight,leftCurl,rightCurl);
             fingerPoseDirty=active;
+        } else if (hasArmTwistDistribution) {
+            api.SetBoneAdditiveTransformBatch(handle,publishBones,qps);
         }
         physics.finish(seconds);
     }
@@ -481,7 +634,7 @@ public final class WorldPoseRetargeter {
     }
 
     private void restoreWrists(int[] targetArms,Quaternionf[] wristRotation,int[] status) {
-        api.SetBoneAdditiveTransformBatch(handle,targetBones,qps);
+        api.SetBoneAdditiveTransformBatch(handle,publishBones,qps);
         api.EvaluateSkeleton(handle); evaluations++;
         readPalette();
         for (int side=0;side<2;side++) {
@@ -492,7 +645,7 @@ public final class WorldPoseRetargeter {
             qps[offset+3]=local.x; qps[offset+4]=local.y;
             qps[offset+5]=-local.z; qps[offset+6]=-local.w;
         }
-        api.SetBoneAdditiveTransformBatch(handle,targetBones,qps);
+        api.SetBoneAdditiveTransformBatch(handle,publishBones,qps);
     }
 
     private void adjustGrip(float[] sourceWorld,OzzGrip solver,int[] sourceArms,int[] targetArms,float soften,
@@ -567,7 +720,7 @@ public final class WorldPoseRetargeter {
     }
 
     public int animationEvaluations() { return evaluations; }
-    public float[] lastTransforms() { return qps.clone(); }
+    public float[] lastTransforms() { return Arrays.copyOf(qps, targetBones.length * 10); }
     public synchronized void setPhysicsEnabled(boolean enabled) { physics.request(enabled); }
     public synchronized boolean physicsEnabled() { return physics.enabled(); }
     public synchronized void resetPhysics() { physics.reset(); }
