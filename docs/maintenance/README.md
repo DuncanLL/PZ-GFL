@@ -1,11 +1,11 @@
 # 维护手册
 
-从 `main` 接手。2026-11-20 核对的公开版本是 **0.7.31**，框架条目 **3842318650**，25 个角色包共登记 72 个造型。框架与角色包各有自己的版本号。旧框架条目 3838709437 仅存草稿，内部 ID 同为 `GFL2Exilium`，排查时以游戏日志中的实际加载路径识别。[本次发布回执](../../provenance/releases/0.7.31-workshop-public.json) · [现行工坊条目索引](../../provenance/workshop-items.json)
+从 `main` 接手。2026-11-26 核对的线上公开版本是 **0.8.2**，框架条目 **3842318650**，共 **32 个角色包**、**87 套整备室造型**（核心注册表登记 88 项）与 **32 把专武**；`main` 另含 `0.8.2` 之后已本地构建验证的后续修复（见 [版本记录](../../CHANGELOG.md)）。框架与角色包各有自己的版本号。旧框架条目 3838709437 仅存草稿，内部 ID 同为 `GFL2Exilium`，排查时以游戏日志中的实际加载路径识别。[0.8.2 发布回执](../../provenance/releases/0.8.2-workshop-public.json) · [现行工坊条目索引](../../provenance/workshop-items.json)
 
 1. 核实版本时，先用发布回执的 `framework_manifest` 对 Steam 内容清单，用 `framework_jar_sha256` 对订阅副本。Git 保存源码、资源指纹和回执。模型、原材质、贴图、语音及构建工具链按[构建手册](workflow-build-checks.md)从外部读取。
 2. 复核完整订阅目录可运行 `py -3 tools/check_subscribed_release.py "<Steam 库>/steamapps/workshop/content/108600"`。它只读核对框架和角色包，要求本机已下载整套合集。修改源码后验证候选的入口见[维护与验证](verification.md)。
-3. 0.7.31 的整备室工坊按钮映射收录了 24 个角色，缺秋桦。她的分包已发布（3838935753），可以从合集订阅。验证整套发行以工坊索引为准；修整备室入口时核对 `roomWorkshopItems`。
-4. 当前待定位的玩家反馈是光影目录中没有生成两套包。先按[分发排查](rendering.md#两个光影目录都没有生成)读当次启动日志。NVIDIA／Intel 的本版实机、真实双客户端表现和旧有的原生切人崩溃仍各需独立证据。
+3. 全部 32 个已发布角色均已收录到整备室工坊按钮映射 `roomWorkshopItems` 及[工坊条目索引](../../provenance/workshop-items.json)；后续新增或调整角色入口时同步核对两处。
+4. 历史排查与当前边界：光影目录未生成排查见[分发排查](rendering.md#两个光影目录都没有生成)；`main` 已修复整备室预览 `FarRelief`/`D70` 冲突及原版视角 VS3 `VSDynamics` 皮肤法线错乱。Viewpoint 3D 视角下偶发手持武器隐形、NVIDIA／Intel 全矩阵实机、真实双客户端联机表现和早期原生切人崩溃仍各需独立证据。
 
 | 要查的问题 | 入口 |
 |---|---|

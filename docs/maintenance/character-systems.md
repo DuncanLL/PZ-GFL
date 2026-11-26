@@ -20,10 +20,11 @@
 | 配件、显隐和色彩 | [Wardrobe](../../game/java/gfl2/motion/Wardrobe.java) 与 [ModelAppearance](../../game/java/gfl2/motion/ModelAppearance.java) 解析 `appearance_controls` 组、选项和规则。菜单提交稳定的组和选项 ID。规则应用到该造型真实的材质槽和 morph。 |
 | 手动表情 | 玩家预设与正在穿戴的造型分开记。表情输入按现用模型的表情名称和权重核对。联机整备室会合并滑条修改，角色切换前把仍在等待的修改提交一次。 |
 | 读档、恢复和换装 | [Main.settingsFor](../../game/java/gfl2/runtime/Main.java) 将保存的外观同当前 profile 整合。有 `previous_material_slots` 且旧数组长度吻合时才迁移旧显隐、颜色、透明度、贴图和双面标记。当前衣装的规则表重新从 profile 绑定。新槽位补用当前默认值。 |
-| 物理按钮 | 界面根据当前模型实际能力显示。保存的是身体物理总开关及相应的局部开关。更换造型不会凭旧的菜单项生成该 PMX 缺少的软体资料。 |
-| VMD | 默认隐藏。在整备室资源栏长按专访许可的加号 3 秒切换入口，作用在当前玩家会话。松手或移开会取消，触发成功后消耗这次点击。时长与另外两个资源加号共用 `GFL2RoomWindow.lua` 中的 `resourceHoldMs`。 |
+| 物理与人物设置 | [Tabs.lua](../../game/mod/42/media/lua/client/GFL2Room/Tabs.lua) 提供顶栏齿轮入口与分栏设置页（语音音量/字幕、胸部物理 0–100% 与衣发物理开关、联机其他玩家显示/物理/语音开关），实时生效并持久化到本地 `GFL2Exilium/client-settings.json`。更换造型不会凭旧菜单项生成 PMX 缺少的软体资料。 |
+| 沙盒与 Q 轮盘 | [sandbox-options.txt](../../game/mod/42/media/sandbox-options.txt) 提供 5 项原版沙盒选项（`AllowHoldGrant`、`FreeUnlockAll`、`CreditsPerCash`、`AllowSignatureWeapons`、`AllowAmmoAndMagazines`），双端校验。[GFL2RadialMenu.lua](../../game/mod/42/media/lua/client/GFL2RadialMenu.lua) 在原版 `Q` 表情轮盘末尾追加 6 项二级快捷入口。 |
+| VMD | 整备室常规入口与 `Q` 轮盘均可直接打开（自 0.8.1 起取消长按专访许可加号隐藏后门），[Motion.lua](../../game/mod/42/media/lua/client/GFL2Room/Motion.lua) 统一管理动作、镜头（[VmdCamera](../../game/java/gfl2/motion/VmdCamera.java)）、音乐与面部表情叠加（[GFL2VmdFace](../../game/java/gfl2/runtime/GFL2VmdFace.java)）。 |
 
-动作读取优先走预览页提供的库入口。自定义文件库是游戏缓存目录中的 `GFL2Exilium/Motions`，内置动作在核心 `media/gfl2_pmx/motions`。选择额外目录时，播放检查是否属于登记的文件或目录，校验文件类型和文件归属。动作命令有 `play`、`pause`、`speed`、`seek`、`restart`、`stop`、`physics` 和 `reset`。进度条带动作修订号，拖到新位置会重置物理历史，旧的拖动不会作用到另一段动作。速度范围为 0 到 1。暂停时动作与物理的推进时间为零，设为 0 倍速时只停动画时间。播放时把动画交给 VMD 层并启用该层需要的腿部 IK 与 morph。停止时释放动作句柄、恢复 PZ 姿态路径、恢复之前的常规物理开关。[VMD 解析](../../game/java/gfl2/motion/VmdInput.java) · [控制层](../../game/java/gfl2/motion/PmxModel.java) · [0.7.15 入口记录](../../provenance/releases/0.7.15-vmd-entry-toggle.json)
+动作读取优先走统一 VMD 面板。自定义文件库是游戏缓存目录中的 `GFL2Exilium/Motions`（支持扫描一级子目录并自动联动同包动作、镜头、音乐与表情），内置动作在核心 `media/gfl2_pmx/motions`。选择额外目录时，播放检查是否属于登记的文件或目录，校验文件类型和文件归属。动作命令有 `play`、`pause`、`speed`、`seek`、`restart`、`stop`、`physics` 和 `reset`。进度条带动作修订号，拖到新位置会重置物理历史，旧的拖动不会作用到另一段动作。速度范围为 0 到 1。暂停时动作与物理的推进时间为零，设为 0 倍速时只停动画时间。播放时把动画交给 VMD 层并启用该层需要的腿部 IK 与 morph。停止时释放动作句柄、恢复 PZ 姿态路径、恢复之前的常规物理开关。[VMD 解析](../../game/java/gfl2/motion/VmdInput.java) · [控制层](../../game/java/gfl2/motion/PmxModel.java)
 
 ## 资源、抽取和专武各自怎么结算
 
@@ -35,7 +36,7 @@
 | 保底与归属 | 角色保底 80，专武保底 70，抽取衣装保底 100。角色和专武各自共享本类进度，衣装按衣装 ID 保存进度。旧戴烟解锁及旧专武进度在共同读取函数兼容。改卷率、门槛或保底时同时核对单机和联机。 |
 | 衣装购买 | 部分衣装用余额购买，其余走抽取。服务器的材质外观请求和穿戴许可共同校验 `GFL2MultiplayerCatalog`，因此界面可见、已订阅和有穿戴权限是三个独立条件。 |
 | 领取专武、弹匣、涂装 | [GFL2SignatureWeapon](../../game/mod/42/media/lua/shared/GFL2SignatureWeapon.lua) 与 [GFL2SignatureMagazines](../../game/mod/42/media/lua/shared/GFL2SignatureMagazines.lua) 定义实际物品和弹匣。共享脚本写物品，服务端在联机时处理交易。[GFL2WeaponSkins](../../game/mod/42/media/lua/shared/GFL2WeaponSkins.lua) 维护枪皮身份。 |
-| 读档兼容和平衡 | [SignatureWeaponRangeMigration](../../game/java/gfl2/runtime/SignatureWeaponRangeMigration.java) 在游戏装载武器时识别旧值，保留配件带来的变化。[CovenantWeaponTextures](../../game/java/gfl2/runtime/CovenantWeaponTextures.java) 给指定枪皮图集保留原分辨率。[GFL2AutomaticCadence](../../game/mod/42/media/lua/shared/GFL2AutomaticCadence.lua) 仅在 SWMG 启用时注册游戏内自动射速，并在相应的 RealAuto 路径处理额外反冲延迟。 |
+| 读档兼容和平衡 | [SignatureWeaponRangeMigration](../../game/java/gfl2/runtime/SignatureWeaponRangeMigration.java) 在游戏装载武器时识别旧值，保留配件带来的变化。[CovenantWeaponTextures](../../game/java/gfl2/runtime/CovenantWeaponTextures.java) 给指定枪皮图集保留原分辨率。[GFL2SignatureMagazines](../../game/mod/42/media/lua/shared/GFL2SignatureMagazines.lua) 兼容原版及 EFZ / Guns of Marz（`GunsOfMarz` 与旧 `MarzGuns`）/ Modern Firearms System（MFS）口径与弹匣。[GFL2AutomaticCadence](../../game/mod/42/media/lua/shared/GFL2AutomaticCadence.lua) 在 SWMG 启用时注册游戏内自动射速，并在相应的 RealAuto 路径处理额外反冲延迟。 |
 
 专武摆放由[游戏中的持物链](gameplay.md#持物位置为什么要分捕获和插值)负责。交易状态和画面里的枪模型有各自入口，出现“枪在背包里，画面外形不对”时分别核对物品类型、涂装 ID、模型引用和绘制矩阵。
 

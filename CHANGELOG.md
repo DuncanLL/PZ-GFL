@@ -4,12 +4,21 @@
 
 游戏动作、人物状态和光影接线详见 [维护手册](docs/maintenance/README.md)。
 
-## 0.8.2 · 樱花、琼玖与海伦娜接入、1:1 原游身高体型还原、实时面部表情与 13 套站立待机小动作（2026-11-25）
+## 未发布（`main` 开发中，已完成本地构建与组件验证，未上传 Steam）· 2026-11-26
 
-- 新增 3 名角色、5 套衣装、2 把专武与 346 条专属日语语音（全模组总计 **33 人 / 88 外观 / 32 专武 / 5,536 条日语语音与四国字幕**）：
-  - 新角色 **海伦娜**（`GFL2Helena`）：原游特别可操控单位，默认外观免费直接解锁（单人/联机均无需抽取、无专武/皮肤/语音负担，简介留白），完整接入 GF2 DanRP 原材质光影（`shading-danrp.json` + `uv1-danrp.f32` + 27 组原生 GLSL 着色器）、原游 1:1 娇小身高、实时面部表情以及原游官方 2D 封面／海报／双头像。
-  - 新角色 **樱花**（`GFL2Sakura`）：原皮「非常规配送」、衣装「蝶影绮谭」（含配饰与脱鞋丝袜部件开关）、专武「绯红契约」（`GFL2.CrimsonCovenant`）及 8 级契约涂装「涂装·心速共鸣」（塔科夫 UZI PRO 室内消音枪声 + 原厂机械音）、173 条专属日语语音与 CN / EN / JP / KO 四语字幕（双外观均已绑定）、原游官方 2D 封面／海报／双头像／招募卡。
-  - 新角色 **琼玖**（`GFL2Qiongjiu`）：原皮「云辉定仪」（补齐胸部软体物理 `chest.bin`）、衣装「义薄云天」（含脱鞋部件开关）、专武「金石奏」（`GFL2.GoldenMelody`）及 8 级契约涂装「涂装·神形兼备之美」（塔科夫 RPK-16 室外消音枪声 + AK-74 机械音）、173 条专属日语语音与 CN / EN / JP / KO 四语字幕（双外观均已绑定）、原游官方 2D 封面／海报／双头像／招募卡。
+- **原版视角 VS3（可变身形 3 / `3640496116`）皮肤发脏兼容修复**（[VanillaWorld.java](game/java/gfl2/runtime/VanillaWorld.java)）：
+  - 定位并修复同时启用 `VariableSkinBoobBounce`（`VSDynamics.jar`）时，原版等距视角下 `Shader.startCharacter` 触发 `uVSDEnabled = 1` 按 `gl_VertexID` 覆写 PMX 前段皮肤顶点法线导致皮肤大块灰黑斑驳的问题；在 GFL2 绘制前清零 `uVSDEnabled` 与 `uVSDHeader`，覆盖 S / M / L / P / Z / SFW 全子模组，且不影响僵尸与非 GFL2 角色的 VS3 身形和乳摇物理。
+- **整备室 UI 视觉改版与 VMD 统一绑定面板**（[GFL2RoomWindow.lua](game/mod/42/media/lua/client/GFL2RoomWindow.lua)、[Motion.lua](game/mod/42/media/lua/client/GFL2Room/Motion.lua)、[Dialogs.lua](game/mod/42/media/lua/client/GFL2Room/Dialogs.lua)、[Tabs.lua](game/mod/42/media/lua/client/GFL2Room/Tabs.lua)、[ReadyRoomPreview.java](game/java/gfl2/runtime/ReadyRoomPreview.java)、[VmdCamera.java](game/java/gfl2/motion/VmdCamera.java)、[GFL2VmdFace.java](game/java/gfl2/runtime/GFL2VmdFace.java)）：
+  - 整备室及 VMD 面板切换为暗石墨（`#141619`）与少前2标志橘黄（`#F27D24` / `#F07820`）主题配色，加入边缘压暗暗角遮罩，窗口折叠态改为可拖动 `36×36` 独立小图标。
+  - 合并 VMD 动作、镜头、音乐与面部表情叠加至统一面板，支持一级子目录扫描与同包镜头/音乐/表情自动联动。
+- **整备室原材质预览 `FarRelief` / `D70` 隔离修复**（[Gfl2StudioPreviewRenderer.java](render-support/java/viewpoint/render/Gfl2StudioPreviewRenderer.java)）：
+  - 修复开启 Viewpoint 地形起伏（`FarRelief`）时 `uReliefGrid` 注入导致整备室 3D 原材质预览角色被甩出视锥（静默空白），并将 `uStudioHdr`/`uStudioLut` 迁至高位安全纹理槽 `119/120` 消除 Viewpoint `D70` 冲突告警。
+
+## 0.8.2 · 樱花与琼玖接入、1:1 原游身高体型还原、实时面部表情与 13 套站立待机小动作（2026-11-26）
+
+- 新增 2 名角色、4 套衣装、2 把专武与 346 条专属日语语音（全模组总计 **32 人 / 87 套整备室外观，核心注册表登记 88 项 / 32 把专武 / 5,536 条日语语音与四国字幕**）：
+  - 新角色 **樱花**（`GFL2Sakura`，工坊 `3845695298`）：原皮「非常规配送」、衣装「蝶影绮谭」（含配饰与脱鞋丝袜部件开关）、专武「绯红契约」（`GFL2.CrimsonCovenant`）及 8 级契约涂装「涂装·心速共鸣」（塔科夫 UZI PRO 室内消音枪声 + 原厂机械音）、173 条专属日语语音与 CN / EN / JP / KO 四语字幕（双外观均已绑定）、原游官方 2D 封面／海报／双头像／招募卡。
+  - 新角色 **琼玖**（`GFL2Qiongjiu`，工坊 `3845695485`）：原皮「云辉定仪」（补齐胸部软体物理 `chest.bin`）、衣装「义薄云天」（含脱鞋部件开关）、专武「金石奏」（`GFL2.GoldenMelody`）及 8 级契约涂装「涂装·神形兼备之美」（塔科夫 RPK-16 室外消音枪声 + AK-74 机械音）、173 条专属日语语音与 CN / EN / JP / KO 四语字幕（双外观均已绑定）、原游官方 2D 封面／海报／双头像／招募卡。
   - 清理两包未引用 `normalmap/` 冗余资源共瘦身 78.8 MB，并刷新 [GFL2MultiplayerCatalog.lua](game/mod/42/media/lua/shared/GFL2MultiplayerCatalog.lua) 联机目录。
 - **全员 1:1 原游真实身高与三维体型还原**（零运行时性能开销）：
   - 在 [PmxModel.java](game/java/gfl2/motion/PmxModel.java) 与 [ModelSession.java](game/java/gfl2/runtime/ModelSession.java) 统一全员缩放标尺 `CANONICAL_UNIT_SCALE = 20.5f`，不再按原版女角色骨架强行抹平高矮，完整还原少前2原游约 24.5% 真实身高与肩宽/头身比差异（娇小档如夏安/米什缇/樱花/索米、中等档如可露凯/卡萝/莱娅、偏高档如阿斯缇亚/春田/琼玖、高挑御姐档如罗蕾莱/黛烟/纳美西丝），联机双端一致且武器／背包保持原版 1:1 尺寸。
@@ -21,10 +30,10 @@
 - **核心动作、兼容与稳定性修复**：
   - 修复第三方动画模组手臂异常轴向扭转（拧麻花）问题，自动将上臂/前臂扭转分配到 PMX `腕捩`/`手捩` 辅助骨（[WorldPoseRetargeter.java](game/java/gfl2/motion/WorldPoseRetargeter.java)）。
   - 修复 AMD 显卡在整备室原材质 3D 预览（`Gfl2StudioPreviewRenderer`）下的画面闪烁与状态泄漏问题（[Gfl2GlScope.java](render-support/java/viewpoint/render/Gfl2GlScope.java)、[Gfl2StudioPreviewRenderer.java](render-support/java/viewpoint/render/Gfl2StudioPreviewRenderer.java)）。
-  - 修复原版斜 45° 渲染管线与 Tomb's Player Body / VS 可变身形（Variable Skin）等角色身形模组的兼容性问题（[VanillaWorld.java](game/java/gfl2/runtime/VanillaWorld.java)、[VanillaWorldPatch.java](game/java/gfl2/runtime/VanillaWorldPatch.java)）。
+  - 修复原版斜 45° 渲染管线与 Tomb's Player Body 等角色身形模组的兼容性问题，并新增 [HeldAttachmentPatch.java](game/java/gfl2/runtime/HeldAttachmentPatch.java)、回主菜单新启角色包热重载与旧存档已移除配件键兼容（[Main.java](game/java/gfl2/runtime/Main.java)、[Wardrobe.java](game/java/gfl2/motion/Wardrobe.java)、[VanillaWorld.java](game/java/gfl2/runtime/VanillaWorld.java)）。
   - 修复 **米什缇**（G11）新衣装「迷盹睡鼠」（`pmx-2a37b36707a4f3f2`）遗漏语音绑定导致不发声的问题（[ZZ_GFL2PmxMechtyVoice.lua](game/packs/GFL2Mechty/42/media/lua/client/ZZ_GFL2PmxMechtyVoice.lua)）。
   - 修复整备室「握持校准」预览采样未叠加实况站立姿态的问题（[GripRoomPreview.java](game/java/gfl2/runtime/GripRoomPreview.java)），并修复维克托专武「报丧轻语」临时枪声声明问题（[GFL2BansheesWhisperSounds.txt](game/packs/GFL2Vector/42/media/scripts/GFL2BansheesWhisperSounds.txt)）。
-  - 全量 32 把专武与 8 级契约涂装的 3D 武器贴图（64 张，含原 4K/2K 贴图）统一无损等比降采样至上限 `1024px`（`1024×1024` / `1024×512`），专武显存峰值下降 **79.9%**（`1,096 MB → 220 MB`）、贴图体积减少 **52.1%**。
+  - 全量 32 把专武与 8 级契约涂装的 3D 武器贴图（64 张，含原 4K/2K 贴图）统一无损等比降采样至上限 `1024px`（`1024×1024` / `1024×512`），专武显存峰值下降 **79.9%**（`1,096 MB → 220 MB`）、贴图体积减少 **52.1%**。[工坊发布与验证记录](provenance/releases/0.8.2-workshop-public.json)
 
 ## 0.8.1 · 卡萝与米什缇新装接入、第一人称遮挡修复、设置页／沙盒／Q 轮盘／VMD 镜头与兼容升级（2026-11-24）
 
@@ -53,7 +62,7 @@
 - 第一人称视线遮挡修复与渲染／封面标准化：
   - 修复第一人称下角色头发、帽子及头饰遮挡视线的问题：在模型加载阶段按头部与头发骨骼子树权重自动划分独立三角面分区，第一人称色彩通道精确隐藏头/发/帽，同时完整保留地面投影与第一人称身体／双臂显示（全 84 套模型零泄漏实测通过）。
   - 修复整备室原材质 3D 预览 `Gfl2StudioPreviewRenderer` 在退出时对 OpenGL 纹理单元 1 与 SSBO 1–3 的状态泄漏，新增 `Gfl2GlScope.Phase.STUDIO` 零泄漏状态保护。
-  - 统一全部 30 个角色分包 2D 特写封面、透明半身海报与图标，主框架换装卡萝 `EXILIUM 2` 新封面，并接入 [check_pack_images.py](tools/check_pack_images.py) 自动校验门禁。
+  - 统一全部 30 个角色分包 2D 特写封面、透明半身海报与图标，主框架换装卡萝 `EXILIUM 2` 新封面，并接入 [check_pack_images.py](tools/check_pack_images.py) 自动校验门禁。[工坊发布与验证记录](provenance/releases/0.8.1-workshop-public.json)
 
 ## 0.8.0 · 托洛洛／伊格蕾塔／纳美西丝接入、25 套衣装胸部物理恢复与联机／兼容大更（2026-11-23）
 

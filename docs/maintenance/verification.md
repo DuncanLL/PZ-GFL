@@ -18,7 +18,8 @@
 
 | 想确认 | 用哪个入口 | 得到什么 |
 |---|---|---|
-| 目录、ID 和产物 | [check_runtime_locations.py](../../tools/check_runtime_locations.py)、[check_runtime.py](../../tools/check_runtime.py) | 已配置安装路径和 JAR 读回、工坊候选校验、原生组件及模型身份。脚本依赖该工作树的候选与本机配置。 |
+| 目录、ID 和产物 | [sync_framework.py](../../tools/sync_framework.py)、[check_runtime_locations.py](../../tools/check_runtime_locations.py)、[check_runtime.py](../../tools/check_runtime.py) | 一键构建、全套校验与多目录同步；已配置安装路径和 JAR 读回、工坊候选校验、原生组件及模型身份。脚本依赖该工作树的候选与本机配置。 |
+| 图标与封面门禁 | [check_weapon_icons.py](../../tools/check_weapon_icons.py)、[check_pack_images.py](../../tools/check_pack_images.py) | 全量角色包 `32×32` 专武物品图标与 `WeaponIcons/` 高清原图双轨校验、2D 封面/海报/头像规范校验。 |
 | 动作源与帧推进 | [check_source_pose.py](../../tools/check_source_pose.py)、[check_frame_timing.py](../../tools/check_frame_timing.py) | 实际 PZ 动画组件、姿态守护和受控帧推进。源姿态夹具需要对应的本机依赖和已知动作输入，按脚本开头和参数准备。 |
 | 武器与镜头 | [GripPhaseCheck.java](../../tools/java/GripPhaseCheck.java)、[GripPauseCheck.java](../../tools/java/GripPauseCheck.java) | 持物与手部的相同插值权重、暂停和重捕获、换物品、相机切换及握持参数。既有对照见 0.7.12 和 [0.7.14](../../provenance/releases/0.7.14-held-slot-attachment.json)。 |
 | 切人、隐藏部件和退役 | [check_lifecycle.py](../../tools/check_lifecycle.py)、[check_physics_streaming.py](../../tools/check_physics_streaming.py)、[check_texture_runtime.py](../../tools/check_texture_runtime.py) | 候选交接、发布外观前的就绪检查、图形资源释放、阴影专用部件以及旧新帧历史。 |
@@ -29,10 +30,13 @@
 常用组件检查可以在仓库根目录按以下方式跑。带路径的命令用本次实际候选替换尖括号里的值。
 
 ```powershell
+python tools/sync_framework.py --status
 python tools/check_room_workshop.py
 python tools/check_room_economy.py
 python tools/check_multiplayer.py
 python tools/generate_multiplayer_catalog.py --check
+python tools/check_weapon_icons.py
+python tools/check_pack_images.py
 python tools/check_lifecycle.py --jar "<人物候选 JAR>"
 python tools/check_runtime_locations.py --jar "<已验证的人物 JAR>"
 python tools/check_gfl2_unified.py --project "<候选目录>/Workshop/GFL2Exilium"
@@ -57,4 +61,4 @@ python tools/check_render_release.py --evidence "<后端验证记录 JSON>" --ou
 
 ## 当前证据怎样解释
 
-当前线上身份见 [0.7.31 公开回执](../../provenance/releases/0.7.31-workshop-public.json)。`framework_manifest` 对 Steam，`framework_jar_sha256` 对最终 JAR。独立人物构建另用[人物参考指纹](../../provenance/character-release.json)。旧报告中的 RC4、旧项目编号、旧材质标记和已完成的候选，都保留当时的参考范围。换宿主、包、版本、硬件或影响层以后，应以当前来源重新取证。早期出现过的原生切换崩溃、真实双客户端画面与语音、订阅冷启动，分别记录实测状态。
+当前线上公开身份见 [0.8.2 公开回执](../../provenance/releases/0.8.2-workshop-public.json)（`framework_manifest` 对 Steam，`framework_jar_sha256` 对最终线上 JAR）；`main` 分支若包含 `0.8.2` 之后的未发布提交，以本机构建产物 SHA-256 与最新校验结果区分。独立人物构建另用[人物参考指纹](../../provenance/character-release.json)。旧报告中的 RC4、旧项目编号、旧材质标记和已完成的候选，都保留当时的参考范围。换宿主、包、版本、硬件或影响层以后，应以当前来源重新取证。早期出现过的原生切换崩溃、真实双客户端画面与语音、订阅冷启动，分别记录实测状态。

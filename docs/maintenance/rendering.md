@@ -23,7 +23,7 @@ Somber 使用 Native 人物后端。角色包提供一份 PMX 和一份原材质
 
 ## 两个光影目录都没有生成
 
-0.7.31 有两位工坊用户反馈缺包，其中一位说明菜单和目录均为空，另一位重新订阅后仍然缺包。另一次玩家实机日志记录了两包安装成功并被 VP 列出。两位反馈者的当次日志尚未取得，发生比例和各自原因待查。
+历史上（0.7.31 阶段）曾收到工坊用户反馈缺包，以下排查步骤沿用于各版本日志诊断：
 
 | 在问题当次的 `console.txt` 里找 | 如何判断 |
 |---|---|
@@ -68,6 +68,13 @@ Eclipse 通过 Iris 接入。构建使用固定指纹的 Eclipse 基线、实际
 | 检查和资源退役 | 更换 Iris programs/pipeline 时分开释放材质与帧目标。检查缩放、TAA 运动向量选项、透明、阴影、雾和远近地形衔接。环境阶段的变化和人物着色变化分别记录。 |
 
 已做过的 Eclipse 修正包括着色缓冲的 write-only 主灯约束、宿主预留 relief sampler 单元、按实际 Iris 宏展开的地形衔接、不同设置下的 TAA 运动与原游原程序输入。验收看真实宏、include 展开和 OpenGL 编译链接。[Eclipse 来源记录](../../provenance/eclipse-outline.json) · [启动检查](../../tools/java/RenderSupportStartupCheck.java)
+
+## 整备室原材质 3D 预览（`Gfl2StudioPreviewRenderer`）
+
+整备室及物品栏 3D 预览由 [Gfl2StudioPreviewRenderer](../../render-support/java/viewpoint/render/Gfl2StudioPreviewRenderer.java) 复用原游材质与 GLSL 管线绘制，采用严格 LRU-2 缓存并在闲置时回收显存，由 [Gfl2GlScope](../../render-support/java/viewpoint/render/Gfl2GlScope.java)（`Phase.STUDIO`）保护 OpenGL 纹理/SSBO/混合状态不泄漏回主世界：
+
+- 为避免与 Viewpoint 地形起伏（`FarRelief`）和纹理槽检查（`D70`）冲突，预览绘制将 `drawRec[63]` 设为 `2f`（`PLACED`）并在末次 `glp.use()` 后清零 `uReliefGrid = (0, 0, 0, 0)`，且 `uStudioHdr`/`uStudioLut` 固定使用高位安全纹理槽 `119/120`。
+- `Native-GFL2` 与 `Somber-GFL2` 远景描边按人物画面垂直占比自动收敛（`outlineDistanceScale`），描边参数为 0 时直接跳过描边 Pass。
 
 ## 切包和资源退役
 

@@ -33,17 +33,17 @@ flowchart LR
 2. [WorldPoseRetargeter](../../game/java/gfl2/motion/WorldPoseRetargeter.java) 使用源参考姿态、目标骨架的父子关系和比例，将游戏世界骨骼姿态转换为目标 PMX 的局部姿态。持物时再以源手部数据和目标掌心求握持修正。细节依赖相同的骨名、绑定和单位，单独修改其中一项会影响多个动作。
 3. [ModelSession.update](../../game/java/gfl2/runtime/ModelSession.java) 按游戏帧号去重。新帧从捕获时间计算物理步长，首帧为零，单次推进上限为 0.08 秒。用来校准姿态的中间评价采用 `dt=0`。同一帧再次捕获可更新第一人称显隐、改用已经完成姿态的 CPU 蒙皮或准备当前后端网格，动作和物理只推进一次。
 4. [ModelPhysics](../../game/java/gfl2/motion/ModelPhysics.java) 在最终姿态提交时统一处理物理启停和重置，再推进运行时。需要延后蒙皮时调用 `UpdateModelPose`，需要本机 CPU 顶点时调用 `UpdateModel`。姿态计算完成后才生成位置、法线、材质状态和渲染资料快照。
-5. 游戏原版视角从 [VanillaWorld.capture](../../game/java/gfl2/runtime/VanillaWorld.java) 接手，启用 Viewpoint 时从 [CapturePatch](../../game/java/gfl2/runtime/CapturePatch.java) 与 [Bridge](../../game/java/gfl2/runtime/Bridge.java) 接手。两边复用模型会话、人物资源和姿态。进入绘制阶段后，表现层按快照采样。
+5. 游戏原版视角从 [VanillaWorld.capture](../../game/java/gfl2/runtime/VanillaWorld.java) 接手（绘制时通过 `clearThirdPartyBodyDeformation()` 清除 `VSDynamics` 等第三方女体形变着色器 uniform，兼容 Tomb's Player Body 与 VS3 可变身形），启用 Viewpoint 时从 [CapturePatch](../../game/java/gfl2/runtime/CapturePatch.java) 与 [Bridge](../../game/java/gfl2/runtime/Bridge.java) 接手。两边复用模型会话、人物资源和姿态，并统一使用 `PmxModel.CANONICAL_UNIT_SCALE = 20.5f` 还原少前2全员 1:1 真实身高体型差。进入绘制阶段后，表现层按快照采样。
 
 ## 各种游戏状态
 
 | 状态 | 实现和修正 | 升级后的观察点 |
 |---|---|---|
-| 空手普通站立 | [IdleHandPose](../../game/java/gfl2/runtime/IdleHandPose.java) 只在空手、动作上下文为普通 idle 且没有子状态时过门控。目标手型来自 `Bob_Walk` 25% 的手指参考，渐入渐出，现行公共强度为 70%。 | 手型换入和走动恢复，切片时手指朝向和手掌比例。 |
-| 移动、蹲、坐下、攀爬、攻击及其它动作 | 继续读取当前游戏骨骼。移动、潜行、瞄准、坐下、攀爬、攻击和正在执行交互等会退出空手 idle 修正。 | 测进入、退出和混合过程，例如站到蹲走、翻窗、跨低栏、攻击回到站立。动作里的肢体与衣料回归要分开看。 |
+| 空手普通站立与实时表情 | [IdleHandPose](../../game/java/gfl2/runtime/IdleHandPose.java) 提供三节手指放松级联（70% 公共强度）；[IdleAmbientMotion](../../game/java/gfl2/runtime/IdleAmbientMotion.java) 在空手静止时轮播 13 套烘焙站立待机微动作（`idle_clips.bin`）；[LiveFacialMotion](../../game/java/gfl2/runtime/LiveFacialMotion.java) 驱动自动眨眼、语音/聊天口型与瞄准/近战神态。 | 手型换入与走动恢复、待机微动作退出过渡、眨眼与口型同步。 |
+| 移动、蹲、坐下、攀爬、攻击及其它动作 | 继续读取当前游戏骨骼；[WorldPoseRetargeter](../../game/java/gfl2/motion/WorldPoseRetargeter.java) 自动将上臂/前臂轴向扭转分配到 PMX `腕捩`/`手捩` 辅助骨，避免第三方动作拧麻花。移动、潜行、瞄准、坐下、攀爬、攻击和交互等会退出空手 idle 修正。 | 测进入、退出和混合过程，例如站到蹲走、翻窗、跨低栏、攻击回到站立。动作里的肢体与衣料回归要分开看。 |
 | 全身表情和舞蹈朝向 | [SourcePoseGuard.usesAuthoredEmoteFacing](../../game/java/gfl2/runtime/SourcePoseGuard.java) 判定正在播放、具有混合权重并影响根骨和头骨的 emote。舞蹈朝向归全身动作，避免瞄准扭转跟着改头。 | 全身转向与退出表情时朝向，局部表情的骨骼权重要保持原行为。 |
-| 持枪、近战、双手物品 | 游戏提交物品本体和附件变换。框架以完成的 PMX 掌心重映射物品。握持链包括掌心校准、Ozz 双骨 IK 和手腕方向恢复，物品校准可分站姿与瞄准。 | 左右手、枪与近战切换、换物品、换配件。瞄准和站姿各查一次，避免因保存键错误串值。 |
-| 第一人称、瞄准、车内 | Viewpoint 路径以 `hideHead` 和车辆状态区分第一人称，第一人称用头部锚点，车内用骨盆座位锚点。兼容的 EFZ 第一人称持枪状态可保留外部持物矩阵，目标手腕跟随实际手部姿态。 | 开关第一人称、进入瞄准、进出车辆、切回第三人称。应分别观察相机锚点、头部显隐和枪的摆放。 |
+| 持枪、近战、双手物品 | 游戏提交物品本体和附件变换。框架以完成的 PMX 掌心重映射物品，配合 [HeldAttachmentPatch](../../game/java/gfl2/runtime/HeldAttachmentPatch.java) 保证附件跟随。握持链包括掌心校准、Ozz 双骨 IK、大拇指三节指骨校准和手腕方向恢复，物品校准可分站姿与瞄准。 | 左右手、枪与近战切换、换物品、换配件。瞄准和站姿各查一次，避免因保存键错误串值。 |
+| 第一人称、瞄准、车内 | Viewpoint 路径以 `hideHead` 和车辆状态区分第一人称，模型加载阶段按头/发/帽骨骼权重划分三角面分区，第一人称精确隐藏头/发/帽并保留地面投影与双臂；第一人称用头部锚点，车内用骨盆座位锚点。兼容的 EFZ 第一人称持枪状态可保留外部持物矩阵，目标手腕跟随实际手部姿态。 | 开关第一人称、进入瞄准、进出车辆、切回第三人称。应分别观察相机锚点、头部/发丝显隐和枪的摆放。 |
 | 本地 VMD 动作 | 整备室选择本地或内置 VMD，通过 [ReadyRoomPreview.motionCommand](../../game/java/gfl2/runtime/ReadyRoomPreview.java) 控制当前本机玩家的会话。游戏移动、瞄准、攻击、上车或死亡会使正常播放条件失效。 | 暂停、拖动、倍速、停止、角色切换和退出后，要核对动作层、临时物理状态和旧进度条。 |
 | 暂停、镜头切换、断帧 | 模型处于同一游戏帧时继续用该帧姿态。镜头切换、历史不连续或拓扑变化时，表现层重置插值历史。暂停期间的相机重捕获复用已缓存的持物局部矩阵。 | 暂停绕人物、恢复时间和快转相机。对照手与枪是否同时到位，角色阴影与透明件是否还在正确位置。 |
 
