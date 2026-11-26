@@ -7,6 +7,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL33;
 import zombie.characters.IsoGameCharacter;
 import zombie.core.PerformanceSettings;
@@ -27,6 +28,20 @@ public final class VanillaWorld {
     private static final ConcurrentHashMap<ModelSlotRenderData,Draw> QUEUED=new ConcurrentHashMap<>();
     private static final ThreadLocal<ModelSlotRenderData> WORLD=new ThreadLocal<>();
     private static final Field SLOT_READY=readyField();
+    private static int cachedVsdProgram=-1,cachedVsdEnabledLoc=-1,cachedVsdHeaderLoc=-1;
+
+    // Clear third-party body-deformation uniforms (e.g. VSDynamics/VariableSkinBoobBounce)
+    // that hook Shader.startCharacter(slot, bodyData) on the underlying FemaleBody model.
+    static void clearThirdPartyBodyDeformation(int programId) {
+        if(programId<=0)return;
+        if(programId!=cachedVsdProgram) {
+            cachedVsdProgram=programId;
+            cachedVsdEnabledLoc=GL20.glGetUniformLocation(programId,"uVSDEnabled");
+            cachedVsdHeaderLoc=GL20.glGetUniformLocation(programId,"uVSDHeader");
+        }
+        if(cachedVsdEnabledLoc>=0)GL20.glUniform1i(cachedVsdEnabledLoc,0);
+        if(cachedVsdHeaderLoc>=0)GL20.glUniform4f(cachedVsdHeaderLoc,0f,0f,0f,0f);
+    }
 
     private static Field readyField() {
         try {
@@ -200,6 +215,7 @@ public final class VanillaWorld {
             // stays in sync with the GPU uniform for subsequent static world items (e.g. radios at 25%/50% zoom).
             VertexBufferObject.setModelViewProjection(shader);
             shader.startCharacter(slot,source);
+            clearThirdPartyBodyDeformation(shader.getID());
             shader.setTransformMatrix(draw.bodyPlacement,false);
             if(slot.modelSlot!=null&&slot.modelSlot.model!=null) {
                 shader.setTargetDepth(PerformanceSettings.fboRenderChunk?slot.modelSlot.model.targetDepth:0.5f);
