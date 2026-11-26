@@ -46,10 +46,13 @@ final class ModelSession {
     private boolean viewpointQueued,plainQueued;
     private long lastFrame=Long.MIN_VALUE,lastNanos,lastWallNanos,lastSlowFrame=Long.MIN_VALUE;
     private long lastMotionRevision;
+    private static final int CPU_RING_SLOTS=6;
     private PmxDrawMesh.FrameData frozen;
     private boolean frozenViewpoint;
     PmxDrawMesh.FrameData previousFrozen,olderFrozen;
     private PmxDrawMesh.FrameData fullFrame;
+    private float[][] posRing,normRing;
+    private int cpuRingIndex;
     private float[] sourcePose;
     private GripAdjustment gripAdjustment;
     private boolean preserveAimWeapon;
@@ -168,7 +171,7 @@ final class ModelSession {
         long revision=model.motionRevision();boolean continuous=revision==lastMotionRevision&&frame==lastFrame+1;
         float[] poseForModel=sourcePose;
         if(idleAmbient!=null&&!model.motionActive()) {
-            boolean standing=!firstPerson&&IdleHandPose.standingIdle(player.getIsoGameCharacter());
+            boolean standing=Main.idleAmbientEnabled()&&!firstPerson&&IdleHandPose.standingIdle(player.getIsoGameCharacter());
             poseForModel=idleAmbient.apply(poseForModel,seconds,standing,holding);
         }
         if(idleHand!=null&&!model.motionActive()) {
@@ -182,11 +185,12 @@ final class ModelSession {
                 && owner.getVehicle()==null && !model.motionActive();
         if(onFurniture && furnitureSeat==null)furnitureSeat=new FurnitureSeat(profile);
         if(liveFacial!=null) {
-            liveFacial.update(model.appearance(),player.getIsoGameCharacter(),seconds,model.motionActive(),firstPerson);
+            liveFacial.update(model.appearance(),player.getIsoGameCharacter(),seconds,model.motionActive(),firstPerson,Main.facialMotionMode());
         }
         boolean useGpu=!viewpoint&&!previewOnly&&gpu!=null&&!gpuDisabled&&!(onFurniture&&furnitureSeat.needsMeasurement());
-        if(useGpu)model.applyPose(poseForModel,holding?grip:null,seconds,-1,-1,gripAdjustment);
-        else model.apply(poseForModel,holding?grip:null,seconds,firstPerson?sourceHead:-1,firstPerson?targetHead:-1,gripAdjustment);
+        float simSeconds=model.motionActive()?seconds:Math.min(seconds,.034f);
+        if(useGpu)model.applyPose(poseForModel,holding?grip:null,simSeconds,-1,-1,gripAdjustment);
+        else model.apply(poseForModel,holding?grip:null,simSeconds,firstPerson?sourceHead:-1,firstPerson?targetHead:-1,gripAdjustment);
         if(materials==null||appearanceRevision!=model.appearance().revision()||materials.epoch()!=imageEpoch) {
             String[] paths=model.appearance().readTextures();
             for(int i=0;i<paths.length;i++)paths[i]=resolveTexture(paths[i]);
@@ -217,9 +221,17 @@ final class ModelSession {
         return viewpoint?frozen:fullFrame;
     }
     private PmxDrawMesh.FrameData cpuFrame(float[] finalMaterials,boolean viewpoint,boolean hideHead) {
+        int floatCount=positions.capacity()/4;
+        if(posRing==null||posRing[0].length!=floatCount){
+            posRing=new float[CPU_RING_SLOTS][floatCount];
+            normRing=new float[CPU_RING_SLOTS][floatCount];
+            cpuRingIndex=0;
+        }
+        float[] p=posRing[cpuRingIndex],n=normRing[cpuRingIndex];
+        cpuRingIndex=(cpuRingIndex+1)%CPU_RING_SLOTS;
+        positions.clear();normals.clear();
         api.CopyDataToByteBuffer(positions,api.GetPoss(model.handle()),positions.capacity());
         api.CopyDataToByteBuffer(normals,api.GetNormals(model.handle()),normals.capacity());
-        float[] p=new float[positions.capacity()/4],n=new float[p.length];
         positions.asFloatBuffer().get(p);normals.asFloatBuffer().get(n);model.deformChest(p,n);
         boolean needShading=shading!=null&&(viewpoint||ReadyRoomPreview.studioPreviewAvailable());
         return new PmxDrawMesh.FrameData(p,n,finalMaterials,
@@ -341,7 +353,7 @@ final class ModelSession {
         ViewpointMode.retire(()->{
             try{ResourceCleanup.close(viewpointModel,plainMesh,plainTextures,gpu,model);}
             catch(Throwable e){Main.error(e);}
-            finally{viewpointModel=null;plainMesh=null;plainTextures=null;gpu=null;frozen=fullFrame=previousFrozen=olderFrozen=null;ModelInstance m=drawMarker;drawMarker=null;if(m!=null)m.character=null;}
+            finally{viewpointModel=null;plainMesh=null;plainTextures=null;gpu=null;frozen=fullFrame=previousFrozen=olderFrozen=null;posRing=normRing=null;ModelInstance m=drawMarker;drawMarker=null;if(m!=null)m.character=null;}
         });
     }
 }

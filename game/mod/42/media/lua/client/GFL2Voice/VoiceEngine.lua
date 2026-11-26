@@ -133,7 +133,11 @@ function M.playRemote(player,sound,kind)
     remoteHandles[player]=handle
     local meta=M.clipsBySound[sound]
     if GFL2ReadyRoom and GFL2ReadyRoom.notifySpeaking then
-        GFL2ReadyRoom.notifySpeaking(player,(meta and meta.clip and meta.clip.duration) or 2.5)
+        local hint=(kind=="shout" or kind=="sneakShout" or kind=="manual" or kind=="kill" or kind=="idle") and kind or nil
+        if not hint and type(sound)=="string" then
+            hint=sound:match("_([A-Za-z]+)_L%d_") or sound:match("_([A-Za-z]+)_[A-Z]$")
+        end
+        GFL2ReadyRoom.notifySpeaking(player,(meta and meta.clip and meta.clip.duration) or 2.5,hint)
     end
     if M.remoteSubtitlesEnabled~=false and (kind=="shout" or kind=="sneakShout" or kind=="manual") then
         local text=meta and subtitle(meta.clip)
@@ -254,7 +258,8 @@ local function play(player,state,candidate,now,allowAsleep,alreadyEligible)
     state.currentKind=candidate.kind
     Core.commit(state,candidate,now,clip.duration,cfg)
     if GFL2ReadyRoom and GFL2ReadyRoom.notifySpeaking then
-        GFL2ReadyRoom.notifySpeaking(player,clip.duration or 2.5)
+        local hint=candidate.key or candidate.kind
+        GFL2ReadyRoom.notifySpeaking(player,clip.duration or 2.5,hint)
     end
     local text=M.showSubtitles~=false and subtitle(clip) or nil
     if text and text~="" then caption(player,state,text,now) end
@@ -284,6 +289,7 @@ function V.onClothingUpdated(player)
             state.initialized=false
             state.nextPoll=0
             state.nextOrdinary=math.max(state.nextOrdinary,nowMs()+cfg.startupQuietMs)
+            state.nextIdle=math.max(state.nextIdle,nowMs()+(cfg.idleMinMs or 90000))
             state.nextReport=nowMs()+60000
             print(profile.logTag.." Costume voice enabled")
         end
@@ -378,6 +384,9 @@ function V.tick()
     end
     offer(changed)
     offer(Core.current(state,now,cfg),true)
+    if not candidate and profile.idleCue and not state.hasNegative then
+        offer({cue=profile.idleCue,priority=0,key="idle",kind="idle",chance=1})
+    end
     if candidate then
         play(player,state,candidate,now,false,true)
     end
@@ -394,10 +403,10 @@ function V.getDiagnostics()
     if not active then return {active=false,version=V.version} end
     local state=states[active]
     return {active=true,version=V.version,samples=state.samples,moodleReads=state.moodleReads,
-        spoken=state.spoken,autoSpoken=state.autoSpoken,manualSpoken=state.manualSpoken,killSpoken=state.killSpoken,
+        spoken=state.spoken,autoSpoken=state.autoSpoken,manualSpoken=state.manualSpoken,killSpoken=state.killSpoken,idleSpoken=state.idleSpoken,
         currentCue=state.currentCue,maxPriority=state.maxPriority,
         highest=state.maxKey,levels=state.levels,lastBlock=state.lastReject,
-        nextAutoMs=math.max(0,state.nextOrdinary-nowMs()),nativeMuted=state.nativeMuted,
+        nextAutoMs=math.max(0,state.nextOrdinary-nowMs()),nextIdleMs=math.max(0,state.nextIdle-nowMs()),nativeMuted=state.nativeMuted,
         breathCue=state.breathCue,breathPlayed=state.breathPlayed or 0}
 end
 

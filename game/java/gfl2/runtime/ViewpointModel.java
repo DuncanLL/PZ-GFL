@@ -47,8 +47,22 @@ final class ViewpointModel implements AutoCloseable {
         ready();
     }
 
+    private static final boolean OPTIC_PIP_INSTALLED = hasClass("iseethem.OpticPip");
+    private static boolean hasClass(String name) {
+        try { Class.forName(name, false, ViewpointModel.class.getClassLoader()); return true; }
+        catch (ClassNotFoundException | LinkageError absent) { return false; }
+    }
+
+    private boolean usesNativeSourceTextures() {
+        if (OPTIC_PIP_INSTALLED || session.shading == null) return false;
+        String key = gfl2.motion.PmxOriginalInputs.key(session.shading.renderProfile());
+        return key != null && key.startsWith("native:");
+    }
+
     Texture[] textures(ModelSession.Materials state) throws Exception {
-        Texture[] result = textures.prepare(state.paths(), state.factors(), state.version(), state.epoch(), session.shading);
+        Texture[] result = usesNativeSourceTextures()
+            ? textures.preparePlaceholder(state.paths().length)
+            : textures.prepare(state.paths(), state.factors(), state.version(), state.epoch(), session.shading);
         if (mesh != null) mesh.updateOutlineTextures(result);
         return result;
     }

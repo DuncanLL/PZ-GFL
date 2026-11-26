@@ -1480,13 +1480,13 @@ function W:setRoomPage(page)
     if page=="motions" then
         GFL2ReadyRoom.release(self.player)
         self.appearanceX,self.appearanceY=self:getX(),self:getY()
-        self:setX(self.appearanceX+self.fullWidth-self.motionPanelWidth)
         self:setWidth(self.motionPanelWidth)
         self:setHeight(self.motionPanelHeight)
+        self:setX(self.appearanceX+self.fullWidth-self.motionPanelWidth)
     else
         if self.roomPage=="motions" and GFL2VmdMusic then GFL2VmdMusic.stop() end
-        self:setX(self.appearanceX);self:setY(self.appearanceY)
         self:setWidth(self.fullWidth);self:setHeight(self.fullHeight)
+        self:setX(self.appearanceX);self:setY(self.appearanceY)
     end
     self:clearContent()
     self.preview:onMouseUp()
@@ -1515,13 +1515,13 @@ function W:toggleRoomFold()
         GFL2ReadyRoom.release(self.player)
         self.unfoldedX,self.unfoldedY=self:getX(),self:getY()
         local dockSize=36
-        local dx=self.dockX or (self.unfoldedX+self.width-dockSize-12)
-        local dy=self.dockY or (self.unfoldedY+7)
-        dx=clamp(dx,0,math.max(0,sw-dockSize))
-        dy=clamp(dy,0,math.max(0,sh-dockSize))
+        local fx=self.foldButton and (self.unfoldedX+self.foldButton:getX()-1) or (self.unfoldedX+self.width-dockSize-18)
+        local fy=self.foldButton and (self.unfoldedY+self.foldButton:getY()-1) or (self.unfoldedY+6)
+        local dx=clamp(fx,0,math.max(0,sw-dockSize))
+        local dy=clamp(fy,0,math.max(0,sh-dockSize))
         self.dockX,self.dockY=dx,dy
-        self:setX(dx);self:setY(dy)
         self:setWidth(dockSize);self:setHeight(dockSize)
+        self:setX(dx);self:setY(dy)
         if self.dockButton then
             self.dockButton:setX(0);self.dockButton:setY(0)
             self.dockButton:setWidth(dockSize);self.dockButton:setHeight(dockSize)
@@ -1531,8 +1531,8 @@ function W:toggleRoomFold()
         local targetH=self.roomPage=="motions" and self.motionPanelHeight or self.fullHeight
         local ux=clamp(self.unfoldedX or math.floor((sw-targetW)/2),0,math.max(0,sw-targetW))
         local uy=clamp(self.unfoldedY or math.floor((sh-targetH)/2),0,math.max(0,sh-targetH))
-        self:setX(ux);self:setY(uy)
         self:setWidth(targetW);self:setHeight(targetH)
+        self:setX(ux);self:setY(uy)
         self.foldButton:setX(self.width-53)
     end
     self.foldButton:setTooltip(tr(self.folded and "RoomUnfold" or "RoomFold"))
@@ -2643,5 +2643,11 @@ function W.closeFor(player)
     if not player then return end
     local window=W.instances[player:getPlayerNum()]
     if window and window.player==player then window:close() end
+end
+function W.isOpen()
+    for _,window in pairs(W.instances) do
+        if window and not window.closed and window:getIsVisible() then return true end
+    end
+    return false
 end
 return W

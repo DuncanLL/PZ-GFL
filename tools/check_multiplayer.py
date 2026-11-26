@@ -38,6 +38,7 @@ try:
  env.rawset('client',run((media/'client/GFL2MultiplayerClient.lua').read_text('utf8'),'client'))
  print(run('return verifyClient(client,GFL2RoomEconomy)','client-assertions'))
  run('GFL2MultiplayerClient=client; prepareExpressionEdits()','expression-fixture')
+ env.rawset('GFL2PortraitHud',run((media/'client/GFL2PortraitHud.lua').read_text('utf8'),'portrait-hud'))
  run((media/'client/GFL2CharacterRuntime.lua').read_text('utf8'),'preview')
  print(run('return verifyExpressionEdits()','expression-assertions'))
  print(run('return verifyAppearanceRejections()','appearance-rejection-assertions'))

@@ -210,11 +210,64 @@ final class GripRoomPreview {
     }
 
     private void collect(ModelInstance part,AnimationPlayer pose,Matrix4f local,ModelInstance root,int side,String key,List<Part> output) {
+        collectStatic(session,part,pose,local,root,side,key,output);
+    }
+
+    private static void collectStatic(ModelSession session,ModelInstance part,AnimationPlayer pose,Matrix4f local,ModelInstance root,int side,String key,List<Part> output) {
         if(part.model==null||!part.model.isStatic||!part.model.mesh.isReady())return;
         Texture texture=part.tex==null?part.model.tex:part.tex;
         Matrix4f mapped=session.attachment(root,side,key,local,pose);
         if(texture!=null&&mapped.isFinite())output.add(new Part(part.model.mesh,texture,mapped));
-        for(var child:part.sub)if(child.model!=null)collect(child,pose,localPlacement(child,pose,local),root,side,key,output);
+        for(var child:part.sub)if(child.model!=null)collectStatic(session,child,pose,localPlacement(child,pose,local),root,side,key,output);
+    }
+
+    static List<Part> collectLiveHeld(IsoGameCharacter actor,ModelSession session) {
+        if(actor==null||session==null||!session.ready||session.retired||session.failed)return List.of();
+        AnimationPlayer pose=actor.getAnimationPlayer();
+        if(pose==null||!pose.isReady())return List.of();
+        List<Part> out=null;
+        ModelInstance primary=actor.primaryHandModel;
+        if(primary!=null&&primary.model!=null&&primary.model.isStatic&&primary.model.mesh.isReady()) {
+            InventoryItem item=actor.getPrimaryHandItem();
+            String key=item==null?null:item.getType();
+            Matrix4f local=localPlacement(primary,pose,new Matrix4f());
+            out=new ArrayList<>(4);
+            collectStatic(session,primary,pose,local,primary,1,key,out);
+        }
+        ModelInstance secondary=actor.secondaryHandModel;
+        if(secondary!=null&&secondary!=primary&&secondary.model!=null&&secondary.model.isStatic&&secondary.model.mesh.isReady()) {
+            InventoryItem item=actor.getSecondaryHandItem();
+            String key=item==null?null:item.getType();
+            Matrix4f local=localPlacement(secondary,pose,new Matrix4f());
+            if(out==null)out=new ArrayList<>(4);
+            collectStatic(session,secondary,pose,local,secondary,0,key,out);
+        }
+        return out==null?List.of():out;
+    }
+
+    static List<ReadyRoomPreview.StudioItem> toStudioItems(List<Part> parts) {
+        if(parts==null||parts.isEmpty())return List.of();
+        var result=new ArrayList<ReadyRoomPreview.StudioItem>(parts.size());
+        for(var part:parts) {
+            try {
+                var vb=part.mesh.vb;
+                if(vb==null||!(HANDLE.get(vb) instanceof VertexBufferObject.Vbo vbo)||vbo.vboId<=0||vbo.eboId<=0||!part.texture.isReady())continue;
+                var elements=(VertexBufferObject.VertexElement[])ELEMENTS.get(FORMAT.get(vb));
+                int position=-1,normal=-1,uv=-1;
+                for(var element:elements)if(element!=null)switch(element.type){
+                    case VertexArray -> position=element.byteOffset;
+                    case NormalArray -> normal=element.byteOffset;
+                    case TextureCoordArray -> {if(uv<0)uv=element.byteOffset;}
+                    default -> {}
+                }
+                if(position<0||normal<0||uv<0)continue;
+                result.add(new ReadyRoomPreview.StudioItem(
+                    vbo.vboId,vbo.eboId,vbo.numElements,vbo.vertexStride,
+                    position,normal,uv,part.texture.getID(),part.placement.get(new float[16])
+                ));
+            } catch(IllegalAccessException ignored) {}
+        }
+        return result;
     }
 
     static void paintItems(List<Part> parts,int vao,int turnUniform,Matrix4f turn) throws IllegalAccessException {

@@ -26,6 +26,7 @@ import zombie.characters.IsoGameCharacter;
 import zombie.characters.IsoPlayer;
 import zombie.core.Core;
 import zombie.core.SpriteRenderer;
+import zombie.core.opengl.RenderThread;
 import zombie.core.skinnedmodel.animation.AnimationPlayer;
 import zombie.core.textures.Texture;
 import zombie.core.textures.TextureDraw;
@@ -33,6 +34,11 @@ import static gfl2.runtime.UiNotices.text;
 
 /** Displays world snapshots and isolated, single-pose outfit previews. */
 public class ReadyRoomPreview {
+    public record StudioItem(
+        int vboId, int eboId, int indexCount, int stride,
+        int posOffset, int normalOffset, int uvOffset,
+        int textureId, float[] pmxMatrix
+    ) {}
     @FunctionalInterface
     public interface StudioRenderer {
         boolean render(
@@ -45,12 +51,14 @@ public class ReadyRoomPreview {
             float unitScale,
             float cameraX, float cameraY, float cameraZ,
             float dist, float yaw, float pitch, float fovRad, float nearPlane, float farPlane,
-            int x, int y, int width, int height, int screenHeight
+            int x, int y, int width, int height, int screenHeight,
+            List<StudioItem> items
         );
     }
     private static volatile StudioRenderer studioRenderer;
     private static volatile Runnable studioReleaseHook;
     private static volatile boolean studioEnabled = true;
+    private static volatile float studioResolutionScale = 2.0f;
 
     public static void registerStudioRenderer(StudioRenderer renderer, Runnable releaseHook) {
         studioRenderer = renderer;
@@ -60,9 +68,20 @@ public class ReadyRoomPreview {
     public static void setStudioPreviewEnabled(boolean enabled) {
         boolean changed = studioEnabled != enabled;
         studioEnabled = enabled;
+        if (changed) PortraitHudCache.invalidate();
         if (changed && !enabled) {
             Runnable hook = studioReleaseHook;
             if (hook != null) hook.run();
+        }
+    }
+    public static float studioResolutionScale() { return studioResolutionScale; }
+    public static int studioResolutionPercent() { return Math.round(studioResolutionScale * 100f); }
+    public static void setStudioResolutionPercent(int percent) {
+        int snapped = percent <= 125 ? 100 : (percent <= 175 ? 150 : 200);
+        float next = snapped / 100f;
+        if (Math.abs(studioResolutionScale - next) > 1e-3f) {
+            studioResolutionScale = next;
+            PortraitHudCache.invalidate();
         }
     }
     public static boolean studioPreviewAvailable() { return studioEnabled && studioRenderer != null; }
@@ -616,9 +635,12 @@ public class ReadyRoomPreview {
         }
     }
     public static void notifySpeaking(IsoGameCharacter actor, double durationSeconds) {
+        notifySpeaking(actor, durationSeconds, null);
+    }
+    public static void notifySpeaking(IsoGameCharacter actor, double durationSeconds, String emotion) {
         ModelSession s = Main.session(actor);
         if (s != null && s.liveFacial != null && Double.isFinite(durationSeconds) && durationSeconds > 0) {
-            s.liveFacial.notifySpeaking((float) durationSeconds);
+            s.liveFacial.notifySpeaking((float) durationSeconds, emotion);
         }
     }
     public static KahluaTable motionState(IsoGameCharacter actor) {
@@ -725,7 +747,26 @@ public class ReadyRoomPreview {
         return drawCamera(actor,x,y,width,height,yaw,zoom,0,0);
     }
     public static synchronized boolean drawCamera(IsoGameCharacter actor,int x,int y,int width,int height,float yaw,float zoom,float pan,float focus) {
-        return drawSession(Main.session(actor),x,y,width,height,yaw,zoom,pan,focus,false);
+        ModelSession session=Main.session(actor);
+        return drawSession(session,x,y,width,height,yaw,zoom,pan,focus,false,GripRoomPreview.collectLiveHeld(actor,session));
+    }
+    public static synchronized boolean drawPortraitHud(IsoGameCharacter actor,int x,int y,int width,int height,float yaw,float zoom,float pan,float focus,int refreshFps) {
+        ModelSession session=Main.session(actor);
+        if(session==null||!session.ready||session.retired||session.failed||width<16||height<16)return false;
+        try {
+            ModelSession.Snapshot snapshot=session.snapshot();if(snapshot==null)return false;
+            Mesh mesh=session.plainMesh(snapshot.frame());
+            List<GripRoomPreview.Part> heldParts=GripRoomPreview.collectLiveHeld(actor,session);
+            if(refreshFps<=0) {
+                SpriteRenderer.instance.drawGeneric(new Draw(mesh,snapshot.frame(),snapshot.materials(),x,y,width,height,Core.height,yaw,zoom,pan,focus,false,null,0f,true,heldParts));
+            } else {
+                SpriteRenderer.instance.drawGeneric(new PortraitHudDraw(mesh,snapshot.frame(),snapshot.materials(),x,y,width,height,Core.height,yaw,zoom,pan,focus,refreshFps,heldParts));
+            }
+            return true;
+        }catch(Exception e){System.err.println("[GFL2ReadyRoom] Portrait HUD unavailable: "+e);return false;}
+    }
+    public static synchronized void releasePortraitHud() {
+        PortraitHudCache.requestRelease();
     }
     public static synchronized boolean drawBrowse(IsoGameCharacter actor,String id,int x,int y,int width,int height,float yaw,float zoom) {
         return drawBrowseCamera(actor,id,x,y,width,height,yaw,zoom,0,0,false);
@@ -742,13 +783,14 @@ public class ReadyRoomPreview {
         ModelSession equipped=Main.session(actor);
         if(equipped!=null&&!equipped.entry.id().equals(id))equipped=null;
         BrowseState state=browsePreviews.computeIfAbsent(actor,unused->new BrowseState());
-        if(equipped!=null&&!overview){
+        if(equipped!=null){
             state.discardRequest();
-            if(drawSession(equipped,x,y,width,height,yaw,zoom,pan,focus,locked)){
+            List<GripRoomPreview.Part> heldParts=GripRoomPreview.collectLiveHeld(actor,equipped);
+            if(drawSession(equipped,x,y,width,height,yaw,zoom,pan,focus,locked,heldParts)){
                 state.present(equipped,false);
                 return true;
             }
-            return drawSession(state.shown,x,y,width,height,yaw,zoom,pan,focus,locked);
+            return drawSession(state.shown,x,y,width,height,yaw,zoom,pan,focus,locked,List.of());
         }
 
         var worldPlayer=actor.getAnimationPlayer();
@@ -771,18 +813,18 @@ public class ReadyRoomPreview {
             preview.session.fail(failure);
             return false;
         }
-        if(drawSession(preview.session,x,y,width,height,yaw,zoom,pan,focus,locked)){
+        if(drawSession(preview.session,x,y,width,height,yaw,zoom,pan,focus,locked,List.of())){
             state.present(preview.session,true);
             return true;
         }
-        return drawSession(state.shown,x,y,width,height,yaw,zoom,pan,focus,locked);
+        return drawSession(state.shown,x,y,width,height,yaw,zoom,pan,focus,locked,List.of());
     }
-    private static boolean drawSession(ModelSession session,int x,int y,int width,int height,float yaw,float zoom,float pan,float focus,boolean locked) {
+    private static boolean drawSession(ModelSession session,int x,int y,int width,int height,float yaw,float zoom,float pan,float focus,boolean locked,List<GripRoomPreview.Part> heldParts) {
         if(session==null||!session.ready||session.retired||session.failed||width<16||height<16)return false;
         try {
             ModelSession.Snapshot snapshot=session.snapshot();if(snapshot==null)return false;
             Mesh mesh=session.plainMesh(snapshot.frame());
-            SpriteRenderer.instance.drawGeneric(new Draw(mesh,snapshot.frame(),snapshot.materials(),x,y,width,height,Core.height,yaw,zoom,pan,focus,locked));
+            SpriteRenderer.instance.drawGeneric(new Draw(mesh,snapshot.frame(),snapshot.materials(),x,y,width,height,Core.height,yaw,zoom,pan,focus,locked,null,0f,false,heldParts));
             return true;
         }catch(Exception e){System.err.println("[GFL2ReadyRoom] Preview unavailable: "+e);return false;}
     }
@@ -891,15 +933,17 @@ public class ReadyRoomPreview {
         final ModelSession session;
         final float[] uv;
         final int[] indices,materials,firsts,counts;
-        final ByteBuffer upload;
-        final float centerX,centerY,centerZ,span,faceY,minY,heightSpan;
+        private ByteBuffer upload;
+        float centerX,centerY,centerZ,span,faceY,minY,heightSpan;
+        private float boneHeadY;
+        private boolean boundsPending;
         int vao,vbo,ibo,uvBuffer,itemVao,shadowVao,shadowVbo;
         boolean closed,failed,gpuLayout;
         private PmxDrawMesh.FrameData uploaded;
         Mesh(ModelSession s,PmxDrawMesh.FrameData frame) {
             session=s;int count=frame.positions().length/3;
             ByteBuffer bytes=buffer(count*8);s.api.CopyDataToByteBuffer(bytes,s.api.GetUVs(s.model.handle()),bytes.capacity());
-            uv=new float[count*2];bytes.asFloatBuffer().get(uv);upload=buffer(count*32);
+            uv=new float[count*2];bytes.asFloatBuffer().get(uv);
             int size=Math.toIntExact(s.api.GetIndexElementSize(s.model.handle()));
             if(size!=1&&size!=2&&size!=4)throw new IllegalArgumentException("PMX index size");
             indices=new int[Math.toIntExact(s.api.GetIndexCount(s.model.handle()))];bytes=buffer(indices.length*size);
@@ -907,24 +951,56 @@ public class ReadyRoomPreview {
             for(int i=0;i<indices.length;i++)indices[i]=size==1?Byte.toUnsignedInt(bytes.get(i)):size==2?Short.toUnsignedInt(bytes.getShort(i*2)):bytes.getInt(i*4);
             int parts=Math.toIntExact(s.api.GetSubMeshCount(s.model.handle()));materials=new int[parts];firsts=new int[parts];counts=new int[parts];
             for(int i=0;i<parts;i++){materials[i]=s.api.GetSubMeshMaterialID(s.model.handle(),i);firsts[i]=s.api.GetSubMeshBeginIndex(s.model.handle(),i);counts[i]=s.api.GetSubMeshVertexCount(s.model.handle(),i);}
-            float[] p=frame.positions();float minX=Float.POSITIVE_INFINITY,loY=minX,minZ=minX,maxX=-minX,maxY=-minX,maxZ=-minX;
-            for(int i=0;i<p.length;i+=3){minX=Math.min(minX,p[i]);maxX=Math.max(maxX,p[i]);loY=Math.min(loY,p[i+1]);maxY=Math.max(maxY,p[i+1]);minZ=Math.min(minZ,p[i+2]);maxZ=Math.max(maxZ,p[i+2]);}
-            centerX=(minX+maxX)/2;centerY=(loY+maxY)/2;centerZ=(minZ+maxZ)/2;
-            minY=loY;heightSpan=Math.max(1e-3f,maxY-loY);
-            span=Math.max(1,maxY-loY)*1.20f;
-            float head=maxY-(maxY-loY)*.115f;
+            float headBone=Float.NaN;
             if(s.targetHead>=0) {
                 JSONArray bones=new JSONArray(s.api.GetBoneMetadata(s.model.handle()));
                 JSONObject bone=bones.optJSONObject(s.targetHead);
                 JSONArray pos=bone==null?null:bone.optJSONArray("initial_position");
                 if(pos!=null&&pos.length()>1) {
                     float y=(float)pos.optDouble(1);
-                    if(y>centerY&&y<maxY)head=Math.min(maxY,y+.027f*span);
+                    if(Float.isFinite(y)&&y>4f)headBone=y;
                 }
             }
+            boneHeadY=headBone;
+            if(!tryUpdateBounds(frame)) {
+                // On f:0 before PZ AnimationPlayer populates its first bone pose, vertices can collapse
+                // near the feet (e.g. loY=-5.8, maxY=+1.2, centerX=+6.5). Seed canonical upright bounds
+                // from the model's rest-pose head height and refine on the first healthy standing frame.
+                float estMaxY=Float.isFinite(headBone)?headBone/0.86f:s.scale*0.95f;
+                centerX=0f;centerY=estMaxY*0.5f;centerZ=0f;
+                minY=0f;heightSpan=Math.max(1f,estMaxY);
+                span=heightSpan*1.20f;
+                faceY=Float.isFinite(headBone)?Math.min(estMaxY,headBone+0.027f*span):estMaxY*0.885f;
+                boundsPending=true;
+            }
+        }
+        private boolean tryUpdateBounds(PmxDrawMesh.FrameData frame) {
+            if(frame==null||frame.positions()==null)return false;
+            float[] p=frame.positions();
+            if(p.length<3)return false;
+            float minX=Float.POSITIVE_INFINITY,loY=minX,minZ=minX,maxX=-minX,maxY=-minX,maxZ=-minX;
+            for(int i=0;i<p.length;i+=3){
+                float px=p[i],py=p[i+1],pz=p[i+2];
+                if(px<minX)minX=px;if(px>maxX)maxX=px;
+                if(py<loY)loY=py;if(py>maxY)maxY=py;
+                if(pz<minZ)minZ=pz;if(pz>maxZ)maxZ=pz;
+            }
+            float h=maxY-loY;
+            float cx=(minX+maxX)*0.5f;
+            float minValidH=Float.isFinite(boneHeadY)?boneHeadY*0.72f:10f;
+            // Reject degenerate f:0 identity/collapsed poses where the model lies sideways near y=0.
+            if(!Float.isFinite(h)||h<minValidH||loY<-2.5f||maxY<minValidH*0.8f||Math.abs(cx)>4.0f)return false;
+            centerX=cx;centerY=(loY+maxY)*0.5f;centerZ=(minZ+maxZ)*0.5f;
+            minY=loY;heightSpan=Math.max(1e-3f,h);
+            span=Math.max(1f,h)*1.20f;
+            float head=maxY-h*.115f;
+            if(Float.isFinite(boneHeadY)&&boneHeadY>centerY&&boneHeadY<maxY)head=Math.min(maxY,boneHeadY+.027f*span);
             faceY=head;
+            boundsPending=false;
+            return true;
         }
         private void initialize(){
+            if(upload==null)upload=buffer((uv.length/2)*32);
             vao=GL30.glGenVertexArrays();GL30.glBindVertexArray(vao);vbo=GL15.glGenBuffers();ibo=GL15.glGenBuffers();
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER,vbo);GL15.glBufferData(GL15.GL_ARRAY_BUFFER,upload.capacity(),GL15.GL_STREAM_DRAW);
             for(int i=0;i<3;i++)GL20.glEnableVertexAttribArray(i);
@@ -959,7 +1035,7 @@ public class ReadyRoomPreview {
             uploaded=frame;
         }
         void paint(PmxDrawMesh.FrameData frame,ModelSession.Materials state,int width,int height,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView)throws Exception {
-            paint(frame,state,0,0,width,height,height,yaw,zoom,pan,focus,locked,gripView,0);
+            paint(frame,state,0,0,width,height,height,yaw,zoom,pan,focus,locked,gripView,0f,false,List.of());
         }
         private void paintShadowQuad(PreviewProgram program,Matrix4f turn,float alpha) {
             if(shadowVao==0){
@@ -993,11 +1069,25 @@ public class ReadyRoomPreview {
                 GL11.glDrawElements(GL11.GL_TRIANGLES,counts[i],GL11.GL_UNSIGNED_INT,(long)firsts[i]*4);
             }
         }
-        void paint(PmxDrawMesh.FrameData frame,ModelSession.Materials state,int x,int y,int width,int height,int screenHeight,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView,float pitch)throws Exception {
+        void paint(PmxDrawMesh.FrameData frame,ModelSession.Materials state,int x,int y,int width,int height,int screenHeight,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView,float pitch,boolean hud,List<GripRoomPreview.Part> heldParts)throws Exception {
+            if(boundsPending&&frame.positions()!=null)tryUpdateBounds(frame);
             float clampedZoom=Math.clamp(zoom,.62f,4.2f);
             float extent=span/clampedZoom,aspect=(float)width/height;
-            float cameraY=centerY+(faceY-centerY)*Math.clamp(focus,0,1)+span*Math.clamp(pan,-.8f,.8f);
-            float cameraX=centerX,cameraZ=centerZ;
+            float baseCameraY=centerY+(faceY-centerY)*Math.clamp(focus,0,1)+span*Math.clamp(pan,-.8f,.8f);
+            float cameraX=centerX,cameraY=baseCameraY,cameraZ=centerZ;
+            if(hud&&frame.shadingHead()!=null&&frame.shadingHead().length>=11) {
+                float[] sh=frame.shadingHead();
+                float track=Math.clamp((focus-.25f)/.65f,0f,1f);
+                if(track>1e-3f) {
+                    float maxOff=heightSpan*.55f;
+                    float hx=Math.clamp(sh[8],centerX-maxOff,centerX+maxOff);
+                    float hy=Math.clamp(sh[9],faceY-maxOff,faceY+maxOff)+span*Math.clamp(pan,-.8f,.8f);
+                    float hz=Math.clamp(sh[10],centerZ-maxOff,centerZ+maxOff);
+                    cameraX=centerX+(hx-centerX)*track;
+                    cameraY=baseCameraY+(hy-baseCameraY)*track;
+                    cameraZ=centerZ+(hz-centerZ)*track;
+                }
+            }
             boolean studio=gripView==null;
             if(studio&&!locked&&studioEnabled&&studioRenderer!=null
                     &&frame.positions()!=null&&frame.normals()!=null&&frame.shadingHead()!=null) {
@@ -1005,7 +1095,7 @@ public class ReadyRoomPreview {
                 float dist=(extent*.5f)/(float)Math.tan(fov*.5f);
                 float near=Math.max(.05f,dist*.1f),far=dist+span*4.5f;
                 float eyeZ=cameraZ+dist;
-                float floorAlpha=Math.clamp((2.2f-clampedZoom)/.8f,0f,1f);
+                float floorAlpha=hud?0f:Math.clamp((2.2f-clampedZoom)/.8f,0f,1f);
                 if(floorAlpha>.01f){
                     Matrix4f vp=new Matrix4f().perspective(fov,aspect,near,far)
                         .lookAt(cameraX,cameraY,eyeZ,cameraX,cameraY,cameraZ,0,1,0);
@@ -1023,9 +1113,10 @@ public class ReadyRoomPreview {
                     paintShadowQuad(program,turn,floorAlpha);
                 }
                 StudioRenderer renderer=studioRenderer;
+                List<StudioItem> studioItems=GripRoomPreview.toStudioItems(heldParts);
                 if(renderer!=null&&renderer.render(session.pmxSha256(),frame.positions(),frame.normals(),uv,
                         frame.materials(),frame.shadingHead(),session.scale,
-                        cameraX,cameraY,cameraZ,dist,yaw,pitch,fov,near,far,x,y,width,height,screenHeight)) {
+                        cameraX,cameraY,cameraZ,dist,yaw,pitch,fov,near,far,x,y,width,height,screenHeight,studioItems)) {
                     return;
                 }
             }
@@ -1061,7 +1152,7 @@ public class ReadyRoomPreview {
             GL13.glActiveTexture(GL13.GL_TEXTURE0);GL33.glBindSampler(0,0);GL11.glDisable(GL11.GL_CULL_FACE);
             GL11.glEnable(GL11.GL_DEPTH_TEST);GL11.glDepthFunc(GL11.GL_LEQUAL);GL11.glDepthMask(true);
             GL11.glEnable(GL11.GL_BLEND);GL14.glBlendEquation(GL14.GL_FUNC_ADD);GL14.glBlendFuncSeparate(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA);
-            float floorAlpha=studio?Math.clamp((2.2f-clampedZoom)/.8f,0f,1f):0f;
+            float floorAlpha=hud?0f:(studio?Math.clamp((2.2f-clampedZoom)/.8f,0f,1f):0f);
             if(floorAlpha>.01f){
                 if(!locked){
                     Matrix4f reflect=new Matrix4f().translate(0,2f*minY,0).scale(1f,-1f,1f).mul(turn);
@@ -1078,25 +1169,29 @@ public class ReadyRoomPreview {
             GL20.glUniform1i(program.mode(),0);
             GL20.glUniform1f(program.effectAlpha(),1f);
             drawSubMeshes(frame,textures);
-            if(gripView!=null&&!gripView.parts().isEmpty()){
+            List<GripRoomPreview.Part> items=gripView!=null?gripView.parts():heldParts;
+            if(items!=null&&!items.isEmpty()){
                 if(itemVao==0)itemVao=GL30.glGenVertexArrays();
-                GripRoomPreview.paintItems(gripView.parts(),itemVao,program.turn(),turn);
+                GripRoomPreview.paintItems(items,itemVao,program.turn(),turn);
             }
         }
-        @Override public void close(){if(closed)return;closed=true;uploaded=null;if(uvBuffer!=0)GL15.glDeleteBuffers(uvBuffer);if(vbo!=0)GL15.glDeleteBuffers(vbo);if(ibo!=0)GL15.glDeleteBuffers(ibo);if(vao!=0)GL30.glDeleteVertexArrays(vao);if(itemVao!=0)GL30.glDeleteVertexArrays(itemVao);if(shadowVbo!=0)GL15.glDeleteBuffers(shadowVbo);if(shadowVao!=0)GL30.glDeleteVertexArrays(shadowVao);}
+        @Override public void close(){if(closed)return;closed=true;uploaded=null;upload=null;if(uvBuffer!=0)GL15.glDeleteBuffers(uvBuffer);if(vbo!=0)GL15.glDeleteBuffers(vbo);if(ibo!=0)GL15.glDeleteBuffers(ibo);if(vao!=0)GL30.glDeleteVertexArrays(vao);if(itemVao!=0)GL30.glDeleteVertexArrays(itemVao);if(shadowVbo!=0)GL15.glDeleteBuffers(shadowVbo);if(shadowVao!=0)GL30.glDeleteVertexArrays(shadowVao);}
     }
     static final class Draw extends TextureDraw.GenericDrawer {
         final Mesh mesh;final PmxDrawMesh.FrameData frame;final ModelSession.Materials materials;
-        final int x,y,width,height,screenHeight;final float yaw,zoom,pan,focus,pitch;final boolean locked;
-        final GripRoomPreview.View gripView;
+        final int x,y,width,height,screenHeight;final float yaw,zoom,pan,focus,pitch;final boolean locked,hud;
+        final GripRoomPreview.View gripView;final List<GripRoomPreview.Part> heldParts;
         Draw(Mesh mesh,PmxDrawMesh.FrameData frame,ModelSession.Materials materials,int x,int y,int w,int h,int sh,float yaw,float zoom){
             this(mesh,frame,materials,x,y,w,h,sh,yaw,zoom,0,0,false);
         }
         Draw(Mesh mesh,PmxDrawMesh.FrameData frame,ModelSession.Materials materials,int x,int y,int w,int h,int sh,float yaw,float zoom,float pan,float focus,boolean locked){
-            this(mesh,frame,materials,x,y,w,h,sh,yaw,zoom,pan,focus,locked,null,0);
+            this(mesh,frame,materials,x,y,w,h,sh,yaw,zoom,pan,focus,locked,null,0,false,List.of());
         }
         Draw(Mesh mesh,PmxDrawMesh.FrameData frame,ModelSession.Materials materials,int x,int y,int w,int h,int sh,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView,float pitch){
-            this.gripView=gripView;this.pitch=pitch;
+            this(mesh,frame,materials,x,y,w,h,sh,yaw,zoom,pan,focus,locked,gripView,pitch,false,List.of());
+        }
+        Draw(Mesh mesh,PmxDrawMesh.FrameData frame,ModelSession.Materials materials,int x,int y,int w,int h,int sh,float yaw,float zoom,float pan,float focus,boolean locked,GripRoomPreview.View gripView,float pitch,boolean hud,List<GripRoomPreview.Part> heldParts){
+            this.gripView=gripView;this.pitch=pitch;this.hud=hud;this.heldParts=heldParts==null?List.of():heldParts;
             this.mesh=mesh;this.frame=frame;this.materials=materials;this.x=x;this.y=y;width=w;height=h;screenHeight=sh;this.yaw=yaw;this.zoom=zoom;
             this.pan=pan;this.focus=focus;this.locked=locked;
         }
@@ -1109,7 +1204,7 @@ public class ReadyRoomPreview {
             try {
                 GL11.glEnable(GL11.GL_SCISSOR_TEST);GL11.glScissor(x,screenHeight-y-height,width,height);GL11.glViewport(x,screenHeight-y-height,width,height);
                 GL11.glDepthMask(true);GL11.glClearDepth(1);GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
-                mesh.paint(frame,materials,x,y,width,height,screenHeight,yaw,zoom,pan,focus,locked,gripView,pitch);
+                mesh.paint(frame,materials,x,y,width,height,screenHeight,yaw,zoom,pan,focus,locked,gripView,pitch,hud,heldParts);
                 return true;
             }catch(Exception|LinkageError e){
                 if(frame.gpuPose()!=null)mesh.session.disableGpu(e);
@@ -1122,8 +1217,181 @@ public class ReadyRoomPreview {
             }
         }
     }
+    static final class PortraitHudDraw extends TextureDraw.GenericDrawer {
+        final Mesh mesh;final PmxDrawMesh.FrameData frame;final ModelSession.Materials materials;
+        final int x,y,width,height,screenHeight,refreshFps;final float yaw,zoom,pan,focus;
+        final List<GripRoomPreview.Part> heldParts;
+        PortraitHudDraw(Mesh mesh,PmxDrawMesh.FrameData frame,ModelSession.Materials materials,int x,int y,int w,int h,int sh,float yaw,float zoom,float pan,float focus,int refreshFps,List<GripRoomPreview.Part> heldParts){
+            this.mesh=mesh;this.frame=frame;this.materials=materials;this.x=x;this.y=y;this.width=w;this.height=h;this.screenHeight=sh;
+            this.yaw=yaw;this.zoom=zoom;this.pan=pan;this.focus=focus;this.refreshFps=refreshFps;
+            this.heldParts=heldParts==null?List.of():heldParts;
+        }
+        @Override public void render() {
+            PortraitHudCache.render(this);
+        }
+    }
+    /** Offscreen RGBA8 cache for Mode A HUD so 24/30 FPS throttling blits a single premultiplied quad on skipped frames. */
+    static final class PortraitHudCache {
+        private static int fbo,colorTex,depthRbo,cachedW,cachedH;
+        private static int quadProgram,quadVao,quadImageLoc;
+        private static GLCapabilities quadCaps;
+        private static PmxDrawMesh.FrameData lastFrame;
+        private static Mesh lastMesh;
+        private static float lastYaw,lastZoom,lastPan,lastFocus,lastScale;
+        private static int lastHeldCount;
+        private static long lastRevision,lastRenderNanos;
+        private static volatile boolean valid;
+
+        static void invalidate() {
+            valid=false;
+        }
+
+        private static void releaseFboGl() {
+            if(fbo!=0){GL30.glDeleteFramebuffers(fbo);fbo=0;}
+            if(colorTex!=0){GL11.glDeleteTextures(colorTex);colorTex=0;}
+            if(depthRbo!=0){GL30.glDeleteRenderbuffers(depthRbo);depthRbo=0;}
+            cachedW=cachedH=0;valid=false;lastMesh=null;lastFrame=null;
+        }
+        static void releaseAllGl() {
+            releaseFboGl();
+            if(quadProgram!=0){GL20.glDeleteProgram(quadProgram);quadProgram=0;}
+            if(quadVao!=0){GL30.glDeleteVertexArrays(quadVao);quadVao=0;}
+            quadCaps=null;
+        }
+        static void requestRelease() {
+            valid=false;lastMesh=null;lastFrame=null;
+            try { RenderThread.queueInvokeOnRenderContext(PortraitHudCache::releaseAllGl); }
+            catch(Throwable ignored) {}
+        }
+        private static void ensureQuadProgram() {
+            GLCapabilities caps=GL.getCapabilities();
+            if(quadProgram!=0&&quadCaps==caps)return;
+            if(quadProgram!=0){GL20.glDeleteProgram(quadProgram);quadProgram=0;}
+            if(quadVao!=0){GL30.glDeleteVertexArrays(quadVao);quadVao=0;}
+            int vs=PreviewProgram.shader(GL20.GL_VERTEX_SHADER,"""
+                #version 330
+                out vec2 vUv;
+                void main(){
+                    vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);
+                    vUv=p;
+                    gl_Position=vec4(p*2.0-1.0,0.0,1.0);
+                }
+                """);
+            int fs=0,prog=0;
+            try {
+                fs=PreviewProgram.shader(GL20.GL_FRAGMENT_SHADER,"""
+                    #version 330
+                    in vec2 vUv;
+                    uniform sampler2D uImage;
+                    out vec4 color;
+                    void main(){
+                        vec4 c=texture(uImage,vUv);
+                        if(c.a<=0.002)discard;
+                        color=c;
+                    }
+                    """);
+                prog=GL20.glCreateProgram();
+                GL20.glAttachShader(prog,vs);GL20.glAttachShader(prog,fs);GL20.glLinkProgram(prog);
+                if(GL20.glGetProgrami(prog,GL20.GL_LINK_STATUS)==0)throw new IllegalStateException(GL20.glGetProgramInfoLog(prog));
+                quadProgram=prog;quadImageLoc=GL20.glGetUniformLocation(prog,"uImage");
+                quadVao=GL30.glGenVertexArrays();quadCaps=caps;
+            } catch(RuntimeException|Error e) {
+                if(prog!=0)GL20.glDeleteProgram(prog);
+                throw e;
+            } finally {
+                GL20.glDeleteShader(vs);if(fs!=0)GL20.glDeleteShader(fs);
+            }
+        }
+        private static void ensureFbo(int w,int h) {
+            if(fbo!=0&&cachedW==w&&cachedH==h)return;
+            releaseFboGl();
+            fbo=GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,fbo);
+            colorTex=GL11.glGenTextures();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,colorTex);
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA8,w,h,0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,(ByteBuffer)null);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_LINEAR);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,GL11.GL_LINEAR);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL12.GL_TEXTURE_WRAP_S,GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL12.GL_TEXTURE_WRAP_T,GL12.GL_CLAMP_TO_EDGE);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER,GL30.GL_COLOR_ATTACHMENT0,GL11.GL_TEXTURE_2D,colorTex,0);
+            depthRbo=GL30.glGenRenderbuffers();
+            GL30.glBindRenderbuffer(GL30.GL_RENDERBUFFER,depthRbo);
+            GL30.glRenderbufferStorage(GL30.GL_RENDERBUFFER,GL30.GL_DEPTH24_STENCIL8,w,h);
+            GL30.glFramebufferRenderbuffer(GL30.GL_FRAMEBUFFER,GL30.GL_DEPTH_STENCIL_ATTACHMENT,GL30.GL_RENDERBUFFER,depthRbo);
+            int status=GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+            if(status!=GL30.GL_FRAMEBUFFER_COMPLETE) {
+                releaseFboGl();
+                throw new IllegalStateException("Portrait HUD FBO incomplete: "+status);
+            }
+            cachedW=w;cachedH=h;
+        }
+        static void render(PortraitHudDraw d) {
+            if(d.mesh.closed||d.mesh.failed||d.mesh.session.retired)return;
+            State saved=new State();
+            try {
+                ensureQuadProgram();
+                float resScale=studioResolutionScale();
+                // When GF2 studio renderer handles SSAA internally, keep cache FBO at display size;
+                // when plain GL33 fallback is active, apply resScale to the cache FBO so the setting still works.
+                boolean studioActive=studioPreviewAvailable();
+                int targetW=studioActive?d.width:Math.max(16,Math.round(d.width*resScale));
+                int targetH=studioActive?d.height:Math.max(16,Math.round(d.height*resScale));
+                ensureFbo(targetW,targetH);
+                long now=System.nanoTime();
+                long minInterval=1_000_000_000L/Math.max(1,d.refreshFps);
+                long rev=d.mesh.session.model.appearance().revision();
+                int heldCount=d.heldParts.size();
+                boolean paramsChanged=!valid||lastMesh!=d.mesh||lastRevision!=rev||lastHeldCount!=heldCount
+                    ||Math.abs(lastScale-resScale)>1e-3f
+                    ||Math.abs(lastYaw-d.yaw)>1e-3f||Math.abs(lastZoom-d.zoom)>1e-3f
+                    ||Math.abs(lastPan-d.pan)>1e-3f||Math.abs(lastFocus-d.focus)>1e-3f;
+                boolean intervalElapsed=(now-lastRenderNanos)>=minInterval;
+                if(paramsChanged||(lastFrame!=d.frame&&intervalElapsed)) {
+                    GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,fbo);
+                    GL11.glDisable(GL11.GL_SCISSOR_TEST);
+                    GL11.glViewport(0,0,targetW,targetH);
+                    GL11.glColorMask(true,true,true,true);
+                    GL11.glClearColor(0f,0f,0f,0f);
+                    GL11.glDepthMask(true);
+                    GL11.glClearDepth(1.0);
+                    GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);
+                    d.mesh.paint(d.frame,d.materials,0,0,targetW,targetH,targetH,d.yaw,d.zoom,d.pan,d.focus,false,null,0f,true,d.heldParts);
+                    lastMesh=d.mesh;lastFrame=d.frame;lastRevision=rev;lastHeldCount=heldCount;lastScale=resScale;
+                    lastYaw=d.yaw;lastZoom=d.zoom;lastPan=d.pan;lastFocus=d.focus;
+                    lastRenderNanos=now;valid=true;
+                }
+                if(!valid)return;
+                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,saved.drawFbo);
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,saved.readFbo);
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+                GL11.glScissor(d.x,d.screenHeight-d.y-d.height,d.width,d.height);
+                GL11.glViewport(d.x,d.screenHeight-d.y-d.height,d.width,d.height);
+                GL11.glDisable(GL11.GL_DEPTH_TEST);
+                GL11.glDisable(GL11.GL_CULL_FACE);
+                GL11.glColorMask(true,true,true,true);
+                GL11.glEnable(GL11.GL_BLEND);
+                GL14.glBlendEquation(GL14.GL_FUNC_ADD);
+                GL14.glBlendFuncSeparate(GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA);
+                GL20.glUseProgram(quadProgram);
+                GL20.glUniform1i(quadImageLoc,0);
+                GL13.glActiveTexture(GL13.GL_TEXTURE0);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D,colorTex);
+                GL33.glBindSampler(0,0);
+                GL30.glBindVertexArray(quadVao);
+                GL11.glDrawArrays(GL11.GL_TRIANGLES,0,3);
+            } catch(Exception|LinkageError e) {
+                if(d.frame.gpuPose()!=null)d.mesh.session.disableGpu(e);
+                else {d.mesh.failed=true;System.err.println("[GFL2ReadyRoom] Portrait HUD draw failed: "+e);}
+            } finally {
+                saved.restore();
+                SpriteRenderer.ringBuffer.restoreVbos=true;SpriteRenderer.ringBuffer.restoreBoundTextures=true;
+            }
+        }
+    }
     // Core-profile-safe state scope; legacy glPushAttrib is unavailable on some hosts.
     static final class State {
+        final int drawFbo=GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING),readFbo=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         final int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),vao=GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING),vbo=GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
         final int unit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE),depthFunc=GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
         final int srcRGB=GL11.glGetInteger(GL14.GL_BLEND_SRC_RGB),dstRGB=GL11.glGetInteger(GL14.GL_BLEND_DST_RGB),srcAlpha=GL11.glGetInteger(GL14.GL_BLEND_SRC_ALPHA),dstAlpha=GL11.glGetInteger(GL14.GL_BLEND_DST_ALPHA);
@@ -1134,6 +1402,7 @@ public class ReadyRoomPreview {
         State(){GL11.glGetIntegerv(GL11.GL_VIEWPORT,viewport);GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX,box);GL13.glActiveTexture(GL13.GL_TEXTURE0);texture=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);sampler=GL30.glGetIntegeri(GL33.GL_SAMPLER_BINDING,0);}
         static void enabled(int flag,boolean value){if(value)GL11.glEnable(flag);else GL11.glDisable(flag);}
         void restore(){
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,drawFbo);GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,readFbo);
             GL11.glViewport(viewport[0],viewport[1],viewport[2],viewport[3]);GL11.glScissor(box[0],box[1],box[2],box[3]);
             enabled(GL11.GL_BLEND,blend);enabled(GL11.GL_DEPTH_TEST,depth);enabled(GL11.GL_CULL_FACE,cull);enabled(GL11.GL_SCISSOR_TEST,scissor);
             GL14.glBlendFuncSeparate(srcRGB,dstRGB,srcAlpha,dstAlpha);GL20.glBlendEquationSeparate(equationRGB,equationAlpha);GL11.glDepthMask(depthMask);GL11.glDepthFunc(depthFunc);GL11.glClearDepth(clearDepth);

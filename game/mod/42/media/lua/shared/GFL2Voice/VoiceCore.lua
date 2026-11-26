@@ -5,12 +5,12 @@ local C={rules=config.rules,defaults=config.defaults,pools=config.pools}
 C.defaults.sameCueMs=20*60*1000
 C.defaults.sameConditionMs=C.defaults.sameCueMs
 function C.newState(now, seed)
-    return { initialized=false, levels={}, maxPriority=0, maxKey=nil,
-        rng=((seed or now or 1) % 2147483646)+1, nextOrdinary=0, nextUrgent=0,
+    return { initialized=false, levels={}, maxPriority=0, maxKey=nil, hasNegative=false,
+        rng=((seed or now or 1) % 2147483646)+1, nextOrdinary=0, nextUrgent=0, nextIdle=0,
         lastUrgentPriority=0, lastUrgentAt=-1000000000, lastManualAt=-1000000000,
         cueAt={}, cuePriority={}, conditionAt={}, lastPool={},
         speakingUntil=0, currentPriority=0, currentCue=nil,
-        samples=0, moodleReads=0, spoken=0,killSpoken=0,
+        samples=0, moodleReads=0, spoken=0, killSpoken=0, idleSpoken=0,
         autoSpoken=0, manualSpoken=0, rejected=0, highest=nil,
         lastReject=nil }
 end
@@ -40,10 +40,12 @@ function C.observe(state, readLevel)
     state.samples=state.samples+1
     state.maxPriority=0
     state.maxKey=nil
+    state.hasNegative=false
     for i=1,#C.rules do
         local rule=C.rules[i]
         local level=math.floor(tonumber(readLevel(rule)) or 0)
         level=math.max(0,math.min(#rule.cues,level))
+        if level>0 and rule.key~="FoodEaten" then state.hasNegative=true end
         local previous=state.levels[rule.key] or 0
         local cue=rule.cues[level]
         local priority=rule.ranks[level] or 0
@@ -90,6 +92,7 @@ function C.propose(state,candidate,now,config)
     local manual=candidate.kind=="manual"
     local urgent=priority>=80 and not manual
     local kill=candidate.kind=="kill"
+    local idle=candidate.kind=="idle"
     local function reject(reason)
         state.lastReject=reason
         state.rejected=state.rejected+1
@@ -106,6 +109,10 @@ function C.propose(state,candidate,now,config)
         local escalation=priority>=90 and priority>state.lastUrgentPriority and
             now-state.lastUrgentAt>=cfg.urgentEscalationGapMs
         if now<state.nextUrgent and not escalation then return reject("urgent_cooldown") end
+    elseif idle then
+        if state.hasNegative then return reject("not_calm") end
+        if now<state.nextIdle then return reject("idle_cooldown") end
+        if now<state.nextOrdinary then return reject("ordinary_cooldown") end
     elseif not kill and now<state.nextOrdinary then
         return reject("ordinary_cooldown")
     end
@@ -115,23 +122,17 @@ function C.propose(state,candidate,now,config)
     local selected=candidate.cue
     if C.pools then
     local pool = C.pools[candidate.cue] or {candidate.cue}
-    local preferred = C.pick(state, pool, candidate.key)
-    selected = nil
-    for pass=1,2 do
-        for _, cue in ipairs(pool) do
-            if (pass==1 and cue==preferred) or (pass==2 and cue~=preferred) then
-                local last = state.cueAt[cue]
-                local escalated = urgent and priority > (state.cuePriority[cue] or 0) and
-                    last and now-last >= cfg.urgentEscalationGapMs
-                if manual or not last or now-last >= cfg.sameCueMs or escalated then
-                    selected = cue
-                    break
-                end
-            end
+    local eligible = {}
+    for _, cue in ipairs(pool) do
+        local last = state.cueAt[cue]
+        local escalated = urgent and priority > (state.cuePriority[cue] or 0) and
+            last and now-last >= cfg.urgentEscalationGapMs
+        if manual or not last or now-last >= cfg.sameCueMs or escalated then
+            eligible[#eligible+1] = cue
         end
-        if selected then break end
     end
-    if not selected then return reject("same_line_20m") end
+    if #eligible == 0 then return reject("same_line_20m") end
+    selected = C.pick(state, eligible, candidate.key)
     else
     local lastCue=state.cueAt[candidate.cue]
     if not manual and lastCue and now-lastCue<cfg.sameCueMs then
@@ -169,7 +170,11 @@ function C.commit(state,candidate,now,duration,config)
     end
     state.cueAt[candidate.cue]=now
     state.cuePriority[candidate.cue]=candidate.priority
+    local idleMin=cfg.idleMinMs or 90000
+    local idleMax=cfg.idleMaxMs or 180000
+    state.nextIdle=now+idleMin+math.floor(C.random(state)*(idleMax-idleMin+1))
     if candidate.kind=="kill" then state.killSpoken=state.killSpoken+1;return end
+    if candidate.kind=="idle" then state.idleSpoken=state.idleSpoken+1 end
     state.autoSpoken=state.autoSpoken+1
     state.nextOrdinary=now+cfg.ordinaryMinMs+
         math.floor(C.random(state)*(cfg.ordinaryMaxMs-cfg.ordinaryMinMs+1))

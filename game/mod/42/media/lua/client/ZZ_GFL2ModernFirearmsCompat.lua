@@ -1,3 +1,12 @@
+-- Third-party compatibility guard for:
+--   Mod: Modern Firearms System (MFS) | Mod ID: ModernFirearmsSystem
+--   Conflict & Root Cause: MFS's ChangeMagzine swaps GFL2 signature weapons to generic magazines
+--     and strips custom modData keys not listed in AWCWF_AllowModDataTable.
+--   Hook Points: Wraps global ChangeMagzine, registers AWCWF_AllowModDataTable["GFL2WeaponSkin"],
+--     and repairs dedicated magazines on OnEquipPrimary.
+--   Removal: Delete this file, tools/tests/mfs-compat-fixture.lua, and usesMFS branches in
+--     GFL2SignatureMagazines.lua / GFL2RoomEconomy.lua; update docs/MOD_COMPATIBILITY.md.
+
 local activeMods = getActivatedMods and getActivatedMods()
 if not activeMods or not activeMods:contains("ModernFirearmsSystem") then return end
 

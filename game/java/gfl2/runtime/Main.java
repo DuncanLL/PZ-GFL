@@ -40,6 +40,8 @@ public class Main {
     private static List<String> configuredModIds=List.of();
     private static volatile boolean remoteBodyPhysicsEnabled=false;
     private static volatile int remoteChestStrength=0;
+    private static volatile boolean idleAmbientEnabled=true;
+    private static volatile int facialMotionMode=LiveFacialMotion.MODE_FULL;
 
     public static void main(String[] args) {
         // ZombieBuddy retransforms loaded game classes when the package is dispatched.
@@ -234,6 +236,14 @@ public class Main {
     }
     public static boolean studioPreviewEnabled() { return ReadyRoomPreview.studioPreviewEnabled(); }
     public static void setStudioPreviewEnabled(boolean enabled) { ReadyRoomPreview.setStudioPreviewEnabled(enabled); }
+    public static int studioResolutionPercent() { return ReadyRoomPreview.studioResolutionPercent(); }
+    public static void setStudioResolutionPercent(int percent) { ReadyRoomPreview.setStudioResolutionPercent(percent); }
+    public static boolean idleAmbientEnabled() { return idleAmbientEnabled; }
+    public static void setIdleAmbientEnabled(boolean enabled) { idleAmbientEnabled=enabled; }
+    public static int facialMotionMode() { return facialMotionMode; }
+    public static void setFacialMotionMode(int mode) {
+        facialMotionMode=Math.clamp(mode,LiveFacialMotion.MODE_OFF,LiveFacialMotion.MODE_FULL);
+    }
     public static synchronized boolean chestPhysicsEnabled(IsoGameCharacter actor) {
         ModelSession s=active.get(actor);return s!=null&&s.model.chestPhysicsEnabled();
     }

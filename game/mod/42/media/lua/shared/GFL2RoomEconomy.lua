@@ -39,27 +39,42 @@ local gomAmmoBoxes={
     ["Base.Bullets44Box"]="MarzGuns.44_Box",
     ["Base.ShotgunShellsBox"]="MarzGuns.12Gauge_Box_Buckshot",
 }
+local xannyAmmoBoxes={
+    ["Base.556Box"]="XannyArms.XA_556x45Box",
+    ["Base.308Box"]="XannyArms.XA_762x51Box",
+    ["Base.Bullets9mmBox"]="XannyArms.XA_9x19Box",
+    ["Base.Bullets45Box"]="XannyArms.XA_45Box",
+    ["Base.Bullets44Box"]="XannyArms.XA_50AEBox",
+    ["Base.ShotgunShellsBox"]="XannyArms.XA_12GaugeBox",
+}
 local ammoBoxPrices={
     ["Base.Bullets9mmBox"]=1200,
     ["MarzGuns.9x19_Box"]=1200,
+    ["XannyArms.XA_9x19Box"]=1200,
     ["Base.Bullets45Box"]=1500,
     ["MarzGuns.45_Box"]=1500,
+    ["XannyArms.XA_45Box"]=1500,
     ["Base.Bullets44Box"]=1800,
     ["MarzGuns.44_Box"]=1800,
+    ["XannyArms.XA_50AEBox"]=1800,
     ["EscapeFromZomboidFirearms.AB_66a0d1f88486c69fce00fdf6"]=1800,
     ["Base.ShotgunShellsBox"]=1800,
     ["MarzGuns.12Gauge_Box_Buckshot"]=1800,
+    ["XannyArms.XA_12GaugeBox"]=1800,
     ["Base.556Box"]=2000,
     ["MarzGuns.556x45_Box"]=2000,
+    ["XannyArms.XA_556x45Box"]=2000,
     ["EscapeFromZomboidFirearms.Box545x39"]=2000,
     ["EscapeFromZomboidFirearms.AB_61962d879bb3d20b0946d385"]=2000,
     ["Base.308Box"]=2400,
     ["MarzGuns.308_Box"]=2400,
+    ["XannyArms.XA_762x51Box"]=2400,
     ["EscapeFromZomboidFirearms.Box762x54R"]=2400,
     ["EscapeFromZomboidFirearms.AB_5fc382c1016cce60e8341b20"]=2400,
 }
 E.ammoBoxPrices=ammoBoxPrices
 E.gomAmmoBoxes=gomAmmoBoxes
+E.xannyAmmoBoxes=xannyAmmoBoxes
 E.keys={"targeted","outfit","credits"}
 local snapshots=setmetatable({},{__mode="k"})
 local recordingUnlocks=setmetatable({},{__mode="k"})
@@ -493,6 +508,7 @@ function E.weaponAmmo(weapon)
     local usesEFZ=mods and mods:contains("EscapeFromZomboidFirearms")
     local usesMFS=not usesEFZ and mods and mods:contains("ModernFirearmsSystem")
     local usesGOM=not usesEFZ and not usesMFS and mods and (mods:contains("GunsOfMarz") or mods:contains("MarzGuns"))
+    local usesXanny=not usesEFZ and not usesMFS and not usesGOM and mods and mods:contains("XannyArmsGunPack")
     local box,itemScript
     if usesEFZ and weapon.efzAmmoBox then
         itemScript=scripts:FindItem(weapon.efzAmmoBox)
@@ -504,6 +520,10 @@ function E.weaponAmmo(weapon)
         local gomBox=gomAmmoBoxes[weapon.ammoBox]
         itemScript=scripts:FindItem(gomBox)
         if itemScript then box=gomBox end
+    elseif usesXanny and xannyAmmoBoxes[weapon.ammoBox] then
+        local xannyBox=xannyAmmoBoxes[weapon.ammoBox]
+        itemScript=scripts:FindItem(xannyBox)
+        if itemScript then box=xannyBox end
     end
     if not itemScript then
         itemScript=scripts:FindItem(weapon.ammoBox)

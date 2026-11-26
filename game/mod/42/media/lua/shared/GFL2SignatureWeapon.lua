@@ -419,6 +419,32 @@ local weapons = {{
     startsWithMagazine = true,
     ammoBox = "Base.556Box",
     efzAmmoBox = "EscapeFromZomboidFirearms.Box545x39",
+}, {
+    id = "GFL2.ThornCriterion",
+    mod = "GFL2Lind",
+    character = "GFL2Lind",
+    name = "ContextMenu_GFL2_ThornCriterion",
+    description = "ContextMenu_GFL2_ThornCriterionDescription",
+    icon = "media/textures/Item_GFL2ThornCriterion.png",
+    card = "media/ui/GFL2/ThornCriterionCard.png",
+    previewCenterY = 0.116213,
+    previewCenterZ = 0.001175,
+    previewZoom = 16,
+    startsWithMagazine = true,
+    ammoBox = "Base.ShotgunShellsBox",
+}, {
+    id = "GFL2.OmenKey",
+    mod = "GFL2Agent",
+    character = "GFL2Agent",
+    name = "ContextMenu_GFL2_OmenKey",
+    description = "ContextMenu_GFL2_OmenKeyDescription",
+    icon = "media/textures/Item_GFL2OmenKey.png",
+    card = "media/ui/GFL2/OmenKeyCard.png",
+    previewCenterY = 0.226316,
+    previewCenterZ = 0.047557,
+    previewZoom = 14,
+    startsWithMagazine = true,
+    ammoBox = "Base.308Box",
 }}
 
 local catalog = {byId = {}, byCharacter = {}}

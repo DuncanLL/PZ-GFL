@@ -44,6 +44,11 @@ public final class SignatureWeaponRangeMigration {
                 }
             }
             case "GFL2.BittersweetCaramel" -> migrateDamage(weapon, 1.2f, 2.0f);
+            case "GFL2.ThornCriterion" -> {
+                if (Math.abs(weapon.getMaxRange() - attachmentRange - 22.0f) < 0.01f) {
+                    weapon.setMaxRange(scriptRange + attachmentRange);
+                }
+            }
             default -> { }
         }
     }

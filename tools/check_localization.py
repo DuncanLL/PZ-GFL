@@ -170,7 +170,7 @@ try:
             for cue, fields in re.findall(r'\["(\w+)"\]\s*=\s*\{([^{}]*\bjapanese\s*=\s*"[^"]+"[^{}]*)\}',
                                           file.read_text('utf-8-sig'))
         ]
-        assert len(declarations) == len(set(declarations)) == len(clips) == 173, (pack,len(declarations),len(clips))
+        assert len(declarations) == len(set(declarations)) == len(clips) and len(clips) in (173, 183), (pack,len(declarations),len(clips))
         clip_sounds = set()
         for cue, fields in clips:
             matches = [sound for sound in declarations if sound.endswith('_'+cue)]

@@ -23,6 +23,7 @@ function GFL2CatalogVoice.install(id,modelId,clips)
         resolve=function(_,cue) return clips[cue] end,
         captionTag=captionTag,logTag="["..prefix.."Voice]",
         cues={shout="Shout_A",sneakShout="SneakShout_A"},killCue="Kill_A",
+        idleCue=clips["Idle_A"] and "Idle_A" or nil,
     })
 end
 

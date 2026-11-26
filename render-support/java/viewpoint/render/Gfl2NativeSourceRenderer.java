@@ -101,7 +101,10 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
         int base=switch(m.group(1)){case "Background"->1000;case "Geometry"->2000;case "AlphaTest"->2450;case "Transparent"->3000;case "Overlay"->4000;default->throw new IllegalArgumentException("Unknown source queue");};return base+(m.group(2)==null?0:Integer.parseInt(m.group(2)));
     }
     private FrameActors actors(FrameContext frame,ModelPass models)throws Exception{
-        if(frozenActors!=null&&frozenActors.frame==frame.index)return frozenActors;
+        return actors(frame,models,true);
+    }
+    private FrameActors actors(FrameContext frame,ModelPass models,boolean cache)throws Exception{
+        if(cache&&frozenActors!=null&&frozenActors.frame==frame.index)return frozenActors;
         ModelDraws draws=models.draws();
         int[] rank=(int[])Gfl2NativeEnvironment.field(models.batches,"rank");
         Map<Integer,ActorParts> found=new LinkedHashMap<>();
@@ -139,7 +142,9 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
                 actor.shadow.add(draw);
             }
         }
-        return frozenActors=new FrameActors(frame.index,colour,shadow,submitted);
+        FrameActors result=new FrameActors(frame.index,colour,shadow,submitted);
+        if(cache)frozenActors=result;
+        return result;
     }
     private void ensure(int w,int h){
         if(width==w&&height==h)return;if(colour!=0)GL11.glDeleteTextures(colour);width=w;height=h;target.ensure(w,h);target.ensureOriginalOutputs(true);
@@ -188,8 +193,15 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
         }finally{if(casterQueryActive){GL15.glEndQuery(GL33.GL_ANY_SAMPLES_PASSED);casterQueryActive=false;}}
     }
     void prepass(FrameContext frame)throws Exception{
-        if(earlyFrame==frame.index)throw new IllegalStateException("Duplicate source GBuffer callback");earlyFrame=frame.index;earlyDraws=0;
-        ModelPass models=(ModelPass)Gfl2NativeEnvironment.world("models");ModelDraws draws=models.draws();List<Actor> actors=actors(frame,models).colour;if(actors.isEmpty())return;
+        boolean sttDepthReplay=Gfl2ShootToThrillCompatibility.isWorldDepthReplay();
+        boolean sttDepthSplit=sttDepthReplay||Gfl2ShootToThrillCompatibility.isWorldDepthSplitPass();
+        if(earlyFrame==frame.index){
+            if(!sttDepthReplay)throw new IllegalStateException("Duplicate source GBuffer callback");
+        }else{
+            earlyFrame=frame.index;earlyDraws=0;
+        }
+        ModelPass models=(ModelPass)Gfl2NativeEnvironment.world("models");ModelDraws draws=models.draws();List<Actor> actors=actors(frame,models,!sttDepthSplit).colour;if(actors.isEmpty())return;
+        int beforeEarlyDraws=earlyDraws;
         Targets nativeTargets=(Targets)Gfl2NativeEnvironment.world("targets");
         try(Gfl2GlScope scope=new Gfl2GlScope(Gfl2GlScope.Phase.PREPASS);AutoCloseable bindings=modelBindings(models)){
             captureRelief(models,frame.index);
@@ -214,7 +226,7 @@ public final class Gfl2NativeSourceRenderer implements AutoCloseable {
                     int issued=drawNative(frame,models,program,materials.state(draw.material,"GFCharForward",true),draw.index,false);if(issued!=1)throw new IllegalStateException("Native early source job absent");earlyDraws++;
                 }
             }
-            target.writeBackDepth(nativeTargets.gbufferFbo);earlyFrames++;
+            target.writeBackDepth(nativeTargets.gbufferFbo);if(beforeEarlyDraws==0)earlyFrames++;
         }
     }
     public void draw(FrameContext frame)throws Exception{

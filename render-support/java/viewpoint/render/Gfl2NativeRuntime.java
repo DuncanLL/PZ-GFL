@@ -99,6 +99,7 @@ public final class Gfl2NativeRuntime {
                 try{
                     renderer=new Gfl2NativeSourceRenderer(prepared);drawnData=prepared;rendererPack=selected;created++;if(diagnostics)renderer.diagnostics();
                     attachStudioPreview(prepared);
+                    prepared.compactAfterRendererInit();
                 }catch(IOException|IllegalArgumentException|JSONException e){
                     System.err.println("[GFL2 Native] Character resources unavailable: "+e);
                     Gfl2NativeRegistry.detach(prepared);prepared=null;catalog=null;
@@ -129,18 +130,18 @@ public final class Gfl2NativeRuntime {
         beforeLighting(WorldRenderer.models,frame);
     }
     public static void beforeLighting(ModelPass models,FrameContext frame){
-        if(frameRenderer==null||models==null||models!=WorldRenderer.models)return;
+        if(frameRenderer==null||models==null||models!=WorldRenderer.models||Gfl2ShootToThrillCompatibility.isScopePipPass())return;
         try{frameRenderer.prepass(frame);}catch(Exception e){throw new IllegalStateException("Native source depth/GBuffer",e);}
     }
     public static void shadows(org.joml.Matrix4f matrix,int[] candidates,int count,ModelBatches.Filter filter){
         shadows(WorldRenderer.models,matrix,candidates,count,filter);
     }
     public static void shadows(ModelPass models,org.joml.Matrix4f matrix,int[] candidates,int count,ModelBatches.Filter filter){
-        if(frameRenderer==null||models==null||models!=WorldRenderer.models)return;
+        if(frameRenderer==null||models==null||models!=WorldRenderer.models||Gfl2ShootToThrillCompatibility.isScopePipPass())return;
         try{frameRenderer.cast(matrix,candidates,count,filter);}catch(Exception e){throw new IllegalStateException("Native original ShadowCaster",e);}
     }
     public static void draw(FrameContext frame){
-        if(frameRenderer==null)return;
+        if(frameRenderer==null||Gfl2ShootToThrillCompatibility.isScopePipPass())return;
         int[] before=diagnostics?Gfl2NativeSourceScope.bindings():null;
         try{frameRenderer.draw(frame);}catch(Exception e){throw new IllegalStateException("Native GF2 AFTER_OPAQUE",e);}
         if(diagnostics&&!java.util.Arrays.equals(before,Gfl2NativeSourceScope.bindings()))throw new IllegalStateException("Native GF2 shared GL bindings leaked");

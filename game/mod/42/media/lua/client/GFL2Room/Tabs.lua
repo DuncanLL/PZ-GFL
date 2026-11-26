@@ -152,6 +152,25 @@ function M.install(W,ctx)
         voiceSlider.roomSlider=true;self.content:addChild(voiceSlider);table.insert(self.widgets,voiceSlider)
         y=y+58
 
+        local function addSegmented(labelText,options,currentVal,onSelect)
+            self:addLabel(labelText,y,18,width);y=y+24
+            local count=#options
+            local segGap=6
+            local segW=math.floor((width-(count-1)*segGap)/count)
+            for idx,opt in ipairs(options) do
+                local sx=(idx-1)*(segW+segGap)
+                local b=button(self.content,sx,y,segW,tr(opt[1]),self,function(w)
+                    onSelect(w,opt[2])
+                    w:refreshControls(true)
+                end)
+                b:setHeight(32)
+                b.roomActive=(currentVal==opt[2])
+                if opt[3] then b:setTooltip(getText(opt[3])) end
+                table.insert(self.widgets,b)
+            end
+            y=y+42
+        end
+
         local subOn=not self.actions.getShowSubtitles or self.actions.getShowSubtitles()
         addToggle(tr("VoiceSubtitles"),subOn,"ContextMenu_GFL2_SubtitlesOn","ContextMenu_GFL2_SubtitlesOff",function(w,nextOn)
             if w.actions.setShowSubtitles then w.actions.setShowSubtitles(nextOn) end
@@ -160,6 +179,59 @@ function M.install(W,ctx)
         addToggle(tr("StudioPreview"),studioOn,"ContextMenu_GFL2_StudioPreviewOn","ContextMenu_GFL2_StudioPreviewOff",function(w,nextOn)
             if w.actions.setStudioPreview then w.actions.setStudioPreview(nextOn) end
         end)
+        local studioScale=self.actions.getStudioScale and self.actions.getStudioScale() or 200
+        addSegmented(tr("StudioResolution"),{
+            {"StudioRes100",100,"ContextMenu_GFL2_StudioRes100Tip"},
+            {"StudioRes150",150,"ContextMenu_GFL2_StudioRes150Tip"},
+            {"StudioRes200",200,"ContextMenu_GFL2_StudioRes200Tip"},
+        },studioScale,function(w,val)
+            if w.actions.setStudioScale then w.actions.setStudioScale(val) end
+        end)
+        y=y+6
+
+        y=self:addSettingsSection(tr("SettingsPresentation"),y,width)
+        local idleOn=not self.actions.getIdleAmbient or self.actions.getIdleAmbient()
+        addToggle(tr("IdleAmbient"),idleOn,"ContextMenu_GFL2_IdleAmbientOn","ContextMenu_GFL2_IdleAmbientOff",function(w,nextOn)
+            if w.actions.setIdleAmbient then w.actions.setIdleAmbient(nextOn) end
+        end)
+
+        local facialMode=self.actions.getFacialMode and self.actions.getFacialMode() or 2
+        addSegmented(tr("FacialMode"),{
+            {"FacialOff",0,"ContextMenu_GFL2_FacialOffTip"},
+            {"FacialLight",1,"ContextMenu_GFL2_FacialLightTip"},
+            {"FacialFull",2,"ContextMenu_GFL2_FacialFullTip"},
+        },facialMode,function(w,val)
+            if w.actions.setFacialMode then w.actions.setFacialMode(val) end
+        end)
+
+        local hudOn=self.actions.getPortraitHud and self.actions.getPortraitHud() or false
+        addToggle(tr("PortraitHud"),hudOn,"ContextMenu_GFL2_PortraitHudOn","ContextMenu_GFL2_PortraitHudOff",function(w,nextOn)
+            if w.actions.setPortraitHud then w.actions.setPortraitHud(w.player,nextOn) end
+        end)
+
+        local fpsRaw=self.actions.getPortraitFps and self.actions.getPortraitFps() or 24
+        local fpsSliderVal=(fpsRaw<=0) and 61 or clamp(fpsRaw,10,60)
+        self:addLabel(tr("PortraitFps"),y,18,width-82)
+        local fpsSlider=ISSliderPanel:new(5,y+25,width-10,20,self,function(w,value)
+            local v=math.floor(value+.5)
+            local target=(v>=61) and 0 or clamp(v,10,60)
+            if w.actions.setPortraitFps then w.actions.setPortraitFps(w.player,target,false) end
+        end)
+        fpsSlider:initialise();fpsSlider:instantiate();fpsSlider:setDoButtons(false)
+        fpsSlider:setValues(10,61,1,5,true);fpsSlider:setCurrentValue(fpsSliderVal,true)
+        if styleSlider then styleSlider(fpsSlider) end
+        attachSliderTooltip(fpsSlider,getText("ContextMenu_GFL2_PortraitFpsSliderTip"))
+        local renderFps=fpsSlider.render
+        fpsSlider.render=function(s)
+            renderFps(s)
+            local v=math.floor(s.currentValue+.5)
+            local live=(v>=61)
+            local txt=live and tr("PortraitFpsLive") or string.format("%d FPS",v)
+            local r,g,b=live and .98 or .86,live and .62 or .89,live and .24 or .92
+            textInSlot(s,txt,s.width,-22,18,76,r,g,b,1,1)
+        end
+        fpsSlider.roomSlider=true;self.content:addChild(fpsSlider);table.insert(self.widgets,fpsSlider)
+        y=y+58
         y=y+6
 
         y=self:addSettingsSection(tr("SettingsPhysics"),y,width)
@@ -254,6 +326,11 @@ function M.install(W,ctx)
             if w.actions.setVoiceVolume then w.actions.setVoiceVolume(w.player,50,true) end
             if w.actions.setShowSubtitles then w.actions.setShowSubtitles(true) end
             if w.actions.setStudioPreview then w.actions.setStudioPreview(true) end
+            if w.actions.setStudioScale then w.actions.setStudioScale(200) end
+            if w.actions.setIdleAmbient then w.actions.setIdleAmbient(true) end
+            if w.actions.setFacialMode then w.actions.setFacialMode(2) end
+            if w.actions.resetPortraitHud then w.actions.resetPortraitHud(w.player) end
+            if w.actions.setPortraitHud then w.actions.setPortraitHud(w.player,false) end
             if w:canEditCurrent() then
                 if GFL2CharacterRuntime.hasChestPhysics and GFL2CharacterRuntime.hasChestPhysics(w.player) and w.actions.chestStrength then
                     w.actions.chestStrength(w.player,100,true)

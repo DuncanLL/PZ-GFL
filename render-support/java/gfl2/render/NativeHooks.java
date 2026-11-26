@@ -38,7 +38,7 @@ public final class NativeHooks {
                             mv.visitVarInsn(Opcodes.ALOAD,0);call("gfl2/motion/PmxOriginalInputs","key","(L"+PMX+";)Ljava/lang/String;");mv.visitVarInsn(Opcodes.ASTORE,4);
                             mv.visitVarInsn(Opcodes.ALOAD,4);mv.visitJumpInsn(Opcodes.IFNULL,old);mv.visitVarInsn(Opcodes.ALOAD,4);mv.visitLdcInsn("native:");
                             mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,"java/lang/String","startsWith","(Ljava/lang/String;)Z",false);mv.visitJumpInsn(Opcodes.IFEQ,old);
-                            mv.visitInsn(Opcodes.ACONST_NULL);mv.visitVarInsn(Opcodes.ASTORE,3);mv.visitJumpInsn(Opcodes.GOTO,nativeBody);
+                            mv.visitInsn(Opcodes.ACONST_NULL);mv.visitVarInsn(Opcodes.ASTORE,2);mv.visitJumpInsn(Opcodes.GOTO,nativeBody);
                         }else{
                             call("viewpoint/platform/IrisPacks","active","()Lviewpoint/platform/IrisPacks$Active;");mv.visitJumpInsn(Opcodes.IFNONNULL,old);
                             variant();mv.visitJumpInsn(Opcodes.IFNULL,old);variant();call("gfl2/motion/PmxOriginalInputs","key","(L"+PMX+";)Ljava/lang/String;");mv.visitVarInsn(Opcodes.ASTORE,1);

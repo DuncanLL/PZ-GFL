@@ -2,6 +2,7 @@ local key = "GFL2CharacterRuntime"
 local window = require "GFL2RoomWindow"
 local economy = require "GFL2RoomEconomy"
 local multiplayer = require "GFL2MultiplayerClient"
+local portraitHud = require "GFL2PortraitHud"
 local started = false
 local awaiting = {}
 local expressionEdits = {}
@@ -11,6 +12,18 @@ local clientPrefs = {
     voiceVolume = 50,
     showSubtitles = true,
     studioPreview = true,
+    studioScale = 200,
+    idleAmbient = true,
+    facialMode = 2,
+    portraitHud = false,
+    portraitSize = 200,
+    portraitZoom = 265,
+    portraitYaw = 6,
+    portraitPan = 0,
+    portraitLock = false,
+    portraitFps = 24,
+    portraitX = -1,
+    portraitY = -1,
     showRemoteModels = true,
     remoteBodyPhysics = false,
     remoteChestStrength = 0,
@@ -18,20 +31,66 @@ local clientPrefs = {
     remoteSubtitles = true,
 }
 
+local function clampInt(v, lo, hi, fallback)
+    local n = tonumber(v)
+    if not n then return fallback end
+    return math.max(lo, math.min(hi, math.floor(n + (n >= 0 and 0.5 or -0.5))))
+end
+
+local function normalizePortraitFps(v)
+    local n = clampInt(v, 0, 61, 24)
+    if n <= 0 or n >= 61 then return 0 end
+    return clampInt(n, 10, 60, 24)
+end
+
+local function normalizeStudioScale(v)
+    local n = clampInt(v, 100, 200, 200)
+    if n <= 125 then return 100 end
+    if n <= 175 then return 150 end
+    return 200
+end
+
 local function saveClientPrefs()
     if not (GFL2CharacterRuntime and GFL2CharacterRuntime.writeClientSettings) then return end
     local body = string.format(
-        '{"voiceVolume":%d,"showSubtitles":%s,"studioPreview":%s,"showRemoteModels":%s,"remoteBodyPhysics":%s,"remoteChestStrength":%d,"remoteVoice":%s,"remoteSubtitles":%s}',
-        math.max(0, math.min(100, math.floor((tonumber(clientPrefs.voiceVolume) or 50) + 0.5))),
+        '{"voiceVolume":%d,"showSubtitles":%s,"studioPreview":%s,"studioScale":%d,"idleAmbient":%s,"facialMode":%d,"portraitHud":%s,"portraitSize":%d,"portraitZoom":%d,"portraitYaw":%d,"portraitPan":%d,"portraitLock":%s,"portraitFps":%d,"portraitX":%d,"portraitY":%d,"showRemoteModels":%s,"remoteBodyPhysics":%s,"remoteChestStrength":%d,"remoteVoice":%s,"remoteSubtitles":%s}',
+        clampInt(clientPrefs.voiceVolume, 0, 100, 50),
         clientPrefs.showSubtitles ~= false and "true" or "false",
         clientPrefs.studioPreview ~= false and "true" or "false",
+        normalizeStudioScale(clientPrefs.studioScale),
+        clientPrefs.idleAmbient ~= false and "true" or "false",
+        clampInt(clientPrefs.facialMode, 0, 2, 2),
+        clientPrefs.portraitHud == true and "true" or "false",
+        clampInt(clientPrefs.portraitSize, 140, 340, 200),
+        clampInt(clientPrefs.portraitZoom, 100, 340, 265),
+        clampInt(clientPrefs.portraitYaw, -45, 45, 6),
+        clampInt(clientPrefs.portraitPan, -25, 25, 0),
+        clientPrefs.portraitLock == true and "true" or "false",
+        normalizePortraitFps(clientPrefs.portraitFps),
+        clampInt(clientPrefs.portraitX, -1, 16384, -1),
+        clampInt(clientPrefs.portraitY, -1, 16384, -1),
         clientPrefs.showRemoteModels ~= false and "true" or "false",
         clientPrefs.remoteBodyPhysics == true and "true" or "false",
-        math.max(0, math.min(100, math.floor((tonumber(clientPrefs.remoteChestStrength) or 0) + 0.5))),
+        clampInt(clientPrefs.remoteChestStrength, 0, 100, 0),
         clientPrefs.remoteVoice ~= false and "true" or "false",
         clientPrefs.remoteSubtitles ~= false and "true" or "false"
     )
     GFL2CharacterRuntime.writeClientSettings(body)
+end
+
+local function syncPortrait(player)
+    if not portraitHud or not portraitHud.sync then return end
+    portraitHud.sync(player, clientPrefs, function(state)
+        clientPrefs.portraitHud = state.enabled == true
+        clientPrefs.portraitSize = clampInt(state.size, 140, 340, 200)
+        clientPrefs.portraitZoom = clampInt(state.zoom, 100, 340, 265)
+        clientPrefs.portraitYaw = clampInt(state.yaw, -45, 45, 6)
+        clientPrefs.portraitPan = clampInt(state.pan, -25, 25, 0)
+        clientPrefs.portraitLock = state.lock == true
+        clientPrefs.portraitX = clampInt(state.x, -1, 16384, -1)
+        clientPrefs.portraitY = clampInt(state.y, -1, 16384, -1)
+        saveClientPrefs()
+    end)
 end
 
 local function applyClientPrefs(player)
@@ -46,9 +105,13 @@ local function applyClientPrefs(player)
     end
     if GFL2CharacterRuntime then
         if GFL2CharacterRuntime.setStudioPreviewEnabled then GFL2CharacterRuntime.setStudioPreviewEnabled(clientPrefs.studioPreview ~= false) end
+        if GFL2CharacterRuntime.setStudioResolutionPercent then GFL2CharacterRuntime.setStudioResolutionPercent(normalizeStudioScale(clientPrefs.studioScale)) end
+        if GFL2CharacterRuntime.setIdleAmbientEnabled then GFL2CharacterRuntime.setIdleAmbientEnabled(clientPrefs.idleAmbient ~= false) end
+        if GFL2CharacterRuntime.setFacialMotionMode then GFL2CharacterRuntime.setFacialMotionMode(clampInt(clientPrefs.facialMode, 0, 2, 2)) end
         if GFL2CharacterRuntime.setRemoteBodyPhysics then GFL2CharacterRuntime.setRemoteBodyPhysics(clientPrefs.remoteBodyPhysics == true) end
         if GFL2CharacterRuntime.setRemoteChestStrength then GFL2CharacterRuntime.setRemoteChestStrength(clientPrefs.remoteChestStrength or 0) end
     end
+    syncPortrait(player)
 end
 
 local function loadClientPrefs(player)
@@ -56,11 +119,29 @@ local function loadClientPrefs(player)
         clientPrefsLoaded = true
         local raw = GFL2CharacterRuntime.readClientSettings()
         if type(raw) == "string" and raw ~= "" then
-            local vv = tonumber(raw:match('"voiceVolume"%s*:%s*(%d+)'))
-            if vv then clientPrefs.voiceVolume = math.max(0, math.min(100, math.floor(vv))) end
-            local rc = tonumber(raw:match('"remoteChestStrength"%s*:%s*(%d+)'))
-            if rc then clientPrefs.remoteChestStrength = math.max(0, math.min(100, math.floor(rc))) end
-            for _, field in ipairs({"showSubtitles", "studioPreview", "showRemoteModels", "remoteBodyPhysics", "remoteVoice", "remoteSubtitles"}) do
+            local vv = tonumber(raw:match('"voiceVolume"%s*:%s*(%-?%d+)'))
+            if vv then clientPrefs.voiceVolume = clampInt(vv, 0, 100, 50) end
+            local ss = tonumber(raw:match('"studioScale"%s*:%s*(%-?%d+)'))
+            if ss then clientPrefs.studioScale = normalizeStudioScale(ss) end
+            local fm = tonumber(raw:match('"facialMode"%s*:%s*(%-?%d+)'))
+            if fm then clientPrefs.facialMode = clampInt(fm, 0, 2, 2) end
+            local ps = tonumber(raw:match('"portraitSize"%s*:%s*(%-?%d+)'))
+            if ps then clientPrefs.portraitSize = clampInt(ps, 140, 340, 200) end
+            local pz = tonumber(raw:match('"portraitZoom"%s*:%s*(%-?%d+)'))
+            if pz then clientPrefs.portraitZoom = clampInt(pz, 100, 340, 265) end
+            local pyw = tonumber(raw:match('"portraitYaw"%s*:%s*(%-?%d+)'))
+            if pyw then clientPrefs.portraitYaw = clampInt(pyw, -45, 45, 6) end
+            local pp = tonumber(raw:match('"portraitPan"%s*:%s*(%-?%d+)'))
+            if pp then clientPrefs.portraitPan = clampInt(pp, -25, 25, 0) end
+            local pf = tonumber(raw:match('"portraitFps"%s*:%s*(%-?%d+)'))
+            if pf then clientPrefs.portraitFps = normalizePortraitFps(pf) end
+            local px = tonumber(raw:match('"portraitX"%s*:%s*(%-?%d+)'))
+            if px then clientPrefs.portraitX = clampInt(px, -1, 16384, -1) end
+            local py = tonumber(raw:match('"portraitY"%s*:%s*(%-?%d+)'))
+            if py then clientPrefs.portraitY = clampInt(py, -1, 16384, -1) end
+            local rc = tonumber(raw:match('"remoteChestStrength"%s*:%s*(%-?%d+)'))
+            if rc then clientPrefs.remoteChestStrength = clampInt(rc, 0, 100, 0) end
+            for _, field in ipairs({"showSubtitles", "studioPreview", "idleAmbient", "portraitHud", "portraitLock", "showRemoteModels", "remoteBodyPhysics", "remoteVoice", "remoteSubtitles"}) do
                 local v = raw:match('"' .. field .. '"%s*:%s*(%a+)')
                 if v == "true" then clientPrefs[field] = true
                 elseif v == "false" then clientPrefs[field] = false end
@@ -141,7 +222,7 @@ Events.OnTick.Add(function()
             awaiting[player]=nil
             problem(player,GFL2CharacterRuntime.status());voiceChanged(player)
         elseif GFL2CharacterRuntime.isReady(player) then
-            awaiting[player]=nil;remember(player)
+            awaiting[player]=nil;remember(player);syncPortrait(player)
         end
     end
 end)
@@ -243,6 +324,144 @@ local function setStudioPreview(enabled)
     return nextOn
 end
 
+local function getStudioScale()
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.studioResolutionPercent then return normalizeStudioScale(GFL2CharacterRuntime.studioResolutionPercent()) end
+    return normalizeStudioScale(clientPrefs.studioScale)
+end
+
+local function setStudioScale(scale)
+    local clamped = normalizeStudioScale(scale)
+    clientPrefs.studioScale = clamped
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.setStudioResolutionPercent then GFL2CharacterRuntime.setStudioResolutionPercent(clamped) end
+    saveClientPrefs()
+    return clamped
+end
+
+local function getIdleAmbient()
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.idleAmbientEnabled then return GFL2CharacterRuntime.idleAmbientEnabled() end
+    return clientPrefs.idleAmbient ~= false
+end
+
+local function setIdleAmbient(enabled)
+    local nextOn = enabled ~= false
+    clientPrefs.idleAmbient = nextOn
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.setIdleAmbientEnabled then GFL2CharacterRuntime.setIdleAmbientEnabled(nextOn) end
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getFacialMode()
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.facialMotionMode then return GFL2CharacterRuntime.facialMotionMode() end
+    return clampInt(clientPrefs.facialMode, 0, 2, 2)
+end
+
+local function setFacialMode(mode)
+    local clamped = clampInt(mode, 0, 2, 2)
+    clientPrefs.facialMode = clamped
+    if GFL2CharacterRuntime and GFL2CharacterRuntime.setFacialMotionMode then GFL2CharacterRuntime.setFacialMotionMode(clamped) end
+    saveClientPrefs()
+    return clamped
+end
+
+local function getPortraitHud()
+    return clientPrefs.portraitHud == true
+end
+
+local function setPortraitHud(player, enabled)
+    local nextOn = enabled == true
+    clientPrefs.portraitHud = nextOn
+    syncPortrait(player)
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getPortraitSize() return clampInt(clientPrefs.portraitSize, 140, 360, 220) end
+local function setPortraitSize(player, size, immediate)
+    local clamped = clampInt(size, 140, 360, 220)
+    clientPrefs.portraitSize = clamped
+    syncPortrait(player)
+    if immediate then
+        voiceSaveEdits[player] = nil
+        saveClientPrefs()
+    else
+        voiceSaveEdits[player] = getTimestampMs() + 250
+    end
+    return clamped
+end
+
+local function getPortraitZoom() return clampInt(clientPrefs.portraitZoom, 100, 320, 210) end
+local function setPortraitZoom(player, zoom, immediate)
+    local clamped = clampInt(zoom, 100, 320, 210)
+    clientPrefs.portraitZoom = clamped
+    syncPortrait(player)
+    if immediate then
+        voiceSaveEdits[player] = nil
+        saveClientPrefs()
+    else
+        voiceSaveEdits[player] = getTimestampMs() + 250
+    end
+    return clamped
+end
+
+local function getPortraitYaw() return clampInt(clientPrefs.portraitYaw, -45, 45, 8) end
+local function setPortraitYaw(player, yaw, immediate)
+    local clamped = clampInt(yaw, -45, 45, 8)
+    clientPrefs.portraitYaw = clamped
+    syncPortrait(player)
+    if immediate then
+        voiceSaveEdits[player] = nil
+        saveClientPrefs()
+    else
+        voiceSaveEdits[player] = getTimestampMs() + 250
+    end
+    return clamped
+end
+
+local function getPortraitFrame() return clientPrefs.portraitFrame == true end
+local function setPortraitFrame(player, enabled)
+    local nextOn = enabled == true
+    clientPrefs.portraitFrame = nextOn
+    syncPortrait(player)
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getPortraitLock() return clientPrefs.portraitLock == true end
+local function setPortraitLock(player, enabled)
+    local nextOn = enabled == true
+    clientPrefs.portraitLock = nextOn
+    syncPortrait(player)
+    saveClientPrefs()
+    return nextOn
+end
+
+local function getPortraitFps() return normalizePortraitFps(clientPrefs.portraitFps) end
+local function setPortraitFps(player, fps, immediate)
+    local clamped = normalizePortraitFps(fps)
+    clientPrefs.portraitFps = clamped
+    syncPortrait(player)
+    if immediate ~= false then
+        voiceSaveEdits[player] = nil
+        saveClientPrefs()
+    else
+        voiceSaveEdits[player] = getTimestampMs() + 250
+    end
+    return clamped
+end
+
+local function resetPortraitHud(player)
+    clientPrefs.portraitSize = 200
+    clientPrefs.portraitZoom = 265
+    clientPrefs.portraitYaw = 6
+    clientPrefs.portraitPan = 0
+    clientPrefs.portraitLock = false
+    clientPrefs.portraitFps = 24
+    clientPrefs.portraitX = -1
+    clientPrefs.portraitY = -1
+    syncPortrait(player)
+    saveClientPrefs()
+end
+
 local function getShowRemoteModels()
     if multiplayer and multiplayer.getShowRemoteModels then return multiplayer.getShowRemoteModels() end
     return clientPrefs.showRemoteModels ~= false
@@ -318,6 +537,7 @@ local function clearAppearance(player)
     voiceSaveEdits[player]=nil
     awaiting[player]=nil
     GFL2CharacterRuntime.disable(player)
+    if portraitHud and portraitHud.hide then portraitHud.hide() end
     local saved=player:getModData()[key]
     player:getModData()[key] = saved and {profiles=saved.profiles,voiceVolume=saved.voiceVolume} or nil
     economy.saveLocal(player)
@@ -360,6 +580,17 @@ local function open(player,target)
         chestStrength=setChestStrength,getVoiceVolume=getVoiceVolume,setVoiceVolume=setVoiceVolume,
         getShowSubtitles=getShowSubtitles,setShowSubtitles=setShowSubtitles,
         getStudioPreview=getStudioPreview,setStudioPreview=setStudioPreview,
+        getStudioScale=getStudioScale,setStudioScale=setStudioScale,
+        getIdleAmbient=getIdleAmbient,setIdleAmbient=setIdleAmbient,
+        getFacialMode=getFacialMode,setFacialMode=setFacialMode,
+        getPortraitHud=getPortraitHud,setPortraitHud=setPortraitHud,
+        getPortraitSize=getPortraitSize,setPortraitSize=setPortraitSize,
+        getPortraitZoom=getPortraitZoom,setPortraitZoom=setPortraitZoom,
+        getPortraitYaw=getPortraitYaw,setPortraitYaw=setPortraitYaw,
+        getPortraitFrame=getPortraitFrame,setPortraitFrame=setPortraitFrame,
+        getPortraitLock=getPortraitLock,setPortraitLock=setPortraitLock,
+        getPortraitFps=getPortraitFps,setPortraitFps=setPortraitFps,
+        resetPortraitHud=resetPortraitHud,
         getShowRemoteModels=getShowRemoteModels,setShowRemoteModels=setShowRemoteModels,
         getRemoteBodyPhysics=getRemoteBodyPhysics,setRemoteBodyPhysics=setRemoteBodyPhysics,
         getRemoteChestStrength=getRemoteChestStrength,setRemoteChestStrength=setRemoteChestStrength,
@@ -440,6 +671,11 @@ GFL2CharacterActions = {
     open = open,
     resetPhysics = resetPhysics,
     setBodyPhysics = setBodyPhysics,
+    isPortraitHudEnabled = getPortraitHud,
+    togglePortraitHud = function(player)
+        loadClientPrefs(player)
+        return setPortraitHud(player, not getPortraitHud())
+    end,
     showJavaHelp = showJavaHelp,
 }
 
@@ -495,6 +731,7 @@ Events.OnPlayerDeath.Add(function(player)
     economy.saveLocal(player)
     awaiting[player]=nil
     window.closeFor(player)
+    if portraitHud and portraitHud.hide then portraitHud.hide() end
     if GFL2CharacterRuntime then
         GFL2CharacterRuntime.disable(player)
     end
@@ -508,6 +745,7 @@ if Events.OnMainMenuEnter then
         voiceSaveEdits={}
         window.closeAll()
         closeJavaHelp()
+        if portraitHud and portraitHud.hide then portraitHud.hide() end
         if GFL2CharacterRuntime then GFL2CharacterRuntime.clear() end
     end)
 end
@@ -517,6 +755,7 @@ Events.OnDisconnect.Add(function()
     voiceSaveEdits={}
     window.closeAll()
     closeJavaHelp()
+    if portraitHud and portraitHud.hide then portraitHud.hide() end
     started = false
     javaHelpAutoShown = false
     if GFL2CharacterRuntime then GFL2CharacterRuntime.clear() end

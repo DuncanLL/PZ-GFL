@@ -121,6 +121,108 @@ else
     function M.register() end
 end
 
+local usesXanny = activeMods
+    and activeMods:contains("XannyArmsGunPack")
+    and not activeMods:contains("EscapeFromZomboidFirearms")
+    and not activeMods:contains("ModernFirearmsSystem")
+    and not activeMods:contains("GunsOfMarz")
+    and not activeMods:contains("MarzGuns")
+
+if usesXanny then
+    local xannyAmmoMap = {
+        ["Base.556Box"] = { box = "XannyArms.XA_556x45Box" },
+        ["Base.308Box"] = { box = "XannyArms.XA_762x51Box", donors = { "XannyArms.XA_Remington700", "XannyArms.XA_HK417_Mag" } },
+        ["Base.Bullets9mmBox"] = { box = "XannyArms.XA_9x19Box" },
+        ["Base.Bullets45Box"] = { box = "XannyArms.XA_45Box" },
+        ["Base.Bullets44Box"] = { box = "XannyArms.XA_50AEBox", donors = { "XannyArms.XA_DesertEagle", "XannyArms.XA_DesertEagle_Mag" } },
+        ["Base.ShotgunShellsBox"] = { box = "XannyArms.XA_12GaugeBox" },
+    }
+
+    local function resolveXannyAmmoType(scripts, donors)
+        if not donors then return nil end
+        for i = 1, #donors do
+            local donor = scripts:FindItem(donors[i])
+            local ammoType = donor and donor:getAmmoType()
+            if ammoType then return ammoType end
+        end
+        return nil
+    end
+
+    local function configureXannyArms()
+        local scripts = getScriptManager and getScriptManager()
+        if not scripts then return end
+        for weaponId, entry in pairs(catalog.byId) do
+            local spec = entry.ammoBox and xannyAmmoMap[entry.ammoBox]
+            local weapon = spec and scripts:FindItem(weaponId)
+            if weapon then
+                local ammoType = resolveXannyAmmoType(scripts, spec.donors)
+                if ammoType then
+                    weapon:setAmmoType(ammoType)
+                end
+                if scripts:FindItem(spec.box) then
+                    weapon:DoParam("AmmoBox", spec.box)
+                end
+                if entry.startsWithMagazine and ammoType then
+                    local magazine = scripts:FindItem(weaponId .. "Magazine")
+                    if magazine then
+                        magazine:setAmmoType(ammoType)
+                    end
+                end
+            end
+        end
+    end
+
+    local function syncXannyItem(item)
+        if not item or not item.getFullType then return end
+        local fullType = item:getFullType()
+        local ownerId = M.ownerOf(fullType)
+        local entry = catalog.byId[ownerId or fullType]
+        if not entry or not entry.ammoBox then return end
+        local spec = xannyAmmoMap[entry.ammoBox]
+        if not spec then return end
+        local scripts = getScriptManager and getScriptManager()
+        if not scripts then return end
+        local ammoType = resolveXannyAmmoType(scripts, spec.donors)
+        if ammoType and item.getAmmoType and item.setAmmoType and item:getAmmoType() ~= ammoType then
+            item:setAmmoType(ammoType)
+        end
+        if not ownerId and item.setAmmoBox and scripts:FindItem(spec.box) then
+            if not item.getAmmoBox or item:getAmmoBox() ~= spec.box then
+                item:setAmmoBox(spec.box)
+            end
+        end
+    end
+
+    local function syncXannyContainer(container, depth)
+        if not container or not container.getItems then return end
+        depth = depth or 0
+        local items = container:getItems()
+        if not items then return end
+        for i = 0, items:size() - 1 do
+            local item = items:get(i)
+            syncXannyItem(item)
+            if depth < 2 and item and item.IsInventoryContainer and item:IsInventoryContainer() and item.getInventory then
+                syncXannyContainer(item:getInventory(), depth + 1)
+            end
+        end
+    end
+
+    Events.OnGameBoot.Add(configureXannyArms)
+    Events.OnInitGlobalModData.Add(configureXannyArms)
+    if Events.OnEquipPrimary then
+        Events.OnEquipPrimary.Add(function(_, item) syncXannyItem(item) end)
+    end
+    if Events.OnGameStart then
+        Events.OnGameStart.Add(function()
+            configureXannyArms()
+            local player = getSpecificPlayer and getSpecificPlayer(0)
+            if player and player.getInventory then
+                syncXannyContainer(player:getInventory(), 0)
+            end
+        end)
+    end
+end
+
 require "TimedActions/ISInsertMagazine"
 require "TimedActions/ISLoadBulletsInMagazine"
 require "TimedActions/ISUnloadBulletsFromMagazine"

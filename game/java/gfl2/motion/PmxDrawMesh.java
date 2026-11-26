@@ -108,10 +108,13 @@ public final class PmxDrawMesh implements AutoCloseable {
             float lx=Float.POSITIVE_INFINITY,ly=lx,lz=lx,hx=-lx,hy=hx,hz=hx;
             for(int i=0;i<positions.length;i+=3){
                 float x=positions[i],y=positions[i+1],z=positions[i+2];
-                if(!Float.isFinite(x)||!Float.isFinite(y)||!Float.isFinite(z))throw new IllegalArgumentException("Non-finite frozen PMX frame");
-                lx=Math.min(lx,x);ly=Math.min(ly,y);lz=Math.min(lz,z);hx=Math.max(hx,x);hy=Math.max(hy,y);hz=Math.max(hz,z);
+                float nx=normals[i],ny=normals[i+1],nz=normals[i+2];
+                if(!Float.isFinite(x)||!Float.isFinite(y)||!Float.isFinite(z)||!Float.isFinite(nx)||!Float.isFinite(ny)||!Float.isFinite(nz))
+                    throw new IllegalArgumentException("Non-finite frozen PMX frame");
+                if(x<lx)lx=x;if(x>hx)hx=x;
+                if(y<ly)ly=y;if(y>hy)hy=y;
+                if(z<lz)lz=z;if(z>hz)hz=z;
             }
-            for(float value:normals)if(!Float.isFinite(value))throw new IllegalArgumentException("Non-finite frozen PMX frame");
             for(float value:materials)if(!Float.isFinite(value))throw new IllegalArgumentException("Non-finite frozen PMX frame");
             minX=lx;minY=ly;minZ=lz;maxX=hx;maxY=hy;maxZ=hz;
         }

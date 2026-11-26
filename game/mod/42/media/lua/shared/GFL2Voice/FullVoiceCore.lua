@@ -121,9 +121,10 @@ function GFL2PmxFullVoiceCore.create()
         ["CantSprint_L1_A"]={"CantSprint_L1_A","CantSprint_L1_B","CantSprint_L1_C"},
         ["Shout_A"]={"Shout_A","Shout_B","Shout_C"},
         ["SneakShout_A"]={"SneakShout_A","SneakShout_B","SneakShout_C"},
-        ["Kill_A"]={"Kill_A","Kill_B","Kill_C","Kill_D","Kill_E","Kill_F","Kill_G","Kill_H","Kill_I","Kill_J"}
+        ["Kill_A"]={"Kill_A","Kill_B","Kill_C","Kill_D","Kill_E","Kill_F","Kill_G","Kill_H","Kill_I","Kill_J"},
+        ["Idle_A"]={"Idle_A","Idle_B","Idle_C","Idle_D","Idle_E","Idle_F","Idle_G","Idle_H","Idle_I","Idle_J"}
     }
-    C.defaults={pollMs=2000,tickMs=250,ordinaryMinMs=45000,ordinaryMaxMs=75000,urgentGapMs=40000,urgentEscalationGapMs=15000,manualGapMs=0,startupQuietMs=6000,stateChance=1}
+    C.defaults={pollMs=2000,tickMs=250,ordinaryMinMs=45000,ordinaryMaxMs=75000,idleMinMs=90000,idleMaxMs=180000,urgentGapMs=40000,urgentEscalationGapMs=15000,manualGapMs=0,startupQuietMs=6000,stateChance=1}
     return GFL2VoiceCore.create(C)
 end
 

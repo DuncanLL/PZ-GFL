@@ -35,6 +35,7 @@ public final class Gfl2NativeRegistry {
         return models!=null&&models==WorldRenderer.models&&owns(draws,index);
     }
     public static boolean owns(ModelDraws draws,int index){
+        if(Gfl2ShootToThrillCompatibility.isScopePipPass())return false;
         Gfl2PackData data=frameData;
         if(data==null||draws==null||index<0||index>=draws.count)return false;
         ModelPass main=WorldRenderer.models;

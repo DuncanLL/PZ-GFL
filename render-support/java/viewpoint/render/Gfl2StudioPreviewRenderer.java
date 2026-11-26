@@ -35,7 +35,7 @@ import viewpoint.platform.Gfl2NativePackSelection;
  */
 final class Gfl2StudioPreviewRenderer implements AutoCloseable {
     private static final int MAX_CACHED_MODELS = 2;
-    private static final int MAX_FBO_DIM = 1280;
+    private static final int MAX_FBO_DIM = 1600;
     private static final int BLIT_HDR_UNIT = 119;
     private static final int BLIT_LUT_UNIT = 120;
     private static final long IDLE_RECLAIM_NANOS = 3_000_000_000L;
@@ -63,6 +63,7 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             uniform sampler2D uStudioHdr;
             uniform sampler2D uStudioLut;
             uniform float uStudioExposure;
+            uniform vec2 uStudioSubOffset;
             out vec4 fragColor;
             vec3 evalLut(vec3 rgb) {
                 vec3 p = clamp(log2(max(rgb, vec3(0.0)) * 5.555556 + 0.047996) * 0.0735 + 0.386036, 0.0, 1.0) * 31.0;
@@ -79,12 +80,71 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
                 return mix(hi, lo, lessThanEqual(c, vec3(0.0031308)));
             }
             void main() {
-                vec4 hdr = texture(uStudioHdr, vUv);
+                vec4 hdr;
+                if (uStudioSubOffset.x > 0.0 || uStudioSubOffset.y > 0.0) {
+                    hdr = 0.25 * (
+                        texture(uStudioHdr, vUv + vec2(-uStudioSubOffset.x, -uStudioSubOffset.y)) +
+                        texture(uStudioHdr, vUv + vec2( uStudioSubOffset.x, -uStudioSubOffset.y)) +
+                        texture(uStudioHdr, vUv + vec2(-uStudioSubOffset.x,  uStudioSubOffset.y)) +
+                        texture(uStudioHdr, vUv + vec2( uStudioSubOffset.x,  uStudioSubOffset.y))
+                    );
+                } else {
+                    hdr = texture(uStudioHdr, vUv);
+                }
                 float coverage = clamp(1.0 - hdr.a, 0.0, 1.0);
                 if (coverage <= 0.002) discard;
                 vec3 linearRgb = max(hdr.rgb / coverage, vec3(0.0)) * uStudioExposure;
                 vec3 mapped = evalLut(linearRgb);
                 fragColor = vec4(linearToSrgb(mapped), coverage);
+            }
+            """;
+
+    private static final String WEAPON_VS = """
+            #version 430
+            layout(location = 0) in vec3 aPos;
+            layout(location = 1) in vec3 aNormal;
+            layout(location = 2) in vec2 aUv;
+            uniform mat4 uWeaponModel;
+            uniform mat4 uWeaponVp;
+            uniform mat3 uWeaponNormal;
+            out vec3 vWorldPos;
+            out vec3 vNormal;
+            out vec2 vUv;
+            void main() {
+                vec4 wp = uWeaponModel * vec4(aPos, 1.0);
+                vWorldPos = wp.xyz;
+                vNormal = normalize(uWeaponNormal * aNormal);
+                vUv = aUv;
+                gl_Position = uWeaponVp * wp;
+            }
+            """;
+
+    private static final String WEAPON_FS = """
+            #version 430
+            in vec3 vWorldPos;
+            in vec3 vNormal;
+            in vec2 vUv;
+            uniform sampler2D uWeaponTex;
+            uniform vec3 uLightDir;
+            uniform vec3 uEyePos;
+            out vec4 fragColor;
+            void main() {
+                vec4 tex = texture(uWeaponTex, vUv);
+                if (tex.a < 0.05) discard;
+                vec3 albedo = pow(max(tex.rgb, vec3(0.0)), vec3(2.2));
+                vec3 N = normalize(vNormal);
+                if (!gl_FrontFacing) N = -N;
+                vec3 L = normalize(uLightDir);
+                vec3 V = normalize(uEyePos - vWorldPos);
+                float ndl = max(dot(N, L), 0.0);
+                float hemi = N.y * 0.5 + 0.5;
+                vec3 amb = mix(vec3(0.24, 0.26, 0.30), vec3(0.42, 0.44, 0.48), hemi);
+                vec3 diff = vec3(0.82, 0.80, 0.78) * (0.20 + 0.80 * ndl);
+                vec3 H = normalize(L + V);
+                float spec = pow(max(dot(N, H), 0.0), 28.0) * 0.16;
+                float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.08;
+                vec3 linearLit = albedo * (amb + diff) + vec3(spec + rim);
+                fragColor = vec4(linearLit, 0.0);
             }
             """;
 
@@ -262,6 +322,8 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
 
     private GlProgram blitProgram;
     private int blitVao;
+    private GlProgram weaponProgram;
+    private int weaponVao;
     private int lutTexture;
     private int studioCube;
     private int studioShadow;
@@ -346,6 +408,17 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         blitProgram.sampler("uStudioHdr", BLIT_HDR_UNIT);
         blitProgram.sampler("uStudioLut", BLIT_LUT_UNIT);
         blitVao = GL30.glGenVertexArrays();
+
+        weaponProgram = GlProgram.fromSources("GF2 studio held weapon",
+                new GlProgram.Sources(WEAPON_VS, null, null, null, WEAPON_FS), Map.of(), Map.of(), List.of());
+        if (weaponProgram.id() == 0) {
+            String err = GlProgram.lastError();
+            weaponProgram.delete();
+            weaponProgram = null;
+            throw new IllegalStateException("GF2 studio held weapon link failed: " + err);
+        }
+        weaponProgram.sampler("uWeaponTex", 0);
+        weaponVao = GL30.glGenVertexArrays();
 
         // Load checksum-verified original GF2 1024x32 RGBA16F display LUT (256 KB).
         byte[] rawLut;
@@ -443,12 +516,16 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
     }
 
     private void ensureFbo(int w, int h) {
-        int tw = Math.min(w, MAX_FBO_DIM);
-        int th = Math.min(h, MAX_FBO_DIM);
-        if (w > MAX_FBO_DIM || h > MAX_FBO_DIM) {
-            float scale = Math.min((float) MAX_FBO_DIM / w, (float) MAX_FBO_DIM / h);
-            tw = Math.max(16, Math.round(w * scale));
-            th = Math.max(16, Math.round(h * scale));
+        // Render UI previews at the user-configured resolution scale (1.0x / 1.5x / 2.0x, clamped to MAX_FBO_DIM).
+        float resScale = Math.clamp(ReadyRoomPreview.studioResolutionScale(), 1.0f, 2.0f);
+        int sw = Math.max(16, Math.round(w * resScale));
+        int sh = Math.max(16, Math.round(h * resScale));
+        int tw = Math.min(sw, MAX_FBO_DIM);
+        int th = Math.min(sh, MAX_FBO_DIM);
+        if (sw > MAX_FBO_DIM || sh > MAX_FBO_DIM) {
+            float scale = Math.min((float) MAX_FBO_DIM / sw, (float) MAX_FBO_DIM / sh);
+            tw = Math.max(16, Math.round(sw * scale));
+            th = Math.max(16, Math.round(sh * scale));
         }
         if (fbo != 0 && fboWidth == tw && fboHeight == th) return;
         deleteFbo();
@@ -458,6 +535,8 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         GL45.glTextureStorage2D(colourTex, 1, GL30.GL_RGBA16F, tw, th);
         GL45.glTextureParameteri(colourTex, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL45.glTextureParameteri(colourTex, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL45.glTextureParameteri(colourTex, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+        GL45.glTextureParameteri(colourTex, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
 
         normalTex = GL45.glCreateTextures(GL11.GL_TEXTURE_2D);
         GL45.glTextureStorage2D(normalTex, 1, GL11.GL_RGBA8, tw, th);
@@ -741,6 +820,24 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             float dist, float yaw, float pitch, float fovRad, float nearPlane, float farPlane,
             int x, int y, int width, int height, int screenHeight
     ) {
+        return render(pmxSha256, positions, normals, uv, pmxMaterials, shadingHead, unitScale,
+                cameraX, cameraY, cameraZ, dist, yaw, pitch, fovRad, nearPlane, farPlane,
+                x, y, width, height, screenHeight, List.of());
+    }
+
+    boolean render(
+            String pmxSha256,
+            float[] positions,
+            float[] normals,
+            float[] uv,
+            float[] pmxMaterials,
+            float[] shadingHead,
+            float unitScale,
+            float cameraX, float cameraY, float cameraZ,
+            float dist, float yaw, float pitch, float fovRad, float nearPlane, float farPlane,
+            int x, int y, int width, int height, int screenHeight,
+            List<ReadyRoomPreview.StudioItem> items
+    ) {
         if (closed || width < 16 || height < 16 || unitScale <= 1e-4f) return false;
         JSONObject modelJson = data.modelBySha(pmxSha256);
         if (modelJson == null) return false;
@@ -788,10 +885,10 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             GL45.glNamedBufferData(ssboDraws, drawRec, GL15.GL_DYNAMIC_DRAW);
 
             // Orbit studio camera around character target matching ReadyRoomPreview framing 1:1.
-            // In Gfl2Rc2Vertex space Z is negated from PMX, so front is +Z.
+            // PMX retargeted vertices already face +Z in studio placement space (placement = diag(s, s, s, 1)).
             float targetX = cameraX * s;
             float targetY = cameraY * s;
-            float targetZ = -cameraZ * s;
+            float targetZ = cameraZ * s;
             float distM = dist * s;
             Vector3f offset = new Vector3f(0f, 0f, distM);
             // Match ReadyRoomPreview turn = rotateX(pitch) * rotateY(yaw) on model => inverse on camera: rotateY(-yaw) * rotateX(-pitch)
@@ -850,7 +947,9 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             float gloss = displaySettings == null ? 0f : displaySettings.skinGloss();
             float baseOutline = displaySettings == null ? 1f : Math.max(0f, displaySettings.outlineWidth());
             boolean skipOutline = baseOutline <= 1e-4f;
-            float effOutline = baseOutline * Gfl2NativeSourceRenderer.outlineDistanceScale(inputs);
+            // Scale outline proportionally with actual UI preview pixel height so zoomed-out Ready Room & HUD boxes stay delicate.
+            float uiOutlineScale = Math.clamp((float) height / 1080f, 0.32f, 0.80f);
+            float effOutline = baseOutline * Gfl2NativeSourceRenderer.outlineDistanceScale(inputs) * uiOutlineScale;
 
             // Render all GF2 stages into our private RGBA16F + D24S8 studio FBO.
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
@@ -975,6 +1074,10 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
                 }
             }
 
+            if (items != null && !items.isEmpty()) {
+                drawStudioItems(items, s, projM, viewM, lightWorld, eyeX, eyeY, eyeZ);
+            }
+
             // Composite studio HDR through the official GF2 display LUT onto the UI framebuffer with exact alpha!
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, hostDrawFbo);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, hostReadFbo);
@@ -995,6 +1098,9 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
 
             blitProgram.use();
             blitProgram.set("uStudioExposure", 1.0f);
+            float subX = fboWidth > width ? 0.5f / (float) fboWidth : 0f;
+            float subY = fboHeight > height ? 0.5f / (float) fboHeight : 0f;
+            blitProgram.set("uStudioSubOffset", subX, subY);
             GL13.glActiveTexture(GL13.GL_TEXTURE0 + BLIT_HDR_UNIT);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, colourTex);
             GL33.glBindSampler(BLIT_HDR_UNIT, 0);
@@ -1014,6 +1120,66 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
             GL11.glScissor(hostScissor[0], hostScissor[1], hostScissor[2], hostScissor[3]);
             if (hostScissorOn) GL11.glEnable(GL11.GL_SCISSOR_TEST);
             else GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        }
+    }
+
+    private void drawStudioItems(
+            List<ReadyRoomPreview.StudioItem> items,
+            float s,
+            Matrix4f projM,
+            Matrix4f viewM,
+            Vector3f lightWorld,
+            float eyeX, float eyeY, float eyeZ
+    ) {
+        if (weaponProgram == null || weaponVao == 0) return;
+        Matrix4f vp = new Matrix4f(projM).mul(viewM);
+        Matrix4f pmxToStudio = new Matrix4f().scaling(s, s, s);
+        Matrix4f itemModel = new Matrix4f();
+        Matrix4f studioModel = new Matrix4f();
+        Matrix3f normalM = new Matrix3f();
+        float[] vpBuf = vp.get(new float[16]);
+        float[] modelBuf = new float[16];
+        float[] normBuf = new float[9];
+
+        GL20.glDrawBuffers(GL30.GL_COLOR_ATTACHMENT0);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glDepthFunc(GL11.GL_LEQUAL);
+        GL11.glDepthMask(true);
+        GL11.glDisable(GL11.GL_STENCIL_TEST);
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glDisable(GL13.GL_SAMPLE_ALPHA_TO_COVERAGE);
+        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+        GL11.glColorMask(true, true, true, true);
+
+        weaponProgram.use();
+        int locVp = GL20.glGetUniformLocation(weaponProgram.id(), "uWeaponVp");
+        int locModel = GL20.glGetUniformLocation(weaponProgram.id(), "uWeaponModel");
+        int locNormal = GL20.glGetUniformLocation(weaponProgram.id(), "uWeaponNormal");
+        GL20.glUniformMatrix4fv(locVp, false, vpBuf);
+        weaponProgram.set("uLightDir", lightWorld.x, lightWorld.y, lightWorld.z);
+        weaponProgram.set("uEyePos", eyeX, eyeY, eyeZ);
+
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL33.glBindSampler(0, 0);
+        GL30.glBindVertexArray(weaponVao);
+        for (ReadyRoomPreview.StudioItem item : items) {
+            if (item == null || item.vboId() <= 0 || item.eboId() <= 0 || item.indexCount() <= 0 || item.textureId() <= 0) continue;
+            itemModel.set(item.pmxMatrix());
+            pmxToStudio.mul(itemModel, studioModel);
+            studioModel.normal(normalM);
+            GL20.glUniformMatrix4fv(locModel, false, studioModel.get(modelBuf));
+            GL20.glUniformMatrix3fv(locNormal, false, normalM.get(normBuf));
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, item.vboId());
+            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, item.eboId());
+            GL20.glEnableVertexAttribArray(0);
+            GL20.glEnableVertexAttribArray(1);
+            GL20.glEnableVertexAttribArray(2);
+            GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, item.stride(), item.posOffset());
+            GL20.glVertexAttribPointer(1, 3, GL11.GL_FLOAT, false, item.stride(), item.normalOffset());
+            GL20.glVertexAttribPointer(2, 2, GL11.GL_FLOAT, false, item.stride(), item.uvOffset());
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, item.textureId());
+            GL11.glDrawElements(GL11.GL_TRIANGLES, item.indexCount(), GL11.GL_UNSIGNED_INT, 0L);
         }
     }
 
@@ -1067,6 +1233,8 @@ final class Gfl2StudioPreviewRenderer implements AutoCloseable {
         sourceSamplers.close();
         if (blitProgram != null) { blitProgram.delete(); blitProgram = null; }
         if (blitVao != 0) { GL30.glDeleteVertexArrays(blitVao); blitVao = 0; }
+        if (weaponProgram != null) { weaponProgram.delete(); weaponProgram = null; }
+        if (weaponVao != 0) { GL30.glDeleteVertexArrays(weaponVao); weaponVao = 0; }
         if (lutTexture != 0) { GL11.glDeleteTextures(lutTexture); lutTexture = 0; }
         if (studioCube != 0) { GL11.glDeleteTextures(studioCube); studioCube = 0; }
         if (studioShadow != 0) { GL11.glDeleteTextures(studioShadow); studioShadow = 0; }

@@ -6,7 +6,21 @@ import java.lang.reflect.Proxy;
 import zombie.characters.IsoGameCharacter;
 import zombie.characters.IsoPlayer;
 
-/** Optional ownership handoff for EFZ's first-person weapon placement and stock-model replay. */
+/**
+ * Third-party compatibility guard for:
+ *   Mod: Escape From Zomboid Firearms (EFZ)
+ *   Mod ID: EscapeFromZomboidFirearms (package: pz.escapefromzomboidfirearms.zb)
+ *   Conflict & Root Cause:
+ *     EFZ takes over first-person ADS weapon placement and replays stock models via
+ *     FpViewLatch.acceptAllFilter. GFL2 must yield held-weapon retargeting during EFZ ADS and
+ *     exclude GF2-owned draws from EFZ's stock replay filter.
+ *   Hook Points:
+ *     - gfl2.runtime.ModelSession (preserveAimWeapon -> keepsWeapon)
+ *     - viewpoint.render.Gfl2StockModelReplay (filter -> isReplay)
+ *   Removal:
+ *     Delete this class and remove calls in ModelSession / Gfl2StockModelReplay; update
+ *     docs/MOD_COMPATIBILITY.md.
+ */
 public final class EfzAimCompatibility {
     private record Bridge(Method view, Method held, Field replay) {}
     private static final Bridge BRIDGE = find();

@@ -22,6 +22,8 @@ local automaticRPM = {
     ["GFL2.SparklingCenterstage"] = 700,
     ["GFL2.ThresholdStorm"] = 650,
     ["GFL2.UnspokenCalling"] = 850,
+    ["GFL2.ThornCriterion"] = 300, -- AA-12 full-auto shotgun authentic cyclic rate.
+    ["GFL2.OmenKey"] = 600, -- Sangvis Ferri heavy 7.62x51 machine gun cadence.
 }
 
 for weaponType, rpm in pairs(automaticRPM) do

@@ -58,6 +58,19 @@ local function runTogglePhysics(player)
     end
 end
 
+local function isPortraitHudOn()
+    return GFL2CharacterActions
+        and GFL2CharacterActions.isPortraitHudEnabled ~= nil
+        and GFL2CharacterActions.isPortraitHudEnabled() == true
+end
+
+local function runTogglePortraitHud(player)
+    if not isCharacterActive(player) then return end
+    if GFL2CharacterActions and GFL2CharacterActions.togglePortraitHud then
+        GFL2CharacterActions.togglePortraitHud(player)
+    end
+end
+
 function GFL2RadialMenu.fillSubmenu(emoteMenu)
     if not emoteMenu or not emoteMenu.character then return end
     local player = emoteMenu.character
@@ -73,6 +86,10 @@ function GFL2RadialMenu.fillSubmenu(emoteMenu)
         local physKey = physOn and "UI_GFL2_Radial_PhysicsOn" or "UI_GFL2_Radial_PhysicsOff"
         local physFallback = physOn and "Cloth & Hair: On" or "Cloth & Hair: Off"
         menu:addSlice(label(physKey, physFallback), icon("radial-physics.png"), runTogglePhysics, player)
+        local hudOn = isPortraitHudOn()
+        local hudKey = hudOn and "UI_GFL2_Radial_PortraitOn" or "UI_GFL2_Radial_PortraitOff"
+        local hudFallback = hudOn and "Portrait HUD: On" or "Portrait HUD: Off"
+        menu:addSlice(label(hudKey, hudFallback), icon("radial-room.png"), runTogglePortraitHud, player)
         menu:addSlice(label("UI_GFL2_Radial_Motions", "VMD Motions"), icon("radial-motion.png"), runOpen, player, "motions")
         menu:addSlice(label("UI_GFL2_Radial_Grip", "Grip Calibration"), icon("radial-grip.png"), runOpen, player, "grip")
     end

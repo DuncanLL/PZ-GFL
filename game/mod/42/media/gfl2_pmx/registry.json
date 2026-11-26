@@ -153,6 +153,14 @@
     "GFL2Qiongjiu": [
       "pmx-d032a88a31e425fd",
       "pmx-3831188cd10f09a1"
+    ],
+    "GFL2Lind": [
+      "pmx-9ebfb527dc621fa6",
+      "pmx-5d6e47c4cefdb1f6"
+    ],
+    "GFL2Agent": [
+      "pmx-449c2684e3b94f26",
+      "pmx-746c268f4b0f0ae0"
     ]
   },
   "pack_mod_ids": {
@@ -187,6 +195,8 @@
     "GFL2Nemesis": "GFL2Nemesis",
     "GFL2Kuro": "GFL2Kuro",
     "GFL2Sakura": "GFL2Sakura",
-    "GFL2Qiongjiu": "GFL2Qiongjiu"
+    "GFL2Qiongjiu": "GFL2Qiongjiu",
+    "GFL2Lind": "GFL2Lind",
+    "GFL2Agent": "GFL2Agent"
   }
 }

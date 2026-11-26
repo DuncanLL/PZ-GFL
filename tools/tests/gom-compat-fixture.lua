@@ -175,6 +175,105 @@ function verifyGoMAndJavaHelp(runGfl2Magazines, runGfl2Cadence, runRuntime, runR
         runGoMScenario({ "SWMG", "GunsOfMarz", "ModernFirearmsSystem" }, "SWMG_AmmoTypes", runGfl2Magazines, runGfl2Cadence)
     assert(mfsScripts["GFL2.Scylla"].state.ammoType == "base:initial" and mfsFamilies["GFL2.Scylla"] == nil)
 
+    -- 3b. Xanny Arms standalone (no SWMG): .308 -> XA_762x51Bullets, .44 -> XA_50AEBullets,
+    -- all 6 AmmoBox params -> XannyArms boxes, existing-save inventory sync, and melee untouched.
+    do
+        local active = { XannyArmsCore = true, XannyArmsGunPack = true }
+        Events = {
+            OnGameBoot = makeEvent(),
+            OnInitGlobalModData = makeEvent(),
+            OnEquipPrimary = makeEvent(),
+            OnGameStart = makeEvent(),
+        }
+        ISInsertMagazine = { isValid = function() return true end }
+        ISLoadBulletsInMagazine = {
+            new = function(self, character, magazine, ammoCount)
+                return { character = character, magazine = magazine, ammoCount = ammoCount, stopOnAim = false }
+            end,
+            update = function(self) end,
+        }
+        ISUnloadBulletsFromMagazine = {
+            new = function(self, character, magazine)
+                return { character = character, magazine = magazine, stopOnAim = false }
+            end,
+            update = function(self) end,
+        }
+        local xScripts = {}
+        for _, id in ipairs({
+            "GFL2.Scylla", "GFL2.ScyllaMagazine",
+            "GFL2.ThresholdStorm", "GFL2.ThresholdStormMagazine",
+            "GFL2.Radiance",
+            "GFL2.Iaso", "GFL2.IasoMagazine",
+            "GFL2.Schlitzohr", "GFL2.SchlitzohrMagazine",
+            "GFL2.SilverWingedPistis", "GFL2.SilverWingedPistisMagazine",
+            "GFL2.Sibyl", "GFL2.SibylMagazine",
+            "GFL2.Trailblazer", "GFL2.CauseAndEffect",
+            "XannyArms.XA_Remington700", "XannyArms.XA_DesertEagle",
+            "XannyArms.XA_556x45Box", "XannyArms.XA_762x51Box", "XannyArms.XA_9x19Box",
+            "XannyArms.XA_45Box", "XannyArms.XA_50AEBox", "XannyArms.XA_12GaugeBox",
+        }) do
+            xScripts[id] = makeScriptItem(id)
+        end
+        xScripts["XannyArms.XA_Remington700"].state.ammoType = "XannyArms:XA_762x51Bullets"
+        xScripts["XannyArms.XA_DesertEagle"].state.ammoType = "XannyArms:XA_50AEBullets"
+
+        local function makeLiveItem(fullType, isGun, initAmmo)
+            local st = { ammo = initAmmo, box = "Base.OldBox" }
+            local o = {
+                state = st,
+                getFullType = function() return fullType end,
+                getAmmoType = function() return st.ammo end,
+                setAmmoType = function(_, v) st.ammo = v end,
+            }
+            if isGun then
+                o.getAmmoBox = function() return st.box end
+                o.setAmmoBox = function(_, v) st.box = v end
+            end
+            return o
+        end
+        local liveSibyl = makeLiveItem("GFL2.Sibyl", true, "base:bullets_308")
+        local liveDeagleMag = makeLiveItem("GFL2.SilverWingedPistisMagazine", false, "base:bullets_44")
+        local invList = { liveSibyl, liveDeagleMag }
+        local fakePlayer = {
+            getInventory = function()
+                return {
+                    getItems = function()
+                        return {
+                            size = function() return #invList end,
+                            get = function(_, i) return invList[i + 1] end,
+                        }
+                    end,
+                }
+            end,
+        }
+        getSpecificPlayer = function(i) return i == 0 and fakePlayer or nil end
+        getActivatedMods = function() return { contains = function(_, id) return active[id] == true end } end
+        getScriptManager = function() return { FindItem = function(_, id) return xScripts[id] end } end
+
+        runGfl2Magazines()
+        Events.OnGameBoot.fire()
+        Events.OnInitGlobalModData.fire()
+        Events.OnGameStart.fire()
+
+        assert(xScripts["GFL2.Sibyl"].state.ammoType == "XannyArms:XA_762x51Bullets")
+        assert(xScripts["GFL2.SibylMagazine"].state.ammoType == "XannyArms:XA_762x51Bullets")
+        assert(xScripts["GFL2.Sibyl"].state.params.AmmoBox == "XannyArms.XA_762x51Box")
+        assert(xScripts["GFL2.Radiance"].state.ammoType == "XannyArms:XA_762x51Bullets")
+        assert(xScripts["GFL2.ThresholdStorm"].state.ammoType == "XannyArms:XA_762x51Bullets")
+        assert(xScripts["GFL2.SilverWingedPistis"].state.ammoType == "XannyArms:XA_50AEBullets")
+        assert(xScripts["GFL2.SilverWingedPistisMagazine"].state.ammoType == "XannyArms:XA_50AEBullets")
+        assert(xScripts["GFL2.SilverWingedPistis"].state.params.AmmoBox == "XannyArms.XA_50AEBox")
+        assert(xScripts["GFL2.Scylla"].state.ammoType == "base:initial" and xScripts["GFL2.Scylla"].state.params.AmmoBox == "XannyArms.XA_556x45Box")
+        assert(xScripts["GFL2.Iaso"].state.ammoType == "base:initial" and xScripts["GFL2.Iaso"].state.params.AmmoBox == "XannyArms.XA_9x19Box")
+        assert(xScripts["GFL2.Schlitzohr"].state.ammoType == "base:initial" and xScripts["GFL2.Schlitzohr"].state.params.AmmoBox == "XannyArms.XA_45Box")
+        assert(xScripts["GFL2.Trailblazer"].state.ammoType == "base:initial" and xScripts["GFL2.Trailblazer"].state.params.AmmoBox == "XannyArms.XA_12GaugeBox")
+        assert(xScripts["GFL2.CauseAndEffect"].state.ammoType == "base:initial" and xScripts["GFL2.CauseAndEffect"].state.params.AmmoBox == nil)
+
+        -- Mid-save existing inventory weapons & magazines must sync cleanly.
+        assert(liveSibyl.state.ammo == "XannyArms:XA_762x51Bullets" and liveSibyl.state.box == "XannyArms.XA_762x51Box")
+        assert(liveDeagleMag.state.ammo == "XannyArms:XA_50AEBullets")
+    end
+
     -- 4. JAR-missing self-check modal & clickable right-click/radial entries.
     GFL2CharacterRuntime = nil
     GFL2RadialMenu = nil

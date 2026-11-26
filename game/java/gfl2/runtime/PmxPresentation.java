@@ -61,10 +61,11 @@ final class PmxPresentation {
             }
             if(dan) {
                 int start=(int)source[17]*4,length=(int)source[16]*12,oldStart=(int)source[27]*4,positions=(int)source[18];
-                if(start<0||oldStart<0||positions<0||start+length>header.length||oldStart+length>header.length||positions+count>header.length)
+                boolean hasPositions=header.length>=positions+count;
+                if(start<0||oldStart<0||positions<0||start+length>header.length||oldStart+length>header.length||(!hasPositions&&header.length<positions))
                     throw new IllegalArgumentException("PMX presentation history layout differs");
                 boolean use=history&&!cut&&token0==source[12]&&token1==source[13]&&actor==source[24]&&lastRotations!=null&&lastRotations.length==length;
-                System.arraycopy(use?oldOutput:output,0,header,positions,count);
+                if(hasPositions)System.arraycopy(use?oldOutput:output,0,header,positions,count);
                 if(use)System.arraycopy(lastRotations,0,header,oldStart,length);
                 else System.arraycopy(header,start,header,oldStart,length);
                 if(lastRotations==null||lastRotations.length!=length)lastRotations=new float[length];

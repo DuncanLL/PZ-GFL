@@ -21,12 +21,13 @@ function getTextOrNull(key)
     return ({EN="English caption",KO="Korean caption"})[language]
 end
 UIFont={Small="small"}
-UIManager={getSpeedControls=function()end}
+local currentSpeed=1
+UIManager={getSpeedControls=function()return {getCurrentGameSpeed=function()return currentSpeed end}end}
 function getPlayerScreenWidth(index) assert(index==0);return screenWidth end
 function getTextManager() return {MeasureStringX=function(_,_,value)return #value*10 end} end
 
 local function actor(model)
-    local player={model=model,ready=true,data={},started={},stopped={},volumes={},prefix="VoiceFemale",x=10,y=10}
+    local player={model=model,ready=true,data={},started={},stopped={},volumes={},prefix="VoiceFemale",x=10,y=10,moodleLevels={}}
     local desc={getVoicePrefix=function()return player.prefix end,setVoicePrefix=function(_,prefix)player.prefix=prefix end}
     local emitter={isPlaying=function(_,sound)return type(sound)=="number" or sound==player.vanillaShout end,
         stopSoundByName=function()end,stopSoundLocal=function(_,handle)player.stopped[#player.stopped+1]=handle end,
@@ -34,7 +35,7 @@ local function actor(model)
     function player:getDescriptor()return desc end
     function player:getEmitter()return emitter end
     function player:getModData()return self.data end
-    function player:getMoodles()return {getMoodleLevel=function()return 0 end}end
+    function player:getMoodles()return {getMoodleLevel=function(_,m)return self.moodleLevels[m] or 0 end}end
     function player:getPlayerNum()return 0 end
     function player:getX()return self.x end
     function player:getY()return self.y end
@@ -156,5 +157,53 @@ function verifyVoiceLifecycle()
     GFL2VoiceEngine.syncRemote(other,false)
     assert(other.prefix=="VoiceFemale" and #other.stopped==2)
 
-    return "PASS production multiplayer voice routing, remote vanilla muting, 3D teammate playback and CN/EN/JP/KO captions"
+    -- Ambient calm idle voice (Idle_A..Idle_J): only triggers when calm (no negative moodles), respects cooldown & fast-forward, and never affects 173-line packs.
+    local three="pmx-9ebfb527dc621fa6"
+    local idleClips={Shout_A={duration=2,chinese="shout",japanese="shout"},Hungry_L1_A={duration=2,chinese="hungry",japanese="hungry"}}
+    for _,s in ipairs({"A","B","C","D","E","F","G","H","I","J"}) do
+        idleClips["Idle_"..s]={duration=2,chinese="idle "..s,japanese="idle "..s}
+    end
+    local c=GFL2CatalogVoice.install("AuditLind",three,idleClips)
+    language="CN"
+    localPlayer=actor(three)
+    published={}
+    timestamp=20000
+    events.OnCreatePlayer(0,localPlayer)
+    assert(c.isActive(localPlayer))
+    -- Startup grace: must NOT fire before idleMinMs (90s)
+    timestamp=60000
+    c.tick()
+    assert(#localPlayer.started==0,"idle fired during startup grace")
+    -- Negative moodle active (e.g. BORED): must NOT fire idle even after cooldown
+    localPlayer.moodleLevels.BORED=1
+    timestamp=250000
+    c.tick()
+    assert(#localPlayer.started==0,"idle fired while negative moodle active")
+    -- Clear negative moodle, keep positive FOOD_EATEN active, but fast-forward enabled -> blocked by accelerated
+    localPlayer.moodleLevels.BORED=0
+    localPlayer.moodleLevels.FOOD_EATEN=1
+    currentSpeed=3
+    timestamp=255000
+    c.tick()
+    assert(#localPlayer.started==0,"idle fired during fast-forward")
+    -- Normal speed, calm (zero negative moodles, positive FOOD_EATEN allowed once idle wins): MUST fire!
+    currentSpeed=1
+    localPlayer.moodleLevels.FOOD_EATEN=0
+    timestamp=260000
+    c.tick()
+    assert(#localPlayer.started==1 and localPlayer.started[1]:match("^GFL2PmxAuditLind_Idle_[A-J]$"),"calm idle did not fire: "..tostring(localPlayer.started[1]))
+    assert(#published==1 and published[1].kind=="idle","calm idle did not publish kind=idle")
+    local firstIdle=localPlayer.started[1]
+    -- Cooldown check: must NOT fire again 30s later
+    timestamp=290000
+    c.tick()
+    assert(#localPlayer.started==1,"idle fired before idleMinMs cooldown")
+    -- After 190s calm: fires a DIFFERENT idle line (no repeat within 20m!)
+    timestamp=460000
+    c.tick()
+    assert(#localPlayer.started==2 and localPlayer.started[2]:match("^GFL2PmxAuditLind_Idle_[A-J]$") and localPlayer.started[2]~=firstIdle,"second idle repeated or missed")
+    assert(c.getDiagnostics().idleSpoken==2)
+    events.OnDisconnect()
+
+    return "PASS production multiplayer voice routing, remote vanilla muting, 3D teammate playback, calm ambient idle and CN/EN/JP/KO captions"
 end

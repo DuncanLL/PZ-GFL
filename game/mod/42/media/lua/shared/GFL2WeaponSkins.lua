@@ -31,6 +31,8 @@ local options = {
     ["GFL2.UnspokenCalling"] = { { id="4334095", model="GFL2.UnspokenCallingSkin4334095", detached=true } },
     ["GFL2.CrimsonCovenant"] = { { id="4332365", model="GFL2.CrimsonCovenantSkin4332365", detached=false } },
     ["GFL2.GoldenMelody"] = { { id="4334015", model="GFL2.GoldenMelodySkin4334015", detached=false } },
+    ["GFL2.ThornCriterion"] = { { id="4336305", model="GFL2.ThornCriterionSkin4336305", detached=false } },
+    ["GFL2.OmenKey"] = { { id="4335655", model="GFL2.OmenKeySkin4335655", detached=false } },
 }
 local M = {}
 
