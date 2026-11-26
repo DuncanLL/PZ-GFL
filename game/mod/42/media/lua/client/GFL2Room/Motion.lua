@@ -32,6 +32,7 @@ function M.install(W,ctx)
     end
 
     local function motionDisplayName(file)
+        if not file or file=="" then return "" end
         if file:sub(1,7)=="sample:" then return file:sub(8) end
         return file:match("([^/\\]+)$") or file
     end
@@ -40,86 +41,96 @@ function M.install(W,ctx)
         local over=not slider.disabled and slider:isMouseOver() and (not seek or slider:getMouseY()>=13)
         local hover=hoverAmount(slider,over or (not slider.disabled and (slider.dragInside or slider.joypadFocused)))
         local h=slider.dragInside and not slider.disabled and 4 or 3
-        slider:drawRect(x,y,width,h,.92,.15+.07*hover,.21+.08*hover,.24+.08*hover)
+        slider:drawRect(x,y,width,h,.90,.13+.04*hover,.14+.04*hover,.16+.04*hover)
         if slider.disabled then return end
         local fill=width*clamp(slider.currentValue,0,1)
-        if fill>0 then slider:drawRect(x,y,fill,h,1,seek and .94 or .53,seek and .71 or .77,seek and .38 or .73) end
+        if fill>0 then slider:drawRect(x,y,fill,h,.96,seek and .95 or .62,seek and .49 or .66,seek and .14 or .71) end
         if seek and over and not slider.dragInside then
             local tick=clamp(slider:getMouseX(),x,x+width-1)
-            slider:drawRect(tick,y-3,1,h+6,.76*hover,.85,.90,.88)
+            slider:drawRect(tick,y-3,1,h+6,.78*hover,.88,.90,.92)
         end
         local knob=image(art.."knob.png")
-        local size=slider.dragInside and 12 or 8+2*hover
-        if knob then slider:drawTextureScaled(knob,x+fill-size/2,y+(h-size)/2,size,size,1,
-            seek and 1 or .76,seek and .80 or .92,seek and .52 or .87) end
+        local size=slider.dragInside and 11 or 8+2*hover
+        if knob then slider:drawTextureScaled(knob,x+fill-size/2,y+(h-size)/2,size,size,1,.86,.87,.89) end
     end
 
     local function clockText(frame)
-        local seconds=math.floor(frame/30)
+        local seconds=math.floor(math.max(0,frame or 0)/30)
         return string.format("%02d:%02d",math.floor(seconds/60),seconds%60)
     end
 
-    local function musicClockText(milliseconds)
-        local seconds=math.floor(math.max(0,milliseconds or 0)/1000)
-        return string.format("%02d:%02d",math.floor(seconds/60),seconds%60)
+    local function drawSlotCard(p,x,y,w,h,tag,valueText,active,accentColor,rightReserved)
+        p:drawRect(x,y,w,h,.86,.106,.116,.132)
+        p:drawRectBorder(x,y,w,h,active and .24 or .10,active and accentColor[1] or .80,active and accentColor[2] or .82,active and accentColor[3] or .85)
+        p:drawRect(x,y,2,h,active and .86 or .28,active and accentColor[1] or .52,active and accentColor[2] or .56,active and accentColor[3] or .60)
+        local pillW=44
+        p:drawRect(x+8,y+9,pillW,h-18,active and .88 or .54,active and .16 or .12,active and .17 or .13,active and .19 or .15)
+        p:drawRectBorder(x+8,y+9,pillW,h-18,active and .32 or .14,active and accentColor[1] or .68,active and accentColor[2] or .70,active and accentColor[3] or .74)
+        textInSlot(p,tag,x+8+pillW/2,y+9,h-18,pillW-4,active and .88 or .62,active and .89 or .66,active and .90 or .70,1,.5)
+        local textX=x+8+pillW+8
+        local textW=math.max(24,w-(textX-x)-rightReserved-8)
+        label(p,valueText,textX,y+math.floor((h-16)/2),16,textW,
+            active and .88 or .54,active and .90 or .58,active and .92 or .62)
     end
 
     function W:createMotionPage()
-        self.motionPanelWidth=math.min(586,self.fullWidth)
-        self.motionPanelHeight=math.min(680,self.fullHeight)
+        self.motionPanelWidth=math.min(624,self.fullWidth)
+        self.motionPanelHeight=math.min(544,self.fullHeight)
         self.motionLibTab="motion"
         self.motionMusicAuto=self.motionMusicAuto~=false
-        local height=self.motionPanelHeight-64
-        local listWidth=math.floor((self.motionPanelWidth-32)*.44)
-        local library=ISPanel:new(12,54,listWidth,height)
+        self.motionCameraAuto=self.motionCameraAuto~=false
+        local header=self:titleBarHeight()
+        local bodyY=header+4
+        local height=self.motionPanelHeight-bodyY-8
+        local listWidth=math.floor((self.motionPanelWidth-28)*.43)
+        self.motionDividerX=10+listWidth+6
+
+        -- Seamless left pane (inside unified outer window frame)
+        local library=ISPanel:new(10,bodyY,listWidth,height)
         library:initialise();library.background=false;self:addChild(library);self.motionLibraryBox=library
         library.prerender=function(p)
             local w=p.parent
             local tab=w.motionLibTab
-            local titleKey=tab=="camera" and "MotionCameraLibrary" or (tab=="face" and "MotionFaceLibrary" or "MotionLibrary")
             local emptyKey=tab=="camera" and "MotionNoCameras" or (tab=="face" and "MotionNoFaces" or "MotionNoFiles")
-            drawShadow(p,0,0,p.width,p.height,.92)
-            surface(p,0,0,p.width,p.height,.94)
-            drawCornerTicks(p,0,0,p.width,p.height,.90,6)
-            p:drawRect(0,0,p.width,2,.92,.95,.54,.16)
-            label(p,tr(titleKey),12,10,20,p.width-24,.96,.97,.97)
             if #w.motionList.items==0 then
-                label(p,tr(emptyKey),12,80,17,p.width-24,.68,.76,.78)
+                label(p,tr(emptyKey),10,84,16,p.width-20,.68,.76,.78)
             end
         end
-        local tabW=math.floor((library.width-28)/3)
-        self.motionTabBtn=button(library,8,36,tabW,tr("MotionTabAction"),self,function(w)w:setMotionLibTab("motion")end)
+        local tabW=math.floor((library.width-20)/3)
+        self.motionTabBtn=button(library,4,6,tabW,tr("MotionTabAction"),self,function(w)w:setMotionLibTab("motion")end)
         self.motionTabBtn:setHeight(26);self.motionTabBtn.roomActive=true
-        self.faceTabBtn=button(library,14+tabW,36,tabW,tr("MotionTabFace"),self,function(w)w:setMotionLibTab("face")end)
+        self.faceTabBtn=button(library,10+tabW,6,tabW,tr("MotionTabFace"),self,function(w)w:setMotionLibTab("face")end)
         self.faceTabBtn:setHeight(26);self.faceTabBtn.roomActive=false
-        self.cameraTabBtn=button(library,20+2*tabW,36,library.width-28-2*tabW,tr("MotionTabCamera"),self,function(w)w:setMotionLibTab("camera")end)
+        self.cameraTabBtn=button(library,16+2*tabW,6,library.width-20-2*tabW,tr("MotionTabCamera"),self,function(w)w:setMotionLibTab("camera")end)
         self.cameraTabBtn:setHeight(26);self.cameraTabBtn.roomActive=false
 
-        local list=ISScrollingListBox:new(8,68,library.width-16,height-148)
+        local list=ISScrollingListBox:new(4,38,library.width-8,height-110)
         list:initialise();list.itemheight=42
-        list.backgroundColor={r=.035,g=.055,b=.065,a=0}
+        list.backgroundColor={r=.064,g=.072,b=.082,a=.72}
+        list.borderColor={r=.82,g=.85,b=.88,a=.10}
         list.doDrawItem=function(s,y,row,alt)
             local scroll=s:getYScroll()
             if y+row.height+scroll<=0 or y+scroll>=s.height then return y+row.height end
             local overRow=s.mouseoverselected==row.index and s:isMouseOver() and not s:isMouseOverScrollBar()
             local hover=hoverAmount(row,overRow)
             if row.index==s.selected then
-                s:drawRect(0,y,s.width-14,row.height-2,.93,.15+.04*hover,.19+.05*hover,.20+.05*hover)
-                s:drawRect(0,y+4,2,row.height-10,1,1,.71,.38)
+                s:drawRect(0,y,s.width-14,row.height-2,.94,.155+.03*hover,.170+.03*hover,.195+.03*hover)
+                s:drawRect(0,y+4,2,row.height-10,.92,.95,.49,.14)
             else
-                if alt then s:drawRect(0,y,s.width-14,row.height-2,.42,.055,.085,.105) end
-                if hover>0 then s:drawRect(0,y,s.width-14,row.height-2,.76*hover,.18,.28,.30) end
+                if alt then s:drawRect(0,y,s.width-14,row.height-2,.36,.10,.11,.13) end
+                if hover>0 then s:drawRect(0,y,s.width-14,row.height-2,.65*hover,.16,.18,.21) end
             end
-            local overStar=overRow and s:getMouseX()<=30
-            local starAlpha=row.favorite and 1 or (overStar and .95 or (.40+.35*hover))
-            drawStarIcon(s,15,y+math.floor((row.height-2)/2),overStar and 16 or 14,row.favorite==true,starAlpha)
-            label(s,row.text,31,y+5,17,s.width-48)
-            label(s,row.source,31,y+24,13,s.width-48,.58,.70,.72)
+            local overStar=overRow and s:getMouseX()<=28
+            local starAlpha=row.favorite and 1 or (overStar and .90 or (.34+.30*hover))
+            drawStarIcon(s,14,y+math.floor((row.height-2)/2),overStar and 16 or 14,row.favorite==true,starAlpha)
+            label(s,row.text,28,y+4,16,s.width-44,.88,.90,.92)
+            local subColor=row.hasCompanions and {.95,.49,.14} or {.54,.58,.63}
+            label(s,row.source,28,y+23,13,s.width-44,subColor[1],subColor[2],subColor[3])
             return y+row.height
         end
         local motionListDown=list.onMouseDown
         list.onMouseDown=function(s,x,y)
-            if not s:isMouseOverScrollBar() and x>=0 and x<=30 then
+            if not s:isMouseOverScrollBar() and x>=0 and x<=28 then
                 local rowIdx=s:rowAt(x,y)
                 local item=rowIdx and s.items[rowIdx]
                 if item and item.item then
@@ -132,7 +143,13 @@ function M.install(W,ctx)
         list:setOnMouseDownFunction(self,function(w,filename)
             if w.motionLibTab=="camera" then
                 w.cameraSelected=filename
+                w.motionCameraAuto=true
                 w.motionMessage=nil
+                local cur=GFL2ReadyRoom.motionState(w.player)
+                if cur and cur.name~="" then
+                    w:onMotionCommand("camera",filename)
+                    return
+                end
             elseif w.motionLibTab=="face" then
                 local err=GFL2VmdFace and GFL2VmdFace.validate and GFL2VmdFace.validate(filename) or ""
                 if err~="" then
@@ -142,148 +159,168 @@ function M.install(W,ctx)
                     w.motionMessage=nil
                 end
             else
-                w.motionSelected=filename
-                w.motionMessage=nil
+                w:selectMotionWithBundle(filename)
+                return
             end
             w:refreshMotionControls()
         end)
         library:addChild(list);self.motionList=list
-        local width=library.width-16
-        local half=math.floor((width-6)/2)
-        self.motionAddPath=button(library,8,height-70,width,tr("MotionAddPath"),self,self.onAddMotionPath)
-        self.motionRefresh=button(library,8,height-34,half,tr("MotionRefresh"),self,self.refreshMotionLibrary)
-        self.motionRemovePath=button(library,14+half,height-34,width-half-6,tr("MotionRemovePath"),self,self.onRemoveMotionPath)
+        local lw=library.width-8
+        local lhalf=math.floor((lw-6)/2)
+        self.motionAddPath=button(library,4,height-66,lw,tr("MotionAddPath"),self,self.onAddMotionPath)
+        self.motionAddPath:setHeight(28)
+        self.motionRefresh=button(library,4,height-32,lhalf,tr("MotionRefresh"),self,self.refreshMotionLibrary)
+        self.motionRefresh:setHeight(28)
+        self.motionRemovePath=button(library,10+lhalf,height-32,lw-lhalf-6,tr("MotionRemovePath"),self,self.onRemoveMotionPath)
+        self.motionRemovePath:setHeight(28)
 
-        local box=ISPanel:new(20+listWidth,54,self.motionPanelWidth-32-listWidth,height)
+        -- Seamless right pane (Unified Master Transport + 4 Linked Slots)
+        local rightX=self.motionDividerX+7
+        local rightW=self.motionPanelWidth-rightX-10
+        local box=ISPanel:new(rightX,bodyY,rightW,height)
         box:initialise();box.background=false;self:addChild(box);self.motionBox=box
         box.prerender=function(p)
             local w=p.parent
-            local textWidth=p.width-24
-            drawShadow(p,0,0,p.width,p.height,.92)
-            surface(p,0,0,p.width,p.height,.94)
-            drawCornerTicks(p,0,0,p.width,p.height,.90,6)
-            p:drawRect(0,0,p.width,2,.92,.95,.54,.16)
-            label(p,tr("MotionControls"),12,10,22,textWidth,.96,.97,.97)
+            local textWidth=p.width-16
+            label(p,tr("MotionControls"),8,6,19,textWidth-110,.96,.97,.97)
             local state=w.motionPlayback
-            if state and state.name~="" then
+            local active=state and state.name~=""
+            if active then
                 local frame=state.frame or 0
                 for i=0,2 do
-                    local h=4+math.floor(5*(.5+.5*math.sin(frame*.24+i*1.3)))
-                    p:drawRect(12+i*4,54-h,2,h,1,.96,.58,.18)
+                    local bh=4+math.floor(6*(.5+.5*math.sin(frame*.24+i*1.3)))
+                    p:drawRect(p.width-96+i*4,22-bh,2,bh,.92,.95,.49,.14)
                 end
             end
-            label(p,w.motionStatus or tr("MotionStopped"),28,38,17,textWidth-16,.76,.88,.90)
-            if w.motionPlayingLabel then label(p,w.motionPlayingLabel,12,58,17,textWidth,.95,.96,.96) end
-            label(p,tr("MotionSpeed"),12,114,15,textWidth-66,.70,.78,.80)
-            textInSlot(p,string.format("%.2fx",w.motionSpeed.currentValue),p.width-12,114,15,60,.88,.92,.94,1,1)
-            p:drawRect(12,156,textWidth,1,.16,.80,.88,.90)
-            label(p,tr("MotionSelected"),12,162,14,textWidth,.70,.78,.80)
-            label(p,w.motionSelectedLabel or tr("MotionNoSelection"),12,178,16,textWidth,.94,.96,.96)
-            local faceText=tr("MotionTabFace")..": "..(w.faceSelectedLabel or tr("MotionFaceNone"))
-            label(p,faceText,12,198,14,textWidth-64,
-                w.faceSelectedLabel and .94 or .66,w.faceSelectedLabel and .88 or .76,w.faceSelectedLabel and .62 or .78)
-            p:drawRect(12,286,textWidth,1,.16,.80,.88,.90)
-            label(p,tr("MotionPhysics"),12,292,15,textWidth,.70,.78,.80)
-            p:drawRect(12,344,textWidth,1,.16,.80,.88,.90)
-            label(p,tr("MotionCamera"),12,350,15,textWidth,.70,.78,.80)
-            label(p,w.cameraStatusLabel or tr("MotionCameraNone"),12,367,15,textWidth,
-                w.cameraLoadedActive and .95 or .72,w.cameraLoadedActive and .96 or .80,w.cameraLoadedActive and .96 or .82)
-            p:drawRect(12,420,textWidth,1,.16,.80,.88,.90)
-            label(p,tr("MotionMusicTitle"),12,426,15,textWidth,.70,.78,.80)
-            label(p,w.motionMusicFileLabel or tr("MotionMusicNone"),12,444,16,textWidth,.94,.96,.96)
-            if w.motionMusicStatusLabel then
-                label(p,w.motionMusicStatusLabel,12,564,15,textWidth,.76,.88,.90)
-            end
-            if w.motionMusicMessage then
-                label(p,w.motionMusicMessage,12,582,16,textWidth,1,.74,.42)
-            elseif w.motionMessage then
-                label(p,w.motionMessage,12,582,16,textWidth,1,.74,.42)
+            textInSlot(p,w.motionStatus or tr("MotionStopped"),p.width-8,8,16,84,
+                active and .78 or .58,active and .70 or .62,active and .60 or .66,1,1)
+
+            local titleLine=w.motionPlayingLabel or w.motionSelectedLabel or tr("MotionNoSelection")
+            label(p,titleLine,8,30,16,textWidth,.88,.90,.92)
+
+            label(p,tr("MotionSpeed"),8,92,14,textWidth-66,.58,.62,.67)
+            textInSlot(p,string.format("%.2fx",w.motionSpeed.currentValue),p.width-8,92,14,60,.82,.85,.88,1,1)
+
+            p:drawRect(8,244,textWidth,1,.12,.84,.86,.88)
+            label(p,tr("MotionBundleTitle"),8,252,15,textWidth,.74,.78,.82)
+
+            -- 4 Linked Slots (Action / Camera / Face / Music)
+            local hasMotion=w.motionSelected~=nil
+            local hasCam=w.cameraSelected~=nil
+            local camOn=hasCam and w.motionCameraAuto==true
+            local hasFace=w.faceSelected~=nil
+            local embeddedFace=not hasFace and w.motionEmbeddedFace==true
+            local hasMusic=w.musicSelected~=nil
+            local musicOn=hasMusic and w.motionMusicAuto==true
+            local accent={.95,.49,.14}
+
+            drawSlotCard(p,8,276,textWidth,38,tr("MotionTabAction"),
+                w.motionSelectedLabel or tr("MotionNoSelection"),hasMotion,accent,0)
+
+            local camText=hasCam and motionDisplayName(w.cameraSelected) or tr("MotionCameraNone")
+            drawSlotCard(p,8,320,textWidth,38,tr("MotionTabCamera"),
+                camText,camOn,accent,98)
+
+            local faceText=hasFace and motionDisplayName(w.faceSelected)
+                or (embeddedFace and tr("MotionFaceEmbedded") or tr("MotionFaceNone"))
+            drawSlotCard(p,8,364,textWidth,38,tr("MotionTabFace"),
+                faceText,hasFace or embeddedFace,accent,50)
+
+            local musicText=hasMusic and (w.musicSelectedLabel or motionDisplayName(w.musicSelected)) or tr("MotionMusicNone")
+            drawSlotCard(p,8,408,textWidth,38,tr("MotionTagMusic"),
+                musicText,musicOn,accent,126)
+
+            local msg=w.motionMessage or w.motionMusicMessage
+            if msg and msg~="" then
+                label(p,msg,8,454,15,textWidth,.86,.66,.50)
             end
         end
-        width=box.width-24
-        local third=math.floor((width-12)/3)
-        half=math.floor((width-6)/2)
+
+        local rw=box.width-16
+        local third=math.floor((rw-12)/3)
+        local half=math.floor((rw-6)/2)
         local function control(x,y,w,key,command)
             return button(box,x,y,w,tr(key),self,
-                function(w)w:onMotionCommand(command)end)
+                function(win)win:onMotionCommand(command)end)
         end
-        local faceClearBtn=button(box,12+width-58,194,58,tr("MotionFaceClear"),self,function(w)
+
+        local playBtn=control(8,136,rw,"MotionPlay","play")
+        playBtn:setHeight(32);playBtn.roomLook="primary"
+        local pauseBtn=control(8,174,third,"MotionPause","pause")
+        pauseBtn:setHeight(28)
+        local restartBtn=control(14+third,174,third,"MotionRestart","restart")
+        restartBtn:setHeight(28)
+        local stopBtn=control(20+2*third,174,rw-2*third-12,"MotionStop","stop")
+        stopBtn:setHeight(28)
+        local physBtn=control(8,208,half,"MotionPhysicsOn","physics")
+        physBtn:setHeight(26)
+        local resetBtn=control(14+half,208,rw-half-6,"MotionPhysicsReset","reset")
+        resetBtn:setHeight(26)
+
+        -- Slot inline controls
+        local slotRight=8+rw-6
+        local camClearBtn=button(box,slotRight-42,327,42,tr("MotionCameraClear"),self,function(w)
+            w.cameraSelected=nil
+            w.motionMessage=nil
+            if w.motionLibTab=="camera" and w.motionList then w.motionList.selected=0 end
+            w:onMotionCommand("cameraClear","")
+        end)
+        camClearBtn:setHeight(24)
+        local camToggleBtn=button(box,slotRight-92,327,46,tr("MotionLinkOn"),self,function(w)
+            w:toggleMotionCameraAuto()
+        end)
+        camToggleBtn:setHeight(24)
+
+        local faceClearBtn=button(box,slotRight-42,371,42,tr("MotionFaceClear"),self,function(w)
             w.faceSelected=nil
             w.motionMessage=nil
             if w.motionLibTab=="face" and w.motionList then w.motionList.selected=0 end
             w:refreshMotionControls()
         end)
-        faceClearBtn:setHeight(22)
+        faceClearBtn:setHeight(24)
+
+        local musicClearBtn=button(box,slotRight-24,415,24,"X",self,function(w)
+            w.musicSelected=nil
+            w.musicSelectedLabel=nil
+            w.motionAutoMusicArmed=false
+            w.motionMusicMessage=nil
+            if GFL2VmdMusic then GFL2VmdMusic.stop() end
+            w:refreshMotionControls()
+        end)
+        musicClearBtn:setHeight(24)
+        local musicBrowseBtn=button(box,slotRight-70,415,42,tr("MotionSlotPick"),self,function(w)
+            w:openMotionMusicDialog()
+        end)
+        musicBrowseBtn:setHeight(24)
+        local musicAutoBtn=button(box,slotRight-120,415,46,tr("MotionLinkOn"),self,function(w)
+            w:toggleMotionMusicAuto()
+        end)
+        musicAutoBtn:setHeight(24)
+
         self.motionButtons={
+            play=playBtn,
+            pause=pauseBtn,
+            restart=restartBtn,
+            stop=stopBtn,
+            physics=physBtn,
+            reset=resetBtn,
+            cameraToggle=camToggleBtn,
+            cameraClear=camClearBtn,
             faceClear=faceClearBtn,
-            play=control(12,221,width,"MotionPlay","play"),
-            pause=control(12,253,third,"MotionPause","pause"),
-            restart=control(18+third,253,third,"MotionRestart","restart"),
-            stop=control(24+2*third,253,width-2*third-12,"MotionStop","stop"),
-            physics=control(12,310,half,"MotionPhysicsOn","physics"),
-            reset=control(18+half,310,width-half-6,"MotionPhysicsReset","reset"),
-            cameraLoad=button(box,12,386,third,tr("MotionCameraLoad"),self,function(w)w:onMotionCommand("camera",w.cameraSelected or "")end),
-            cameraToggle=control(18+third,386,third,"MotionCameraOn","cameraToggle"),
-            cameraClear=control(24+2*third,386,width-2*third-12,"MotionCameraClear","cameraClear"),
-            musicBrowse=button(box,12,465,half,tr("MotionMusicBrowse"),self,function(w)w:openMotionMusicDialog()end),
-            musicAuto=button(box,18+half,465,width-half-6,tr("MotionMusicAutoOn"),self,function(w)w:toggleMotionMusicAuto()end),
-            musicPlay=control(12,498,third,"MotionMusicPlay","musicPlay"),
-            musicPause=control(18+third,498,third,"MotionMusicPause","musicPause"),
-            musicStop=control(24+2*third,498,width-2*third-12,"MotionMusicStop","musicStop"),
+            musicAuto=musicAutoBtn,
+            musicBrowse=musicBrowseBtn,
+            musicClear=musicClearBtn,
         }
-        self.motionButtons.play.roomLook="primary"
         for _,key in ipairs({"play","pause","restart","stop"})do self.motionButtons[key].roomIcon=key end
-        self:createMotionTimeline(box,width)
-        local musicSeek=ISSliderPanel:new(12,532,width,30,self)
-        musicSeek:initialise();musicSeek:instantiate()
-        musicSeek:setDoButtons(false);musicSeek:setValues(0,1,.00001,.01,true)
-        musicSeek.currentValue=0;musicSeek.disabled=true
-        musicSeek:paginate()
-        musicSeek.sliderBarDim.x=6;musicSeek.sliderBarDim.w=width-12
-        local musicMouseDown=musicSeek.onMouseDown
-        musicSeek.cancel=function(s)
-            if not s.dragInside then return end
-            s.dragInside=false;s:setCapture(false)
-        end
-        musicSeek.onMouseDown=function(s,x,y)
-            if s.disabled or y<12 then return false end
-            musicMouseDown(s,x,y)
-            if not s.dragInside then return false end
-            s:setCapture(true)
-            return true
-        end
-        musicSeek.onMouseUp=function(s,x)
-            if not s.dragInside then return false end
-            local fraction=clamp((x-s.sliderBarDim.x)/s.sliderBarDim.w,0,1)
-            s:cancel()
-            local w=s.target
-            local state=w.motionMusicPlayback
-            if state and state.duration>0 then
-                w.motionMusicMessage=GFL2VmdMusic.seek(state.duration*fraction)
-                if w.motionMusicMessage=="" then w.motionMusicMessage=nil end
-                w:refreshMotionControls()
-            end
-            return true
-        end
-        musicSeek.onMouseUpOutside=musicSeek.onMouseUp
-        musicSeek.render=function(s)
-            local state=s.target.motionMusicPlayback
-            local duration=state and state.duration or 0
-            local position=s.dragInside and duration*s.currentValue or state and state.position or 0
-            motionTrack(s,s.sliderBarDim.x,22,s.sliderBarDim.w,true)
-            local current=musicClockText(position)
-            local total=musicClockText(duration)
-            textInSlot(s,s.disabled and "--:--" or current,0,0,15,s.width/2,.82,.88,.90,1)
-            textInSlot(s,s.disabled and "--:--" or total,s.width,0,15,s.width/2,.58,.67,.71,1,1)
-        end
-        box:addChild(musicSeek);self.motionMusicSeek=musicSeek
-        local speed=ISSliderPanel:new(12,131,width,21,self,function(w,value)
+
+        self:createMotionTimeline(box,rw)
+        local speed=ISSliderPanel:new(8,110,rw,20,self,function(w,value)
             if math.abs(value-(w.motionPlayback.speed or 1))<.0001 then return end
             w:onMotionCommand("speed",tostring(value))
         end)
         speed:initialise();speed:instantiate()
         speed:setDoButtons(false);speed:setValues(0,1,.01,.1,true)
-        speed.sliderBarDim.x=6;speed.sliderBarDim.w=width-12
+        speed.sliderBarDim.x=6;speed.sliderBarDim.w=rw-12
         speed.currentValue=1;speed.disabled=true
         local speedDown=speed.onMouseDown
         speed.onMouseDown=function(s,x,y)
@@ -291,10 +328,11 @@ function M.install(W,ctx)
         end
         speed.render=function(s)motionTrack(s,s.sliderBarDim.x,math.floor(s.height/2)-1,s.sliderBarDim.w,false)end
         box:addChild(speed);self.motionSpeed=speed
+        self.motionMusicSeek=nil
     end
 
     function W:createMotionTimeline(box,width)
-        local slider=ISSliderPanel:new(12,78,width,34,self)
+        local slider=ISSliderPanel:new(8,52,width,34,self)
         slider:initialise();slider:instantiate()
         slider:setDoButtons(false);slider:setValues(0,1,.00001,.01,true)
         slider.currentValue=0;slider.disabled=true
@@ -332,10 +370,40 @@ function M.install(W,ctx)
             local total=math.floor(duration/30)
             if current~=s.lastSecond then s.lastSecond=current;s.clock=clockText(frame) end
             if total~=s.lastDuration then s.lastDuration=total;s.total=clockText(duration) end
-            textInSlot(s,s.disabled and "--:--" or s.clock,0,0,18,s.width/2,.82,.88,.90,1)
-            textInSlot(s,s.disabled and "--:--" or s.total,s.width,0,18,s.width/2,.58,.67,.71,1,1)
+            textInSlot(s,s.disabled and "--:--" or s.clock,0,0,16,s.width/2,.82,.88,.90,1)
+            textInSlot(s,s.disabled and "--:--" or s.total,s.width,0,16,s.width/2,.58,.67,.71,1,1)
         end
         box:addChild(slider);self.motionSeek=slider
+    end
+
+    function W:selectMotionWithBundle(filename)
+        self.motionSelected=filename
+        self.motionMessage=nil
+        self.motionMusicMessage=nil
+        self.motionEmbeddedFace=false
+        self.motionBundleDir=nil
+        if filename and filename~="" and GFL2ReadyRoom and GFL2ReadyRoom.motionBundle then
+            local bundle=GFL2ReadyRoom.motionBundle(filename)
+            if bundle then
+                self.motionBundleDir=(bundle.dir and bundle.dir~="") and bundle.dir or nil
+                self.motionEmbeddedFace=bundle.embeddedFace==true
+                self.cameraSelected=(bundle.camera and bundle.camera~="") and bundle.camera or nil
+                self.faceSelected=(bundle.face and bundle.face~="") and bundle.face or nil
+                if bundle.music and bundle.music~="" then
+                    self.musicSelected=bundle.music
+                    self.musicSelectedLabel=motionDisplayName(bundle.music)
+                else
+                    self.musicSelected=nil
+                    self.musicSelectedLabel=nil
+                end
+            end
+        else
+            self.cameraSelected=nil
+            self.faceSelected=nil
+            self.musicSelected=nil
+            self.musicSelectedLabel=nil
+        end
+        self:refreshMotionControls()
     end
 
     function W:loadMotionFavorites()
@@ -380,6 +448,22 @@ function M.install(W,ctx)
         self:refreshMotionLibrary()
     end
 
+    local function buildCompanionSubtitle(file,meta)
+        if file:sub(1,7)=="sample:" then return tr("MotionExample"),false end
+        local tags={}
+        if meta then
+            if meta.camera and meta.camera~="" then tags[#tags+1]=tr("MotionTabCamera") end
+            if (meta.face and meta.face~="") or meta.embeddedFace then tags[#tags+1]=tr("MotionTabFace") end
+            if meta.music and meta.music~="" then tags[#tags+1]=tr("MotionTagMusic") end
+        end
+        local prefix=(meta and meta.folder and meta.folder~="") and meta.folder
+            or tr(isLocalMotion(file) and "MotionLocal" or "MotionFolder")
+        if #tags>0 then
+            return prefix.." · "..table.concat(tags,"/"),true
+        end
+        return prefix,false
+    end
+
     function W:refreshMotionLibrary()
         local tab=self.motionLibTab
         local isCam=tab=="camera"
@@ -388,12 +472,16 @@ function M.install(W,ctx)
         if self.faceTabBtn then self.faceTabBtn.roomActive=isFace end
         if self.cameraTabBtn then self.cameraTabBtn.roomActive=isCam end
         local files
+        local metaMap=nil
         if isCam and GFL2ReadyRoom.cameraLibrary then
             files=GFL2ReadyRoom.cameraLibrary()
         elseif isFace and GFL2VmdFace and GFL2VmdFace.library then
             files=GFL2VmdFace.library()
         else
             files=GFL2ReadyRoom.motionLibrary()
+            if GFL2ReadyRoom.motionLibraryMeta then
+                metaMap=GFL2ReadyRoom.motionLibraryMeta()
+            end
         end
         local favs=self:loadMotionFavorites()
         local ordered={}
@@ -406,18 +494,30 @@ function M.install(W,ctx)
             local file=ordered[i]
             local row=self.motionList:addItem(motionDisplayName(file),file,
                 isLocalMotion(file) and file or motionDisplayName(file))
-            local kind=file:sub(1,7)=="sample:" and "MotionExample" or (isLocalMotion(file) and "MotionLocal" or "MotionFolder")
-            row.source=tr(kind)
+            if not isCam and not isFace then
+                local sub,hasComp=buildCompanionSubtitle(file,metaMap and metaMap[file])
+                row.source=sub
+                row.hasCompanions=hasComp
+            else
+                local folder=isLocalMotion(file) and file:match("([^/\\]+)[/\\][^/\\]+$") or nil
+                local kind=file:sub(1,7)=="sample:" and tr("MotionExample")
+                    or (folder or tr(isLocalMotion(file) and "MotionLocal" or "MotionFolder"))
+                row.source=kind
+                row.hasCompanions=false
+            end
             row.favorite=favs[file]==true
             if file==wanted then selected=i end
         end
-        if isFace then
+        if isFace or isCam then
             self.motionList.selected=selected or 0
-            if not selected then self.faceSelected=nil end
         else
             self.motionList.selected=selected or (#ordered>0 and 1 or 0)
             local picked=ordered[self.motionList.selected]
-            if isCam then self.cameraSelected=picked else self.motionSelected=picked end
+            if picked~=self.motionSelected or not self.motionBundleInitialized then
+                self.motionBundleInitialized=true
+                self:selectMotionWithBundle(picked)
+                return
+            end
         end
         self.motionMessage=nil;self:refreshMotionControls()
     end
@@ -670,7 +770,7 @@ function M.install(W,ctx)
         local overlay=ISPanel:new(0,0,self.width,self.height)
         overlay:initialise();overlay.background=false;overlay.isOverlay=true
         local cardW=math.min(526,self.width-24)
-        local cardH=math.min(470,self.height-28)
+        local cardH=math.min(440,self.height-28)
         local targetY=math.floor((self.height-cardH)/2)
         local card=ISPanel:new(math.floor((self.width-cardW)/2),targetY,cardW,cardH)
         card:initialise();card.background=false;overlay:addChild(card)
@@ -699,15 +799,13 @@ function M.install(W,ctx)
         local closeBtn=button(card,cardW-40,7,28,"X",self,function(w)w:closeMotionMusicDialog()end)
         closeBtn:setHeight(26);closeBtn.roomLook="bare"
 
-        local folderList=ISScrollingListBox:new(12,112,cardW-24,cardH-200)
+        local folderList=ISScrollingListBox:new(12,112,cardW-24,cardH-196)
         folderList:initialise();folderList.itemheight=32
         folderList.backgroundColor={r=.04,g=.065,b=.078,a=.86}
         folderList.borderColor={r=.38,g=.52,b=.56,a=.42}
         card:addChild(folderList)
 
-        local pathEntry
-        local upBtn
-        local selectBtn
+        local pathEntry,upBtn,selectBtn
         local function updateSelectionButton()
             if selectBtn then selectBtn:setEnable(state.selectedPath~="") end
         end
@@ -803,10 +901,11 @@ function M.install(W,ctx)
             if state.selectedPath=="" then return end
             w.musicSelected=state.selectedPath
             w.musicSelectedLabel=motionDisplayName(state.selectedPath)
+            w.motionMusicAuto=true
             w.motionMusicMessage=nil
             local motion=GFL2ReadyRoom.motionState(w.player)
-            if w.motionMusicAuto and motion.name~="" and not motion.paused and (motion.speed or 1)>0 then
-                w:playMotionMusic(true)
+            if motion.name~="" and not motion.paused and (motion.speed or 1)>0 then
+                w:playMotionMusicAtFrame(motion.frame or 0)
             end
             w:refreshMotionControls()
             w:closeMotionMusicDialog()
@@ -817,7 +916,8 @@ function M.install(W,ctx)
         self.motionMusicDialog=overlay
         self:addChild(overlay)
         overlay:bringToTop()
-        browseTo("")
+        -- Open directly in the current dance folder when available
+        browseTo(self.musicSelected or self.motionBundleDir or "")
     end
 
     function W:onAddMotionPath()
@@ -832,8 +932,8 @@ function M.install(W,ctx)
         local state=GFL2ReadyRoom.motionState(self.player)
         self.motionPlayback=state
         local camName=state.camera or ""
-        local hasCam=camName~=""
-        local camOn=hasCam and state.cameraEnabled==true
+        local hasLiveCam=camName~=""
+        local camOn=hasLiveCam and state.cameraEnabled==true
         local active=state.name~=""
         local trackActive=active or camOn
         local b=self.motionButtons
@@ -855,12 +955,7 @@ function M.install(W,ctx)
             self.motionSelectionFile=self.motionSelected
             self.motionSelectedLabel=self.motionSelected and motionDisplayName(self.motionSelected) or nil
         end
-        if self.faceSelectionFile~=self.faceSelected then
-            self.faceSelectionFile=self.faceSelected
-            self.faceSelectedLabel=self.faceSelected and motionDisplayName(self.faceSelected) or nil
-        end
         local enabledChar=not self.waiting and GFL2CharacterRuntime.isEnabled(self.player)
-        if b.faceClear then b.faceClear:setEnable(self.faceSelected~=nil and not self.waiting) end
         b.play:setEnable(self.motionSelected~=nil and enabledChar)
         for _,key in ipairs({"pause","restart","stop"})do b[key]:setEnable(trackActive and not self.waiting)end
         b.physics:setEnable(active and not self.waiting)
@@ -869,19 +964,15 @@ function M.install(W,ctx)
         b.pause.roomActive=trackActive and state.paused
         b.pause.roomIcon=state.paused and "play" or "pause"
         b.physics.roomTitle=tr(state.physics and "MotionPhysicsOn" or "MotionPhysicsOff")
-        self.cameraLoadedActive=hasCam
-        if hasCam then
-            self.cameraStatusLabel=motionDisplayName(camName)
-        elseif self.cameraSelected then
-            self.cameraStatusLabel=motionDisplayName(self.cameraSelected).." ("..tr("MotionCameraReady")..")"
-        else
-            self.cameraStatusLabel=tr("MotionCameraNone")
-        end
-        b.cameraLoad:setEnable(self.cameraSelected~=nil and enabledChar)
-        b.cameraToggle:setEnable(hasCam and not self.waiting)
-        b.cameraToggle.roomActive=camOn
-        b.cameraToggle.roomTitle=tr(camOn and "MotionCameraOn" or "MotionCameraOff")
-        b.cameraClear:setEnable(hasCam and not self.waiting)
+
+        -- Slot controls
+        local hasCamSlot=self.cameraSelected~=nil or hasLiveCam
+        b.cameraToggle:setEnable(hasCamSlot and not self.waiting)
+        b.cameraToggle.roomActive=hasCamSlot and self.motionCameraAuto==true
+        b.cameraToggle.roomTitle=tr(self.motionCameraAuto and "MotionLinkOn" or "MotionLinkOff")
+        b.cameraClear:setEnable(hasCamSlot and not self.waiting)
+
+        b.faceClear:setEnable(self.faceSelected~=nil and not self.waiting)
 
         if self.motionAutoMusicArmed and not active then
             self.motionAutoMusicArmed=false
@@ -892,42 +983,44 @@ function M.install(W,ctx)
             self.motionAutoMusicArmed=false
         end
         self.motionMusicPlayback=musicState
-        self.motionMusicFileLabel=self.musicSelectedLabel or tr("MotionMusicNone")
-        if musicState and musicState.paused then
-            self.motionMusicStatusLabel=tr("MotionMusicPaused")
-        elseif musicState and musicState.playing then
-            self.motionMusicStatusLabel=tr("MotionMusicPlaying")
-        else
-            self.motionMusicStatusLabel=tr("MotionMusicStopped")
-        end
-        local musicSeek=self.motionMusicSeek
-        local musicDuration=musicState and musicState.duration or 0
-        musicSeek.disabled=not musicState or not musicState.loaded or musicDuration<=0 or self.waiting
-        if musicSeek.dragInside and musicSeek.disabled then musicSeek:cancel() end
-        if not musicSeek.dragInside then
-            musicSeek.currentValue=not musicSeek.disabled
-                and clamp((musicState.position or 0)/musicDuration,0,1) or 0
-        end
+        b.musicAuto:setEnable(self.musicSelected~=nil and not self.waiting)
+        b.musicAuto.roomActive=self.musicSelected~=nil and self.motionMusicAuto==true
+        b.musicAuto.roomTitle=tr(self.motionMusicAuto and "MotionLinkOn" or "MotionLinkOff")
         b.musicBrowse:setEnable(not self.waiting)
-        b.musicAuto:setEnable(not self.waiting)
-        b.musicAuto.roomTitle=tr(self.motionMusicAuto and "MotionMusicAutoOn" or "MotionMusicAutoOff")
-        b.musicAuto.roomActive=self.motionMusicAuto==true
-        b.musicPlay:setEnable(self.musicSelected~=nil and not self.waiting)
-        b.musicPause:setEnable(musicState~=nil and musicState.loaded and not self.waiting)
-        b.musicStop:setEnable(musicState~=nil and musicState.loaded and not self.waiting)
-        b.musicPause.roomTitle=tr(musicState and musicState.paused and "MotionMusicResume" or "MotionMusicPause")
-        b.musicPause.roomActive=musicState~=nil and musicState.paused==true
-        b.musicPause.roomIcon=musicState and musicState.paused and "play" or "pause"
+        b.musicClear:setEnable(self.musicSelected~=nil and not self.waiting)
     end
 
-    function W:playMotionMusic(autoLinked)
-        if not GFL2VmdMusic or not self.musicSelected then
-            self.motionMusicMessage=tr("MotionMusicSelectFirst")
-            return
-        end
+    function W:playMotionMusicAtFrame(frame)
+        if not GFL2VmdMusic or not self.musicSelected then return end
         local result=GFL2VmdMusic.play(self.musicSelected)
         self.motionMusicMessage=result~="" and result or nil
-        self.motionAutoMusicArmed=(result=="" and autoLinked==true)
+        self.motionAutoMusicArmed=(result=="")
+        if result=="" and frame and frame>0 then
+            local ms=(frame/30)*1000
+            local st=GFL2VmdMusic.state()
+            if st and st.duration>0 then
+                GFL2VmdMusic.seek(clamp(ms,0,st.duration))
+            end
+        end
+    end
+
+    function W:toggleMotionCameraAuto()
+        self.motionCameraAuto=not self.motionCameraAuto
+        self.motionMessage=nil
+        local state=self.motionPlayback or GFL2ReadyRoom.motionState(self.player)
+        if state and state.name~="" then
+            if self.motionCameraAuto then
+                if self.cameraSelected then
+                    local err=GFL2ReadyRoom.motionCommand(self.player,"camera",self.cameraSelected)
+                    if err~="" then self.motionMessage=err end
+                end
+            else
+                if state.cameraEnabled then
+                    GFL2ReadyRoom.motionCommand(self.player,"cameraToggle","")
+                end
+            end
+        end
+        self:refreshMotionControls()
     end
 
     function W:toggleMotionMusicAuto()
@@ -938,47 +1031,45 @@ function M.install(W,ctx)
             if GFL2VmdMusic then GFL2VmdMusic.stop() end
         else
             local state=self.motionPlayback or GFL2ReadyRoom.motionState(self.player)
-            if state.name~="" and not state.paused and (state.speed or 1)>0 and self.musicSelected then
-                self:playMotionMusic(true)
+            if state and state.name~="" and not state.paused and (state.speed or 1)>0 and self.musicSelected then
+                self:playMotionMusicAtFrame(state.frame or 0)
             end
         end
         self:refreshMotionControls()
     end
 
     function W:onMotionCommand(command,value)
-        if command=="musicPlay" then
-            self:playMotionMusic(false)
-            self:refreshMotionControls()
-            return
-        elseif command=="musicPause" then
-            local state=GFL2VmdMusic and GFL2VmdMusic.state()
-            local error=state and state.paused and GFL2VmdMusic.resume() or GFL2VmdMusic and GFL2VmdMusic.pause() or ""
-            self.motionMusicMessage=error~="" and error or nil
-            self:refreshMotionControls()
-            return
-        elseif command=="musicStop" then
-            self.motionAutoMusicArmed=false
-            if GFL2VmdMusic then GFL2VmdMusic.stop() end
-            self.motionMusicMessage=nil
-            self:refreshMotionControls()
-            return
-        end
-
         local previous=GFL2ReadyRoom.motionState(self.player)
         local action=value or self.motionSelected or ""
-        local error
-        if command=="play" and self.faceSelected and GFL2VmdFace and GFL2VmdFace.play then
-            error=GFL2VmdFace.play(self.player,action,self.faceSelected)
+        local error=""
+
+        if command=="play" then
+            -- Auto-sync linked camera slot before starting playback so frame 0 matches cleanly
+            if self.motionCameraAuto and self.cameraSelected then
+                local camErr=GFL2ReadyRoom.motionCommand(self.player,"camera",self.cameraSelected)
+                if camErr~="" then self.motionMessage=camErr end
+            else
+                GFL2ReadyRoom.motionCommand(self.player,"cameraClear","")
+            end
+            if self.faceSelected and GFL2VmdFace and GFL2VmdFace.play then
+                error=GFL2VmdFace.play(self.player,action,self.faceSelected)
+            else
+                error=GFL2ReadyRoom.motionCommand(self.player,"play",action)
+            end
         else
             error=GFL2ReadyRoom.motionCommand(self.player,command,action)
         end
+
         self.motionMessage=error~="" and error or nil
         if error=="" then
             local current=GFL2ReadyRoom.motionState(self.player)
             if command=="play" or command=="restart" then
                 if self.motionMusicAuto and self.musicSelected
                     and current.name~="" and not current.paused and (current.speed or 1)>0 then
-                    self:playMotionMusic(true)
+                    self:playMotionMusicAtFrame(0)
+                else
+                    self.motionAutoMusicArmed=false
+                    if GFL2VmdMusic then GFL2VmdMusic.stop() end
                 end
             elseif command=="pause" or command=="speed" then
                 if current.paused or (current.speed or 1)<=0 then
@@ -1005,9 +1096,8 @@ function M.install(W,ctx)
             self.motionAutoMusicArmed=false
             if GFL2VmdMusic then GFL2VmdMusic.stop() end
             self.motionMusicMessage=nil
-            if previous.cameraEnabled then
-                local cameraError=GFL2ReadyRoom.motionCommand(self.player,"cameraToggle","")
-                if cameraError~="" and self.motionMessage==nil then self.motionMessage=cameraError end
+            if previous.cameraEnabled or (previous.camera and previous.camera~="") then
+                GFL2ReadyRoom.motionCommand(self.player,"cameraClear","")
             end
         end
         self:refreshMotionControls()

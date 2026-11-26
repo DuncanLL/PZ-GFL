@@ -215,31 +215,189 @@ public class ReadyRoomPreview {
             return "";
         }catch(Exception e){return motionError(e,"MotionRemovePath");}
     }
-    static KahluaTable listVmds(java.util.function.Predicate<Path> accept) {
-        var entries=new LinkedHashSet<String>();
+    private static void collectVmdsInDir(Path root, java.util.function.Predicate<Path> accept, LinkedHashSet<String> out, boolean emitRelativeDirect) {
+        if (root == null || !Files.isDirectory(root)) return;
         try {
-            List<String> local=motionNames(Files.createDirectories(library()),accept);
-            for(String sample:motionNames(sampleLibrary(),accept))
-                if(local.stream().noneMatch(sample::equalsIgnoreCase))entries.add(SAMPLE_PREFIX+sample);
-            entries.addAll(local);
-        }catch(Exception e){Main.error(e);}
-        try {
-            for(Path source:savedMotionPaths()) {
-                if(motionFile(source)&&accept.test(source))entries.add(source.toString()); // Paths saved by older releases.
-                else {
-                    try {
-                        for(String name:motionNames(source,accept))entries.add(source.resolve(name).toString());
-                    }catch(IOException e){Main.error(e);}
+            for (String name : motionNames(root, accept)) {
+                out.add(emitRelativeDirect ? name : root.resolve(name).toString());
+            }
+            var subs = new java.util.ArrayList<Path>();
+            try (var stream = Files.newDirectoryStream(root)) {
+                for (Path p : stream) {
+                    if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) && !isSkippableDir(p)) {
+                        subs.add(p);
+                        if (subs.size() >= 200) break;
+                    }
                 }
             }
-        }catch(Exception e){Main.error(e);}
-        return (KahluaTable)lua(new JSONArray(entries));
+            subs.sort(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER));
+            for (Path sub : subs) {
+                try {
+                    for (String name : motionNames(sub, accept)) {
+                        out.add(sub.resolve(name).toString());
+                    }
+                } catch (IOException ignored) {}
+            }
+        } catch (IOException e) {
+            Main.error(e);
+        }
+    }
+    private static LinkedHashSet<String> listVmdEntries(java.util.function.Predicate<Path> accept) {
+        var entries = new LinkedHashSet<String>();
+        try {
+            Path defLib = Files.createDirectories(library());
+            List<String> localDirect = motionNames(defLib, accept);
+            for (String sample : motionNames(sampleLibrary(), accept))
+                if (localDirect.stream().noneMatch(sample::equalsIgnoreCase)) entries.add(SAMPLE_PREFIX + sample);
+            collectVmdsInDir(defLib, accept, entries, true);
+        } catch (Exception e) { Main.error(e); }
+        try {
+            for (Path source : savedMotionPaths()) {
+                if (motionFile(source) && accept.test(source)) entries.add(source.toString());
+                else collectVmdsInDir(source, accept, entries, false);
+            }
+        } catch (Exception e) { Main.error(e); }
+        return entries;
+    }
+    static KahluaTable listVmds(java.util.function.Predicate<Path> accept) {
+        return (KahluaTable)lua(new JSONArray(listVmdEntries(accept)));
     }
     public static KahluaTable motionLibrary() {
-        return listVmds(gfl2.motion.VmdCamera::hasMotionTrack);
+        return listVmds(gfl2.motion.VmdCamera::hasBoneTrack);
     }
     public static KahluaTable cameraLibrary() {
         return listVmds(gfl2.motion.VmdCamera::hasCameraTrack);
+    }
+    private static boolean isAudioCompanion(Path p) {
+        if (p == null || p.getFileName() == null || !Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)) return false;
+        String lower = p.getFileName().toString().toLowerCase(Locale.ROOT);
+        return lower.endsWith(".wav") || lower.endsWith(".mp3");
+    }
+    private static String fileStem(Path p) {
+        String name = p == null || p.getFileName() == null ? "" : p.getFileName().toString();
+        int dot = name.lastIndexOf('.');
+        return (dot > 0 ? name.substring(0, dot) : name).toLowerCase(Locale.ROOT);
+    }
+    private static String normalizedTokens(String stem) {
+        return stem.replaceAll("[\\s_\\-\\.\\[\\]\\(\\)【】（）]+", " ").trim();
+    }
+    private static int similarityScore(String targetStem, String folderName, Path candidate, String[] hints) {
+        String candStem = fileStem(candidate);
+        int score = 0;
+        if (candStem.equals(targetStem)) score += 100;
+        if (!targetStem.isEmpty() && (candStem.startsWith(targetStem) || targetStem.startsWith(candStem))) score += 45;
+        if (!folderName.isEmpty() && (candStem.contains(folderName) || folderName.contains(candStem))) score += 25;
+        int prefix = 0;
+        int limit = Math.min(targetStem.length(), candStem.length());
+        while (prefix < limit && targetStem.charAt(prefix) == candStem.charAt(prefix)) prefix++;
+        if (prefix >= 3) score += Math.min(30, prefix * 3);
+        String[] tWords = normalizedTokens(targetStem).split(" ");
+        String cNorm = normalizedTokens(candStem);
+        for (String w : tWords) {
+            if (w.length() >= 2 && cNorm.contains(w)) score += 15;
+        }
+        for (String h : hints) {
+            if (candStem.contains(h)) score += 8;
+        }
+        return score;
+    }
+    private static Path pickCompanion(Path motion, List<Path> candidates, int danceCountInDir, String[] hints) {
+        if (candidates.isEmpty()) return null;
+        String targetStem = fileStem(motion);
+        String folderName = motion.getParent() != null && motion.getParent().getFileName() != null
+            ? motion.getParent().getFileName().toString().toLowerCase(Locale.ROOT) : "";
+        Path best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (Path c : candidates) {
+            int sc = similarityScore(targetStem, folderName, c, hints);
+            if (sc > bestScore) {
+                bestScore = sc;
+                best = c;
+            }
+        }
+        // In a dedicated single-dance folder, always auto-link the companion even if filenames differ (e.g. "动作.vmd" + "镜头.vmd" + "bgm.wav").
+        // In a flat folder containing multiple unrelated dances, require genuine filename similarity so dances don't cross-wire.
+        if (danceCountInDir <= 1) return best;
+        return bestScore >= 15 ? best : null;
+    }
+    private static JSONObject inspectBundleJson(String selectedMotion) {
+        var out = new JSONObject();
+        out.put("motion", selectedMotion == null ? "" : selectedMotion);
+        out.put("folder", "");
+        out.put("dir", "");
+        out.put("embeddedFace", false);
+        out.put("embeddedCamera", false);
+        out.put("camera", "");
+        out.put("face", "");
+        out.put("music", "");
+        try {
+            Path motion = resolveMotionInput(selectedMotion);
+            long[] selfCounts = gfl2.motion.VmdCamera.inspectTrackCounts(motion);
+            boolean embeddedFace = selfCounts != null && selfCounts[1] > 0;
+            boolean embeddedCam = selfCounts != null && selfCounts[2] > 0;
+            out.put("embeddedFace", embeddedFace);
+            out.put("embeddedCamera", embeddedCam);
+            if (selectedMotion != null && selectedMotion.startsWith(SAMPLE_PREFIX)) {
+                return out;
+            }
+            Path dir = motion.getParent();
+            if (dir == null || !Files.isDirectory(dir)) return out;
+            out.put("dir", dir.toString());
+            Path defLib = library();
+            if (!dir.equals(defLib) && dir.getFileName() != null) {
+                out.put("folder", dir.getFileName().toString());
+            }
+            var cameras = new java.util.ArrayList<Path>();
+            var faces = new java.util.ArrayList<Path>();
+            var audios = new java.util.ArrayList<Path>();
+            int danceCount = 0;
+            try (var stream = Files.newDirectoryStream(dir)) {
+                int seen = 0;
+                for (Path p : stream) {
+                    if (++seen > 400) break;
+                    if (isAudioCompanion(p)) {
+                        audios.add(p);
+                    } else if (motionFile(p)) {
+                        if (p.equals(motion)) {
+                            danceCount++;
+                            continue;
+                        }
+                        long[] c = gfl2.motion.VmdCamera.inspectTrackCounts(p);
+                        if (c == null) continue;
+                        if (c[2] > 0) cameras.add(p);
+                        if (c[1] > 0 && c[0] <= 10) faces.add(p);
+                        if (c[0] > 10) danceCount++;
+                    }
+                }
+            }
+            Comparator<Path> byName = Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER);
+            cameras.sort(byName);
+            faces.sort(byName);
+            audios.sort((a, b) -> {
+                boolean aw = a.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".wav");
+                boolean bw = b.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".wav");
+                if (aw != bw) return aw ? -1 : 1;
+                return byName.compare(a, b);
+            });
+            Path cam = pickCompanion(motion, cameras, danceCount, new String[]{"cam", "camera", "镜头", "カメラ"});
+            Path face = pickCompanion(motion, faces, danceCount, new String[]{"face", "lip", "facial", "morph", "表情", "口型", "口パク", "リップ"});
+            Path audio = pickCompanion(motion, audios, danceCount, new String[]{"bgm", "music", "audio", "song", "音乐", "音源"});
+            if (cam != null) out.put("camera", cam.toString());
+            else if (embeddedCam) out.put("camera", selectedMotion);
+            if (face != null) out.put("face", face.toString());
+            if (audio != null) out.put("music", audio.toString());
+        } catch (Exception ignored) {}
+        return out;
+    }
+    public static KahluaTable motionBundle(String selectedMotion) {
+        return (KahluaTable)lua(inspectBundleJson(selectedMotion));
+    }
+    public static KahluaTable motionLibraryMeta() {
+        var out = new JSONObject();
+        for (String entry : listVmdEntries(gfl2.motion.VmdCamera::hasBoneTrack)) {
+            out.put(entry, inspectBundleJson(entry));
+        }
+        return (KahluaTable)lua(out);
     }
     public static KahluaTable motionPaths() {
         var out=new JSONArray();
@@ -255,9 +413,21 @@ public class ReadyRoomPreview {
         int count=0;
         try(var stream=Files.newDirectoryStream(dir)){
             int seen=0;
+            int subDirs=0;
             for(Path p:stream){
-                if(++seen>4000)break;
-                if(motionFile(p))count++;
+                if(++seen>1000)break;
+                if(motionFile(p)){
+                    count++;
+                }else if(subDirs<80&&Files.isDirectory(p,LinkOption.NOFOLLOW_LINKS)&&!isSkippableDir(p)){
+                    subDirs++;
+                    try(var inner=Files.newDirectoryStream(p)){
+                        int innerSeen=0;
+                        for(Path q:inner){
+                            if(++innerSeen>200)break;
+                            if(motionFile(q))count++;
+                        }
+                    }catch(Exception ignored){}
+                }
             }
         }catch(Exception ignored){}
         return count;
@@ -464,9 +634,17 @@ public class ReadyRoomPreview {
             file=namedMotion(sampleLibrary(),name.substring(SAMPLE_PREFIX.length()));
         }else if(Path.of(name).isAbsolute()){
             file=localMotionPath(name);
-            var sources=savedMotionPaths();
-            if(!sources.contains(file)&&!sources.contains(file.getParent()))
-                throw new MotionInput("MotionRegister");
+            Path defLib=library();
+            Path parent=file.getParent();
+            Path grandParent=parent!=null?parent.getParent():null;
+            boolean inDefault=defLib.equals(parent)||defLib.equals(grandParent);
+            if(!inDefault){
+                var sources=savedMotionPaths();
+                boolean allowed=sources.contains(file)
+                    ||(parent!=null&&sources.contains(parent))
+                    ||(grandParent!=null&&sources.contains(grandParent));
+                if(!allowed)throw new MotionInput("MotionRegister");
+            }
         }else{
             file=namedMotion(library(),name);
         }

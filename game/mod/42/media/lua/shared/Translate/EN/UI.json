@@ -827,5 +827,11 @@
     "UI_GFL2_MotionFaceNone": "No face overlay",
     "UI_GFL2_MotionFaceClear": "Clear",
     "UI_GFL2_Notice_MotionFaceEmpty": "This VMD contains no expression tracks.",
-    "UI_GFL2_Notice_MotionFaceRead": "Could not read or combine the selected expression VMD."
+    "UI_GFL2_Notice_MotionFaceRead": "Could not read or combine the selected expression VMD.",
+    "UI_GFL2_MotionBundleTitle": "Linked Setup (Auto-Matched)",
+    "UI_GFL2_MotionFaceEmbedded": "Built into motion",
+    "UI_GFL2_MotionLinkOn": "On",
+    "UI_GFL2_MotionLinkOff": "Off",
+    "UI_GFL2_MotionSlotPick": "Pick",
+    "UI_GFL2_MotionTagMusic": "Music"
 }

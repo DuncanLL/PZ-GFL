@@ -827,5 +827,11 @@
     "UI_GFL2_MotionFaceNone": "표정 오버레이 없음",
     "UI_GFL2_MotionFaceClear": "해제",
     "UI_GFL2_Notice_MotionFaceEmpty": "이 VMD에는 표정 트랙이 없습니다.",
-    "UI_GFL2_Notice_MotionFaceRead": "선택한 표정 VMD를 읽거나 병합할 수 없습니다."
+    "UI_GFL2_Notice_MotionFaceRead": "선택한 표정 VMD를 읽거나 병합할 수 없습니다.",
+    "UI_GFL2_MotionBundleTitle": "연동 구성 (자동 매칭)",
+    "UI_GFL2_MotionFaceEmbedded": "모션 내장 표정",
+    "UI_GFL2_MotionLinkOn": "켜짐",
+    "UI_GFL2_MotionLinkOff": "꺼짐",
+    "UI_GFL2_MotionSlotPick": "선택",
+    "UI_GFL2_MotionTagMusic": "음악"
 }

@@ -55,52 +55,70 @@ public final class VmdCamera {
         }
     }
 
-    /** Fast header/section count check without allocating keyframes. */
-    public static boolean hasMotionTrack(Path path) {
+    /** Fast header/section count check without allocating keyframes: returns [bones, morphs, cameras] or null. */
+    public static long[] inspectTrackCounts(Path path) {
         try {
             long size = Files.size(path);
-            if (size < 58 || size > MAX_BYTES) return false;
+            if (size < 58 || size > MAX_BYTES) return null;
             try (var stream = new DataInputStream(new BufferedInputStream(Files.newInputStream(path), 8192))) {
-                if (!validHeader(stream)) return false;
+                if (!validHeader(stream)) return null;
                 stream.skipNBytes(20);
+                long remain = size - 50;
+                if (remain < 4) return null;
                 long bones = readU32(stream);
-                if (bones > (size - 58) / 111) return false;
-                if (bones > 0) return true;
-                long morphs = readU32(stream);
-                return morphs > 0 && morphs <= (size - 58) / 23;
+                remain -= 4;
+                if (bones > remain / 111) return null;
+                stream.skipNBytes(bones * 111);
+                remain -= bones * 111;
+                long morphs = 0;
+                if (remain >= 4) {
+                    morphs = readU32(stream);
+                    remain -= 4;
+                    if (morphs > remain / 23) return null;
+                    stream.skipNBytes(morphs * 23);
+                    remain -= morphs * 23;
+                }
+                long cameras = 0;
+                if (remain >= 4) {
+                    cameras = readU32(stream);
+                    remain -= 4;
+                    if (cameras > remain / 61) cameras = 0;
+                }
+                return new long[]{bones, morphs, cameras};
             }
         } catch (IOException e) {
-            return false;
+            return null;
         }
+    }
+
+    /** Fast header/section count check without allocating keyframes. */
+    public static boolean hasMotionTrack(Path path) {
+        long[] counts = inspectTrackCounts(path);
+        return counts != null && (counts[0] > 0 || counts[1] > 0);
+    }
+
+    /** True when the VMD contains skeletal bone animation keyframes (a dance/body motion). */
+    public static boolean hasBoneTrack(Path path) {
+        long[] counts = inspectTrackCounts(path);
+        return counts != null && counts[0] > 0;
+    }
+
+    /** True when the VMD contains facial morph keyframes. */
+    public static boolean hasMorphTrack(Path path) {
+        long[] counts = inspectTrackCounts(path);
+        return counts != null && counts[1] > 0;
+    }
+
+    /** True when the VMD is an overlay expression/lip-sync file (morphs present, negligible bone data). */
+    public static boolean isFaceOnlyTrack(Path path) {
+        long[] counts = inspectTrackCounts(path);
+        return counts != null && counts[1] > 0 && counts[0] <= 10;
     }
 
     /** Fast check for whether a VMD file contains at least one camera keyframe. */
     public static boolean hasCameraTrack(Path path) {
-        try {
-            long size = Files.size(path);
-            if (size < 62 || size > MAX_BYTES) return false;
-            try (var stream = new DataInputStream(new BufferedInputStream(Files.newInputStream(path), 8192))) {
-                if (!validHeader(stream)) return false;
-                stream.skipNBytes(20);
-                long bones = readU32(stream);
-                long remain = size - 54;
-                if (bones > remain / 111) return false;
-                stream.skipNBytes(bones * 111);
-                remain -= bones * 111;
-                if (remain < 4) return false;
-                long morphs = readU32(stream);
-                remain -= 4;
-                if (morphs > remain / 23) return false;
-                stream.skipNBytes(morphs * 23);
-                remain -= morphs * 23;
-                if (remain < 4) return false;
-                long cameras = readU32(stream);
-                remain -= 4;
-                return cameras > 0 && cameras <= remain / 61;
-            }
-        } catch (IOException e) {
-            return false;
-        }
+        long[] counts = inspectTrackCounts(path);
+        return counts != null && counts[2] > 0;
     }
 
     public static VmdCamera load(Path path) throws IOException {

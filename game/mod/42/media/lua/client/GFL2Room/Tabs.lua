@@ -105,9 +105,9 @@ function M.install(W,ctx)
     function W:addSettingsSection(title,y,width)
         local p=ISPanel:new(0,y,width,26);p:initialise();p.background=false
         p.prerender=function(s)
-            s:drawRect(0,6,2,13,.96,.95,.54,.16)
-            label(s,title,9,2,18,s.width-12,.94,.96,.96)
-            s:drawRect(0,24,s.width,1,.16,.80,.88,.90)
+            s:drawRect(0,6,2,13,.94,.95,.49,.14)
+            label(s,title,9,2,18,s.width-12,.92,.94,.95)
+            s:drawRect(0,24,s.width,1,.14,.84,.86,.88)
         end
         self.content:addChild(p);table.insert(self.widgets,p)
         return y+34
@@ -146,7 +146,7 @@ function M.install(W,ctx)
             renderVoice(s)
             local v=math.floor(s.currentValue+.5)
             local txt=v<=0 and tr("VoiceMuted") or tostring(v)
-            local r,g,b=v<=0 and .96 or .86,v<=0 and .68 or .93,v<=0 and .32 or .95
+            local r,g,b=v<=0 and .98 or .86,v<=0 and .58 or .89,v<=0 and .22 or .92
             textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
         end
         voiceSlider.roomSlider=true;self.content:addChild(voiceSlider);table.insert(self.widgets,voiceSlider)
@@ -182,7 +182,7 @@ function M.install(W,ctx)
                     renderChest(s)
                     local v=math.floor(s.currentValue+.5)
                     local txt=v<=0 and tr("ChestOff") or string.format("%d%%",v)
-                    local r,g,b=v<=0 and .78 or 1,v<=0 and .82 or .78,v<=0 and .84 or .34
+                    local r,g,b=v<=0 and .68 or .98,v<=0 and .72 or .58,v<=0 and .76 or .22
                     textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
                 end
                 chestSlider.roomSlider=true;self.content:addChild(chestSlider);table.insert(self.widgets,chestSlider)
@@ -221,7 +221,7 @@ function M.install(W,ctx)
                     renderRChest(s)
                     local v=math.floor(s.currentValue+.5)
                     local txt=v<=0 and tr("ChestOff") or string.format("%d%%",v)
-                    local r,g,b=v<=0 and .78 or 1,v<=0 and .82 or .78,v<=0 and .84 or .34
+                    local r,g,b=v<=0 and .68 or .98,v<=0 and .72 or .58,v<=0 and .76 or .22
                     textInSlot(s,txt,s.width,-22,18,68,r,g,b,1,1)
                 end
                 rChestSlider.roomSlider=true;self.content:addChild(rChestSlider);table.insert(self.widgets,rChestSlider)
@@ -411,7 +411,7 @@ function M.install(W,ctx)
                     render(s)
                     local nz=math.abs(s.currentValue)>=.05
                     textInSlot(s,string.format("%+.1f",s.currentValue)..unit,s.width,20,18,76,
-                        nz and (aiming and 1 or .92) or .70,nz and (aiming and .78 or .96) or .78,nz and (aiming and .34 or .95) or .82,1,1)
+                        nz and (aiming and .98 or .88) or .66,nz and (aiming and .58 or .90) or .70,nz and (aiming and .22 or .92) or .74,1,1)
                 end
                 slider.roomSlider=true;w.content:addChild(slider);table.insert(w.widgets,slider)
                 local reset=button(w.content,width-resetWidth,y,resetWidth,getText("ContextMenu_GFL2_GripResetValue"),w,function(win)

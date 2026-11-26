@@ -36,7 +36,7 @@ public final class GFL2VmdFace {
 
     public static KahluaTable library() {
         try {
-            return ReadyRoomPreview.listVmds(GFL2VmdFace::hasMorphs);
+            return ReadyRoomPreview.listVmds(gfl2.motion.VmdCamera::hasMorphTrack);
         } catch (Throwable failure) {
             report(failure);
             return J2SEPlatform.getInstance().newTable();

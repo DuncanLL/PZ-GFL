@@ -827,5 +827,11 @@
     "UI_GFL2_MotionFaceNone": "表情オーバーレイなし",
     "UI_GFL2_MotionFaceClear": "解除",
     "UI_GFL2_Notice_MotionFaceEmpty": "この VMD には表情トラックが含まれていません。",
-    "UI_GFL2_Notice_MotionFaceRead": "選択した表情 VMD を読み込めないか結合できません。"
+    "UI_GFL2_Notice_MotionFaceRead": "選択した表情 VMD を読み込めないか結合できません。",
+    "UI_GFL2_MotionBundleTitle": "連動セット（自動一致）",
+    "UI_GFL2_MotionFaceEmbedded": "モーション内蔵",
+    "UI_GFL2_MotionLinkOn": "オン",
+    "UI_GFL2_MotionLinkOff": "オフ",
+    "UI_GFL2_MotionSlotPick": "選曲",
+    "UI_GFL2_MotionTagMusic": "音楽"
 }

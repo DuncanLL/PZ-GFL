@@ -644,5 +644,11 @@
     "UI_GFL2_MotionFaceNone": "未叠加表情",
     "UI_GFL2_MotionFaceClear": "清除",
     "UI_GFL2_Notice_MotionFaceEmpty": "此 VMD 不含表情轨道。",
-    "UI_GFL2_Notice_MotionFaceRead": "无法读取或合并所选表情 VMD。"
+    "UI_GFL2_Notice_MotionFaceRead": "无法读取或合并所选表情 VMD。",
+    "UI_GFL2_MotionBundleTitle": "联动配置（选舞自动匹配）",
+    "UI_GFL2_MotionFaceEmbedded": "动作自带表情",
+    "UI_GFL2_MotionLinkOn": "启用",
+    "UI_GFL2_MotionLinkOff": "关闭",
+    "UI_GFL2_MotionSlotPick": "换曲",
+    "UI_GFL2_MotionTagMusic": "音乐"
 }
