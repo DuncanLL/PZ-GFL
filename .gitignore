@@ -1,4 +1,4 @@
-# Local paths, toolchains, credentials and generated output stay on this computer.
+# Local paths, toolchains, credentials, generated output, and external media assets stay on this computer.
 /.local/
 /.codex-attachments/
 /build/
@@ -19,8 +19,12 @@
 *.7z
 *.rar
 *.pmx
+*.pmd
+*.vmd
 *.blend
 *.fbx
+*.x
+*.bin
 *.wav
 *.ogg
 *.mp3
@@ -29,7 +33,11 @@
 *.jpeg
 *.bmp
 *.dds
+*.tga
 *.npz
 /workbench/
 /Saves/
-
+/game/packs/
+/provenance/
+/resources/
+/game/resources/

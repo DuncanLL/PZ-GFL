@@ -1,13 +1,11 @@
 # 源码导航
 
-[维护手册](maintenance/README.md) 记录游戏状态、公共动作修正、整备室与多人以及双光影的运行链路。维护状态和按版本查找的记录见 [版本记录](../CHANGELOG.md)。框架及角色订阅入口见 [项目首页](../README.md)。
+[维护手册](maintenance/README.md) 记录游戏状态、公共动作修正、UI 交互与多人同步以及多光影后端的运行链路。工程迭代摘要见 [技术迭代记录](../CHANGELOG.md)，项目总览与合规声明见 [项目首页](../README.md)。
 
-| 内容 | 位置 |
-|---|---|
-| 人物注册、模型资料、衣装和配件 | [核心资源](../game/mod/42/media/gfl2_pmx) · [角色包](../game/packs) · [整备室资料](../game/mod/42/media/ui/GFL2ReadyRoom) |
-| 人物姿态、网格和物理 | [动作与姿态](../game/java/gfl2/motion) · [原生核心](../native) |
-| 整备室、声音与多人 | [游戏 Lua](../game/mod/42/media/lua) · [多人协议记录](multiplayer-framework.md) |
-| 正式 Native、Somber 与可选 Eclipse 维护构建 | [渲染支持](../render-support) · [光影发布检查](render-release-standard.md) |
-| 构建、验证和发布记录 | [工具](../tools) · [结构化发布记录](../provenance/releases) · [历史笔记](handoffs) |
-
-安装路径与发布目录从本机配置和实际 `mod.info` 核对。整理源码时，现装、Steam 上线及用户实机结果各按其记录描述。日常维护从正式主分支建立任务分支，合并前核对所用宿主和候选文件指纹。
+| 模块 | 位置 |
+| :--- | :--- |
+| 骨骼动作、姿态重定向、面部表情与物理接口 | [`game/java/gfl2/motion`](../game/java/gfl2/motion) · [`game/java/gfl2/runtime`](../game/java/gfl2/runtime) |
+| 原生 C++ / Rust / OpenCL 骨骼与软体物理核心 | [`native/`](../native) |
+| 模块化 UI、语音路由、兼容层与多人同步脚本 | [`game/mod/42/media/lua`](../game/mod/42/media/lua) · [多人协议记录](multiplayer-framework.md) |
+| OpenGL / GLSL 渲染支持与离屏 3D 预览管线 | [`render-support/`](../render-support) · [渲染发布检查标准](render-release-standard.md) |
+| 自动化构建与无头回归校验工具 | [`tools/`](../tools) · [历史技术笔记](handoffs) |
